@@ -34,10 +34,10 @@ public sealed partial class MainWindow : Window
         FilesPane.DataContext = _model;
         InitializeNavigation();
         InitializeHistory();
+        InitializeGitTasks();
         InitializeDocking();
         foreach (var list in new[] { FileList, _projectList })
             list.SizeChanged += (_, _) => list.Classes.Set("compact-file-list", list.Bounds.Width < 420);
-        InitializeGitTasks();
         InitializeShell();
         _blameViewReady = LoadBlameViewAsync();
         _model.DocumentChanged += OnDocumentChanged;
@@ -210,6 +210,7 @@ public sealed partial class MainWindow : Window
             case "view": SwitchView(root.GetProperty("index").GetInt32(), focusNavigation: true); break;
             case "code-search": await OpenCodeSearchAsync(root.GetProperty("filesOnly").GetBoolean(), root.TryGetProperty("quick", out var quick) && quick.GetBoolean()); break;
             case "source-history": await OpenSourceHistoryAsync(version); break;
+            case "project-reveal": RevealProjectFile(); break;
             case "history-back": if (_model.IsHistory) NavigateHistoryBack(); break;
             case "blame": await _model.ToggleBlameAsync(); break;
             case "blame-action": await HandleBlameActionAsync(root.GetProperty("action").GetString()!, root.GetProperty("line").GetInt32(), version); break;
@@ -313,6 +314,8 @@ public sealed partial class MainWindow : Window
         if (_fileHistoryPanel?.HandleKey(e) == true) return;
         if (HistoryFileShortcut(e)) return;
         if (e.KeyModifiers == KeyModifiers.Alt && e.Key == Key.M) { e.Handled = true; MainMenuClicked(MainMenuButton, new RoutedEventArgs()); }
+        else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.E) { e.Handled = true; RevealProjectFile(); }
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.F && _projectPanel.IsKeyboardFocusWithin) { e.Handled = true; _projectFilterVisible = true; UpdateProjectFilter(); NativeKeyboardFocus.TryFocusControl(this, _projectFilter); }
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key is Key.F or Key.N)
         { e.Handled = true; _ = OpenCodeSearchAsync(e.Key == Key.N); }
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.F12)
@@ -409,7 +412,7 @@ public sealed partial class MainWindow : Window
         if (row.IsGroup) ToggleVisibleChanges(); else _model.ToggleIncludeFile(row.Path);
     }
     private void ShowFileFilterClicked(object? sender, RoutedEventArgs e)
-    { _commitFilterVisible = !_commitFilterVisible; UpdateNavigationLayout(); if (_commitFilterVisible) NativeKeyboardFocus.TryFocusControl(this, FilterInput); }
+    { _commitFilterVisible = !string.IsNullOrEmpty(FilterInput.Text) || !_commitFilterVisible; UpdateNavigationLayout(); if (_commitFilterVisible) NativeKeyboardFocus.TryFocusControl(this, FilterInput); }
     private void RefreshInclusion()
     {
         var files = _navigation.Rows.Where(row => row.Entry?.Kind == ComparisonKind.LocalChanges).ToArray();

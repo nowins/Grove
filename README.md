@@ -2,7 +2,7 @@
 
 面向个人本地 Git 工作流程的桌面代码查看器。提供工作区／历史代码浏览、并排 diff、文件结构导航、分支图、暂存与提交、工作树选择、四模式 Reset、独立三栏冲突合并和本地行评论。
 
-支持 Java、C#、Python、JavaScript、TypeScript 的词法高亮与当前文件结构；不提供 LSP、类型检查或跨文件语义定义／引用。工作树入口发现并打开已有目录，不执行 checkout、删除或 prune。Reset 保留快照检查、写锁和恢复材料，Hard 明示丢弃风险。
+支持 Java、C#、Python、JavaScript、TypeScript 的词法高亮与当前文件结构；不提供 LSP、类型检查或跨文件语义定义／引用。Git 输出和工作树列表位于主界面工具页。项目树路径筛选默认收起；Ctrl+F（项目树）展开，Ctrl+Shift+E 或定位图标显示当前文件；活动条件不会隐藏。工作树入口发现并打开已有目录，不执行 checkout、删除或 prune。Reset 保留快照检查、写锁和恢复材料，Hard 明示丢弃风险。
 
 ## 开发运行
 

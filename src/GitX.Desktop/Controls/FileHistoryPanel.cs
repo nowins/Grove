@@ -41,6 +41,7 @@ internal sealed class FileHistoryPanel : Border, IDisposable
     public event Action? HideRequested;
     public event Action? ResetLayoutRequested;
     public event Action? CloseRequested;
+    public event Action<FileHistoryTarget?>? RevealRequested;
 
     public FileHistoryPanel(Window owner, FileHistoryTarget target)
     {
@@ -55,7 +56,12 @@ internal sealed class FileHistoryPanel : Border, IDisposable
         Grid.SetColumn(title, 1); header.Children.Add(title);
         var close = new Button { Classes = { "toolbar", "icon-button" }, Content = IconContent.Icon("CloseIcon") };
         AutomationProperties.SetName(close, "关闭文件历史"); ToolTip.SetTip(close, "关闭文件历史 · Esc");
-        close.Click += (_, _) => CloseRequested?.Invoke(); Grid.SetColumn(close, 2); header.Children.Add(close); layout.Children.Add(header);
+        close.Click += (_, _) => CloseRequested?.Invoke();
+        var reveal = new Button { Classes = { "toolbar", "icon-button" }, Content = IconContent.Icon("RevealIcon") };
+        AutomationProperties.SetName(reveal, "在项目树定位历史文件"); ToolTip.SetTip(reveal, "在当前工作树定位同路径文件 · Ctrl+Shift+E；保留历史版本");
+        reveal.Click += (_, _) => RevealCurrentFile();
+        var headerActions = new StackPanel { Orientation = Orientation.Horizontal }; headerActions.Children.Add(reveal); headerActions.Children.Add(close);
+        Grid.SetColumn(headerActions, 2); header.Children.Add(headerActions); layout.Children.Add(header);
         _body = new Grid { ColumnDefinitions = new("360,4,*") };
         _body.ColumnDefinitions[0].MinWidth = 200; _body.ColumnDefinitions[0].MaxWidth = 520;
         var revisions = new Grid { RowDefinitions = new("28,*,Auto") };
@@ -136,10 +142,12 @@ internal sealed class FileHistoryPanel : Border, IDisposable
     }
     public void FocusDiff()
     { if (!_closed && _ready) { _view?.Focus(); _ = _view?.InvokeScript("window.gitx.focus()"); } }
+    private void RevealCurrentFile() => RevealRequested?.Invoke(_model.Document is { IsNotice: false, Path.Length: > 0 } document ? new(Target.Root, document.Path) : null);
     public bool HandleKey(KeyEventArgs e)
     {
         if (!CurrentOwner.IsActive || !IsKeyboardFocusWithin) return false;
-        if (e.Key == Key.Escape) CloseRequested?.Invoke();
+        if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.E) RevealCurrentFile();
+        else if (e.Key == Key.Escape) CloseRequested?.Invoke();
         else if (e.Key == Key.F5) _ = _model.RefreshAsync();
         else if (e.Key == Key.F7 && _ready)
         { _view?.Focus(); _ = _view?.InvokeScript($"window.gitx.navigate({(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1)})"); }
@@ -204,6 +212,7 @@ internal sealed class FileHistoryPanel : Border, IDisposable
             case "refresh": await _model.RefreshAsync(); break;
             case "focus-navigation": FocusCommits(); break;
             case "close-document": CloseRequested?.Invoke(); break;
+            case "project-reveal": RevealCurrentFile(); break;
             case "hide-tool": HideRequested?.Invoke(); break;
             case "reset-layout": ResetLayoutRequested?.Invoke(); break;
             case "focus-out": if (_view is not null) NativeKeyboardFocus.LeaveEmbedded(CurrentOwner, _view, message.Payload.GetProperty("direction").GetInt32()); break;

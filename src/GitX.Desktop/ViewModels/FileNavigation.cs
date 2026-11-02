@@ -214,3 +214,20 @@ public sealed class FileNavigation
         rows.AddRange(node.Files.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.Name, StringComparer.Ordinal).Select(e => FileRow(e, depth + 1)));
     }
 }
+
+public sealed record ProjectFileRevealResult(NavigationEntry? Entry, string Message = "", bool HiddenByFilter = false);
+public static class ProjectFileReveal
+{
+    public static ProjectFileRevealResult Resolve(string? root, FileHistoryTarget? target, IReadOnlyList<NavigationEntry> entries, string filter)
+    {
+        if (root is null || target is null) return new(null, "没有可定位的当前文件。");
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar).Equals(Path.GetFullPath(target.Root).TrimEnd(Path.DirectorySeparatorChar), comparison))
+            return new(null, "当前文件属于其他仓库或工作树，未改变项目树选择。");
+        var entry = entries.FirstOrDefault(e => e.Path == target.Path);
+        if (entry is null) return new(null, "文件不在当前工作树的文件清单中，可能已删除或只存在于历史版本。");
+        if (filter.Length > 0 && !entry.Path.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            return new(null, "当前筛选隐藏了此文件。请修改或清除筛选后再定位；筛选条件已保留。", true);
+        return new(entry);
+    }
+}

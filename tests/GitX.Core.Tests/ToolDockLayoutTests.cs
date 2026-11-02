@@ -97,7 +97,7 @@ public sealed class ToolDockLayoutTests
     public void Reset_recovers_a_usable_docked_project_without_destroying_other_tool_definitions()
     {
         var layout = new ToolDockLayout(); foreach (var id in Enum.GetValues<ToolId>()) layout.Float(id, 3000, 2000);
-        layout.Reset(); Assert.Equal(4, layout.Tools.Count); Assert.Single(layout.Tools, t => t.Visible);
+        layout.Reset(); Assert.Equal(6, layout.Tools.Count); Assert.Single(layout.Tools, t => t.Visible);
         Assert.True(layout[ToolId.Project].Visible); Assert.All(layout.Tools, tool => Assert.False(tool.Floating));
     }
 }

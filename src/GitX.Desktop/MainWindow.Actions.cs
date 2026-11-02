@@ -17,13 +17,7 @@ public sealed partial class MainWindow
     private async void HistoryActionsClicked(object? sender, RoutedEventArgs e)
         => await ShowHistoryMenuAsync(sender as Control ?? CommitList, atPointer: false);
 
-    private void ShowOutput()
-    {
-        var dialog = new Window { Title = "Git 操作输出", Width = 720, Height = 420, MinWidth = 500, MinHeight = 260, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        dialog.Content = new TextBox { Text = _model.LastOperationOutput, IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Classes = { "code" }, Margin = new Thickness(16), PlaceholderText = "暂无 Git 操作输出。" };
-        DialogChrome.Apply(dialog);
-        dialog.ShowDialog(this);
-    }
+    private void ShowOutput() => ShowGitTask();
 
     private async Task AmendAsync()
     {

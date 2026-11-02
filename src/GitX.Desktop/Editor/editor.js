@@ -794,6 +794,10 @@ window.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); panes[activePane].focus(); }
     return;
   }
+  if (event.ctrlKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'e') {
+    event.preventDefault(); event.stopImmediatePropagation();
+    send({ type: 'project-reveal', version: generation }); return;
+  }
   if (event.ctrlKey && event.shiftKey && !event.altKey && ['f', 'n'].includes(event.key.toLowerCase())) {
     event.preventDefault(); event.stopImmediatePropagation();
     send({ type: 'code-search', filesOnly: event.key.toLowerCase() === 'n', version: generation }); return;

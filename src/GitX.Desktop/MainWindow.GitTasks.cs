@@ -1,87 +1,75 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using GitX.Desktop.Services;
+using GitX.Desktop.ViewModels;
 
 namespace GitX.Desktop;
 
 public sealed partial class MainWindow
 {
-    private Window? _gitTaskWindow;
+    private readonly Grid _gitOutputPanel = new() { RowDefinitions = new("Auto,*,Auto"), RowSpacing = 8, Margin = new(12, 8) };
+    private readonly TextBlock _gitOutputStatus = new() { Classes = { "dialog-hint" }, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBox _gitOutputText = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Classes = { "code" }, VerticalAlignment = VerticalAlignment.Stretch };
+    private readonly Button _gitTerminate = new() { Content = "终止外部 Git 进程…", Classes = { "dialog-action" } };
     private readonly DispatcherTimer _gitTaskTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private bool _gitTerminating;
 
     private void InitializeGitTasks()
     {
-        _model.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(_model.LastGitOperation) && _gitTaskWindow is not null)
-            { _gitTaskWindow.Close(); ShowGitTask(); }
-        };
+        _gitOutputPanel.Children.Add(_gitOutputStatus);
+        _gitOutputPanel.Children.Add(_gitOutputText); Grid.SetRow(_gitOutputText, 1);
+        AutomationProperties.SetName(_gitOutputText, "Git 命令输出");
+        var hide = new Button { Content = "隐藏", Classes = { "dialog-action" } };
+        hide.Click += (_, _) => { _dock?.Hide(ToolId.Output); FocusEditor(); };
+        _gitTerminate.Click += async (_, _) => await TerminateGitTaskAsync();
+        var actions = DialogChrome.Buttons(_gitTerminate, hide); _gitOutputPanel.Children.Add(actions); Grid.SetRow(actions, 2);
+        _model.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(_model.LastGitOperation) or nameof(_model.LastOperationOutput)) UpdateGitOutput(); };
         _gitTaskTimer.Tick += (_, _) =>
         {
             var state = _model.LastGitOperation?.Snapshot();
-            GitTaskButton.IsVisible = state is not null;
+            GitTaskButton.IsVisible = state is not null && state.Root == _model.Root;
             if (state is not null)
             {
                 GitTaskLabel.Text = state.Running ? $"{state.Name} · {(int)state.Elapsed.TotalSeconds}s" : $"{state.Name} · {state.Phase}";
-                ToolTip.SetTip(GitTaskButton, $"{state.Name} · {state.Phase}\n点击查看任务详情与输出");
+                ToolTip.SetTip(GitTaskButton, $"{state.Name} · {state.Phase}\n在主界面查看输出；隐藏面板不停止任务");
             }
+            if (_dock?.Visible(ToolId.Output) == true) UpdateGitOutput();
         };
-        _gitTaskTimer.Start();
-        Closed += (_, _) => { _gitTaskTimer.Stop(); _gitTaskWindow?.Close(); };
+        _gitTaskTimer.Start(); Closed += (_, _) => _gitTaskTimer.Stop();
     }
 
     private void GitTaskClicked(object? sender, RoutedEventArgs e) => ShowGitTask();
+    private void ShowGitTask() { _dock?.Show(ToolId.Output); UpdateGitOutput(); }
 
-    private void ShowGitTask()
+    private void UpdateGitOutput()
     {
-        if (_gitTaskWindow is not null) { _gitTaskWindow.Activate(); return; }
-        if (_model.LastGitOperation is not { } operation) return;
-        var dialog = new Window { Title = "Git 任务", Width = 720, Height = 440, MinWidth = 500, MinHeight = 300,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        _gitTaskWindow = dialog;
-        var status = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        var output = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Classes = { "code" },
-            VerticalAlignment = VerticalAlignment.Stretch };
-        var terminate = new Button { Content = "终止本次 Git 进程…" };
-        var browse = new Button { Content = "返回浏览", IsCancel = true };
-        browse.Click += (_, _) => dialog.Close();
-        var confirming = false;
-        terminate.Click += async (_, _) =>
+        var state = _model.LastGitOperation?.Snapshot();
+        var current = state is not null && state.Root == _model.Root;
+        if (!_gitTerminating) _gitOutputStatus.Text = current ? $"{state!.Name} · {state.Phase} · {state.Elapsed.TotalSeconds:F0} 秒\n{state.Root}" : _model.Root ?? "尚未打开仓库";
+        var text = current ? (state!.Running || _model.LastOperationOutput.Length == 0 ? state.Output : _model.LastOperationOutput) : "";
+        if (_gitOutputText.Text != text) _gitOutputText.Text = text;
+        _gitOutputText.PlaceholderText = current && state!.Running ? "正在等待 Git 输出…" : "当前仓库尚无 Git 命令输出";
+        _gitTerminate.IsEnabled = !_gitTerminating && current && state is { Running: true, TerminationRequested: false, ProcessId: not null };
+    }
+
+    private async Task TerminateGitTaskAsync()
+    {
+        if (_gitTerminating || _model.LastGitOperation is not { } operation || operation.Snapshot() is not { ProcessId: { } pid } state || state.Root != _model.Root) return;
+        _gitTerminating = true; _gitTerminate.IsEnabled = false;
+        try
         {
-            if (confirming || operation.Snapshot().ProcessId is not { } pid) return;
-            confirming = true; terminate.IsEnabled = false;
-            try
+            if (await ConfirmDialog.ShowAsync(_dock?.WindowFor(ToolId.Output) ?? this, "终止外部 Git 进程", $"将终止此任务的 Git 进程及其子进程（PID {pid}）。\n\n写操作可能已部分完成，远端可能已部分更新。退出后请刷新本地状态；远端结果需重新拉取核对。此操作不是回滚，也不会删除锁文件。", "终止进程"))
             {
-                if (await ConfirmDialog.ShowAsync(dialog, "终止本次 Git 进程", $"将终止此任务的 Git 进程及其子进程（PID {pid}）。\n\n工作区、索引或远程可能已部分更新。结束后 GitX 会重新读取本地状态；远程结果需获取核对。此操作不会回滚，也不会删除锁文件。", "终止进程"))
-                {
-                    if (!await Task.Run(() => operation.Terminate(pid))) status.Text = "确认期间该 Git 命令已结束，没有终止后续命令。";
-                }
+                if (_model.Root != state.Root || !ReferenceEquals(operation, _model.LastGitOperation)) return;
+                if (!await Task.Run(() => operation.Terminate(pid))) _gitOutputStatus.Text = "确认期间该 Git 进程已结束，没有终止其他命令。";
             }
-            catch (Exception ex) { _model.ReportError(ex.Message); }
-            finally { confirming = false; }
-        };
-        void Update()
-        {
-            // A reopened window follows the most recent task, but an already
-            // open confirmation remains bound to its original operation/PID.
-            var state = operation.Snapshot();
-            if (!confirming) status.Text = $"{state.Name} · {state.Phase} · {state.Elapsed.TotalSeconds:F0} 秒\n{state.Root}";
-            if (output.Text != state.Output) output.Text = state.Output;
-            output.PlaceholderText = state.Running ? "正在等待 Git 输出…" : "此任务没有输出。";
-            terminate.IsEnabled = !confirming && state.Running && !state.TerminationRequested && state.ProcessId is not null;
         }
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-        timer.Tick += (_, _) => Update();
-        dialog.Closed += (_, _) => { timer.Stop(); if (_gitTaskWindow == dialog) _gitTaskWindow = null; };
-        var panel = new Grid { RowDefinitions = RowDefinitions.Parse("Auto,*,Auto"), Margin = new Thickness(16), RowSpacing = 12 };
-        panel.Children.Add(status); Grid.SetRow(output, 1); panel.Children.Add(output);
-        var footer = DialogChrome.Footer(DialogChrome.Buttons(terminate, browse));
-        Grid.SetRow(footer, 2); panel.Children.Add(footer); dialog.Content = panel;
-        DialogChrome.Apply(dialog);
-        Update(); timer.Start(); dialog.Show(this);
+        catch (Exception ex) { _model.ReportError(ex.Message); }
+        finally { _gitTerminating = false; UpdateGitOutput(); }
     }
 }

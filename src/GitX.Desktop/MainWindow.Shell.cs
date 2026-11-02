@@ -154,7 +154,7 @@ public sealed partial class MainWindow
             if (root is not null)
             {
                 panel.Children.Add(new Separator());
-                panel.Children.Add(ShellAction("工作树 · Worktrees…", "BranchIcon", () => _ = OpenWorktreesAsync()));
+                panel.Children.Add(ShellAction("工作树 · Worktrees", "BranchIcon", () => _ = OpenWorktreesAsync()));
                 panel.Children.Add(ShellAction("仓库详情…", "FolderIcon", () => { CloseShellPopup(); ShowRepositoryDetails(); }));
             }
             void Filter()
@@ -202,7 +202,7 @@ public sealed partial class MainWindow
         var file = Group("文件");
         Item(file, "打开本地仓库…", () => _ = PickRepositoryAsync(), "FolderIcon", !_model.IsWriting, "Ctrl+O");
         Item(file, "切换最近项目…", () => RepositoriesClicked(RepositoryButton, new RoutedEventArgs()), "FolderIcon", !_model.IsWriting);
-        Item(file, "工作树 · Worktrees…", () => _ = OpenWorktreesAsync(), "BranchIcon", ready);
+        Item(file, "工作树 · Worktrees", () => _ = OpenWorktreesAsync(), "BranchIcon", ready);
         file.Items.Add(new Separator());
         Item(file, "仓库详情…", ShowRepositoryDetails, enabled: _model.Root is not null);
         Item(file, "在资源管理器中打开", RevealRepository, "FolderIcon", _model.Root is not null);
@@ -211,6 +211,10 @@ public sealed partial class MainWindow
         Item(view, "项目工具窗口", () => OpenTool(0, true, true), "FolderIcon", shortcut: "Ctrl+D1");
         Item(view, "提交工具窗口", () => OpenTool(1, true, true), "ChangesIcon", shortcut: "Ctrl+D2");
         Item(view, "Git 工具窗口", () => OpenTool(2, true, true), "HistoryIcon", shortcut: "Ctrl+D3");
+        Item(view, "Git 输出", ShowOutput, "OutputIcon");
+        Item(view, "工作树", () => _ = OpenWorktreesAsync(), "BranchIcon");
+        Item(view, "定位当前文件", RevealProjectFile, "RevealIcon", shortcut: "Ctrl+Shift+E");
+        Item(view, "筛选项目文件", ToggleProjectFilter, "FilterIcon", shortcut: "Ctrl+F（项目树）");
         Item(view, "恢复默认布局", () => { if (_dock is not null) _ = _dock.ResetAsync(); }, "PanelIcon", shortcut: "Shift+F12");
         view.Items.Add(new Separator()); Item(view, "刷新", () => _ = RefreshCurrentAsync(), "RefreshIcon", shortcut: "F5");
         if (_bottomOpen)
@@ -237,9 +241,9 @@ public sealed partial class MainWindow
         Item(git, "修改上次提交（Amend）…", () => _ = AmendAsync(), "EditIcon", ready && !_model.HasOperation);
         git.Items.Add(new Separator());
         Item(git, "冲突文件…", () => ShowConflictsClicked(null, new RoutedEventArgs()), "MergeIcon", ready && _model.HasOperation);
-        Item(git, "上次 Git 输出…", ShowOutput, "OutputIcon", _model.Root is not null);
+        Item(git, "Git 输出", ShowOutput, "OutputIcon", _model.Root is not null);
         var help = Group("帮助");
-        Item(help, "快捷键…", () => ShowShellText("快捷键", "Ctrl+O  打开仓库\nCtrl+1 / 2 / 3  项目 / 提交 / Git Log 工具\nShift+Esc  隐藏当前工具\nShift+F12  恢复默认布局\nAlt+M  主菜单\nF5  刷新\nCtrl+F  编辑器内查找\n双击 Shift  快速搜索（文件 / 代码内容）\nCtrl+Shift+F  跨文件内容搜索\nCtrl+Shift+N  文件定位\nCtrl+F12  当前文件结构（Java / C#）\nF7 / Shift+F7  下一处 / 上一处变更\nCtrl+Alt+R  回退当前差异块\nEsc  返回文件列表\n\n历史：Ctrl+D 打开 diff，Alt+← 返回 Log；Shift+F10 打开提交菜单。"));
+        Item(help, "快捷键…", () => ShowShellText("快捷键", "Ctrl+O  打开仓库\nCtrl+1 / 2 / 3  项目 / 提交 / Git Log 工具\nShift+Esc  隐藏当前工具\nShift+F12  恢复默认布局\nAlt+M  主菜单\nF5  刷新\nCtrl+F  编辑器内查找\n双击 Shift  快速搜索（文件 / 代码内容）\nCtrl+Shift+F  跨文件内容搜索\nCtrl+Shift+N  文件定位\nCtrl+F12  当前文件结构（Java / C# / Python / JS / TS）\nCtrl+Shift+E  在项目树定位当前文件\nCtrl+F（项目树）  展开项目文件筛选\nF7 / Shift+F7  下一处 / 上一处变更\nCtrl+Alt+R  回退当前差异块\nEsc  返回文件列表\n\n历史：Ctrl+D 打开 diff，Alt+← 返回 Log；Shift+F10 打开提交菜单。"));
         Item(help, "关于 Grove…", ShowAbout);
         ShowShellPopup(menu, anchor);
     }

@@ -8,6 +8,20 @@ namespace GitX.Core.Tests;
 
 public sealed class EditorMessageTests
 {
+    [Theory]
+    [InlineData("project-reveal")]
+    public async Task Project_commands_require_the_current_published_document(string type)
+    {
+        var state = new EditorMessageState(false, 7, 7, "repo"); var handled = 0; var errors = new List<string>();
+        Task Handle(EditorMessage _) { handled++; return Task.CompletedTask; }
+        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\",\"version\":7}}", () => state, Handle, errors.Add);
+        Assert.Equal(1, handled);
+        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\",\"version\":6}}", () => state, Handle, errors.Add);
+        Assert.Equal(1, handled); Assert.Empty(errors);
+        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\"}}", () => state, Handle, errors.Add);
+        Assert.Equal(1, handled); Assert.Single(errors);
+    }
+
     private static readonly EditorMessageState Current = new(false, 7, 7, "repo");
 
     [Theory]

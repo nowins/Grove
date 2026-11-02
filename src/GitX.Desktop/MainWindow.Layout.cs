@@ -26,12 +26,15 @@ public sealed partial class MainWindow
     private void InitializeDocking()
     {
         InitializeProjectTool();
+        InitializeWorktreeTool();
         _dock = new(this, EditorPane, Path.Combine(LocalDataDirectory, "tool-layout.json"));
         foreach (var control in new Control[] { _projectPanel, LocalNavigation, GitLogWorkspace, FileHistoryHost }) control.DataContext = _model;
         _dock.Register(ToolId.Project, "项目", "FolderIcon", _projectPanel);
         _dock.Register(ToolId.Commit, "提交", "ChangesIcon", LocalNavigation);
         _dock.Register(ToolId.GitLog, "Git · Log", "HistoryIcon", GitLogWorkspace);
         _dock.Register(ToolId.FileHistory, "文件历史", "FileIcon", FileHistoryHost);
+        _dock.Register(ToolId.Output, "Git 输出", "OutputIcon", _gitOutputPanel);
+        _dock.Register(ToolId.Worktrees, "工作树", "BranchIcon", _worktreesPanel);
         _dock.Error += _model.ReportError;
         _dock.BeforeReparentAsync = id => id is null or ToolId.FileHistory ? _fileHistoryPanel?.CaptureDockViewAsync() ?? Task.CompletedTask : Task.CompletedTask;
         _dock.AfterReparentAsync = id => id is null or ToolId.FileHistory ? _fileHistoryPanel?.RestoreDockViewAsync() ?? Task.CompletedTask : Task.CompletedTask;
@@ -44,6 +47,8 @@ public sealed partial class MainWindow
                 case ToolId.Commit: NativeKeyboardFocus.TryFocusControl(this, FileList); break;
                 case ToolId.GitLog: NativeKeyboardFocus.TryFocusControl(this, CommitList); break;
                 case ToolId.FileHistory: _fileHistoryPanel?.FocusCommits(); break;
+                case ToolId.Output: UpdateGitOutput(); NativeKeyboardFocus.TryFocusControl(this, _gitOutputText); break;
+                case ToolId.Worktrees: _ = RefreshWorktreePanelAsync(); _worktreesPanel.FocusList(); break;
             }
         };
         _dock.FloatingCreated += window =>
@@ -64,7 +69,7 @@ public sealed partial class MainWindow
     {
         FileList.SelectionMode = SelectionMode.Multiple;
         CommitFileActions.IsVisible = CommitMessageSplitter.IsVisible = CommitMessagePane.IsVisible = true;
-        FilterInput.IsVisible = _commitFilterVisible;
+        FilterInput.IsVisible = _commitFilterVisible || !string.IsNullOrEmpty(FilterInput.Text);
         var max = Math.Max(100, Math.Min(LocalNavigation.Bounds.Height * .45, LocalNavigation.Bounds.Height - 180));
         var current = FilesPane.RowDefinitions[4].Height;
         if (current.IsAbsolute && Math.Abs(current.Value - _commitAppliedHeight) > 1 && current.Value > 0) _commitHeight = current.Value;
@@ -129,5 +134,5 @@ public sealed partial class MainWindow
     private void GitLogClicked(object? sender, RoutedEventArgs e) => OpenTool(2, false, true);
     private void FileHistoryTabClicked(object? sender, RoutedEventArgs e) => OpenTool(3, false, true);
     private void ToolFilterChanged(object? sender, TextChangedEventArgs e)
-    { _toolFilters[1] = FilterInput.Text ?? ""; QueueNavigationRefresh(); }
+    { _toolFilters[1] = FilterInput.Text ?? ""; if (_toolFilters[1].Length > 0) _commitFilterVisible = true; UpdateNavigationLayout(); QueueNavigationRefresh(); }
 }

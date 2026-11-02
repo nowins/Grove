@@ -26,6 +26,7 @@ public sealed partial class MainWindow
             if (_fileHistoryPanel == panel) _ = OpenCodeSearchAsync(filesOnly, quick, () =>
             { if (_fileHistoryPanel == panel && _fileHistoryActive) panel.FocusDiff(); });
         };
+        panel.RevealRequested += location => { if (_fileHistoryPanel == panel) RevealProjectFile(location, historical: true); };
         panel.CloseRequested += () => { if (_fileHistoryPanel == panel) CloseFileHistory(); };
         panel.HideRequested += () => { if (_fileHistoryPanel == panel) { _dock?.Hide(ToolId.FileHistory); FocusEditor(); } };
         panel.ResetLayoutRequested += () => { if (_fileHistoryPanel == panel && _dock is not null) _ = _dock.ResetAsync(); };

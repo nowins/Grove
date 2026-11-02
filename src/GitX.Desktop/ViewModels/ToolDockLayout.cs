@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace GitX.Desktop.ViewModels;
 
-public enum ToolId { Project, Commit, GitLog, FileHistory }
+public enum ToolId { Project, Commit, GitLog, FileHistory, Output, Worktrees }
 public enum ToolEdge { Left, Right, Top, Bottom }
 public sealed record ToolPlacement(ToolId Id, ToolEdge Edge, bool Floating = false, bool Visible = false,
     int Order = 0, double X = 100, double Y = 100, double Width = 900, double Height = 600, bool Independent = false);

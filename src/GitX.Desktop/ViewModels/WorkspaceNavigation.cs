@@ -7,6 +7,8 @@ public sealed partial class MainViewModel
     private IReadOnlyList<NavigationEntry> _historyEntries = [];
     public IReadOnlyList<NavigationEntry> HistoryEntries => _historyEntries;
 
+    public FileHistoryTarget? CurrentProjectFile => Root is { } root && _document is { IsNotice: false, Path.Length: > 0 } document ? new(root, document.Path) : null;
+
     // Tool-window lists have their own lifetime. Editor tabs own documents.
     public IReadOnlyList<NavigationEntry> NavigationEntries(int tool)
     {
