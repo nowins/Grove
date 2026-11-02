@@ -14,6 +14,8 @@
 
 省略 Repository 从欢迎界面开始。脚本按锁文件恢复依赖、构建离线编辑器和 Release 应用。内部程序集与 src/GitX.* 路径保持兼容；程序入口为 GitX.Desktop.exe（Windows）或 GitX.Desktop（macOS）。GitX 数据目录和 GITX_DATA_DIR 标识继续沿用，已有配置不因品牌名变化而换目录。
 
+界面精修的现状、证据边界和建议见[视觉与交互规范草案](docs/VISUAL-SPEC.md)；建议尚未代表已实现。
+
 ## 构建与测试
 
 ```powershell

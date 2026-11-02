@@ -7,8 +7,10 @@
 - Python／JavaScript／TypeScript：文件识别、高亮、合并和当前文件结构导航已验证；不包含 LSP 或项目级语义分析。
 - 窄窗口：已有停靠空间约束、编辑区聚焦／还原、小地图窄列隐藏和稳定错误反馈。全局视觉精修仍待规范审阅。
 
-## 待独立验证
+## Hosted CI 与验收边界
 
-GitHub Actions 的 Windows／macOS 结果以实际 run 为准。macOS 桌面、WebView、Cmd 快捷键、输入法、Keychain／askpass、混合 DPI、签名、公证及 .app 打包尚未验收。自动化 Core 测试会实际加载 LibGit2 和操作临时 Git 仓库，但不启动桌面窗口。
+macOS ARM 与 Intel 已在[真实 runner](https://github.com/nowins/Grove/actions/runs/41454653030)分别通过 Core 456/456、Editor 73/73、零警告构建和 self-contained 打包。后续提交及 Windows hosted 结果以[工作流运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)为准。
+
+macOS 桌面、WebView、Cmd 快捷键、输入法、Keychain／askpass、混合 DPI、签名、公证及 .app 打包尚未验收。自动化 Core 测试会实际加载 LibGit2 和操作临时 Git 仓库，但不启动桌面窗口。
 
 本快照不含原机器的 Git 历史、验证材料和个人配置；这些材料留在原本地工作区。CI 产物为未签名测试 archive，不是正式发行。

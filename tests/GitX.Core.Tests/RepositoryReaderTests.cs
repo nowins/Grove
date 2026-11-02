@@ -272,6 +272,15 @@ internal sealed class TestRepository : IDisposable
         // Exact, randomly created test container; never a user repository.
         if (!Path.GetFullPath(Container).StartsWith(Path.Combine(Path.GetTempPath(), "GitX.Tests") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return;
         foreach (var file in Directory.EnumerateFiles(Container, "*", SearchOption.AllDirectories)) File.SetAttributes(file, FileAttributes.Normal);
-        Directory.Delete(Container, true);
+        // Reader disposal cancels background reads without blocking the UI.
+        // Windows can retain their directory handles briefly after cancellation.
+        // Retry sharing/lock violations only; persistent cleanup failures still
+        // fail the test, and this never targets anything outside this fixture.
+        for (var attempt = 0; ; attempt++)
+        {
+            try { Directory.Delete(Container, true); return; }
+            catch (IOException e) when (OperatingSystem.IsWindows() && attempt < 20 && (e.HResult & 0xffff) is 32 or 33)
+            { Thread.Sleep(100); }
+        }
     }
 }
