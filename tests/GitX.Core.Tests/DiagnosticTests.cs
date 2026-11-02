@@ -44,6 +44,19 @@ public sealed class DiagnosticTests
         Assert.Equal("base", repo.Git("log", "-1", "--format=%s").Trim());
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(32)]
+    [InlineData(1048576)]
+    public async Task Early_git_exit_preserves_stderr_even_when_stdin_pipe_breaks(int size)
+    {
+        using var repo = new TestRepository();
+        var error = await Assert.ThrowsAsync<IOException>(() => GitWriteProcess.RunAsync(repo.Root,
+            ["-c", "alias.grove-early-exit=!echo expected-early-exit >&2; exit 23", "grove-early-exit"], new byte[size]));
+        Assert.Contains("expected-early-exit", error.Message);
+        Assert.Contains("(23)", error.Message);
+    }
+
     [Fact]
     public async Task Editor_port_collision_retries_and_preserves_capability_boundary()
     {

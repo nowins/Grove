@@ -32,7 +32,11 @@ internal static class GitWriteProcess
             Exception? inputError = null;
             try { if (input is not null) await process.StandardInput.BaseStream.WriteAsync(input); }
             catch (IOException e) { inputError = e; }
-            finally { process.StandardInput.Close(); }
+            // Git may reject a hook or an argument before consuming stdin.
+            // Closing also flushes the pipe and can fail on Unix. Drain both
+            // output streams and prefer Git's exit status/diagnostic first.
+            try { process.StandardInput.Close(); }
+            catch (IOException e) { inputError ??= e; }
             await Task.WhenAll(output, errors, process.WaitForExitAsync());
             operation?.ThrowIfTerminated();
             var stdout = await output; var stderr = await errors;
