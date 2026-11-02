@@ -1,0 +1,17 @@
+[
+  { "language": "java", "fileType": "JV", "grammar": "java", "extensions": [".java"] },
+  { "language": "csharp", "fileType": "C#", "grammar": "c-sharp", "extensions": [".cs"] },
+  { "language": "javascript", "fileType": "JS", "grammar": "javascript", "extensions": [".js", ".mjs", ".cjs", ".jsx"] },
+  { "language": "typescript", "fileType": "TS", "grammar": "typescript", "extensions": [".ts", ".mts", ".cts"] },
+  { "language": "typescript", "fileType": "TS", "grammar": "tsx", "extensions": [".tsx"] },
+  { "language": "python", "fileType": "PY", "grammar": "python", "extensions": [".py", ".pyw", ".pyi"] },
+  { "language": "json", "fileType": "{}", "extensions": [".json"] },
+  { "language": "markdown", "fileType": "MD", "extensions": [".md"] },
+  { "language": "html", "fileType": "≡", "extensions": [".html"] },
+  { "language": "css", "fileType": "≡", "extensions": [".css"] },
+  { "language": "xml", "fileType": "<>", "extensions": [".xml", ".axaml", ".csproj", ".props"] },
+  { "language": "powershell", "fileType": "PS", "extensions": [".ps1"] },
+  { "language": "rust", "fileType": "≡", "extensions": [".rs"] },
+  { "language": "yaml", "fileType": "≡", "extensions": [".yml", ".yaml"] },
+  { "language": "plaintext", "fileType": "SQL", "extensions": [".sql"] }
+]

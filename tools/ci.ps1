@@ -1,0 +1,82 @@
+# Requires PowerShell 7, Git, Node from .node-version, and the SDK in global.json.
+[CmdletBinding()]
+param(
+    [ValidateSet('win-x64', 'osx-arm64', 'osx-x64')]
+    [string]$RuntimeIdentifier,
+    [string]$OutputDirectory
+)
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
+$projectRoot = Split-Path $PSScriptRoot -Parent
+$hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+$hostRid = if ($IsWindows) { "win-$hostArchitecture" } elseif ($IsMacOS) { "osx-$hostArchitecture" } else { throw 'This CI entry supports Windows and macOS hosts.' }
+if (-not $RuntimeIdentifier) { $RuntimeIdentifier = $hostRid }
+if ($RuntimeIdentifier -ne $hostRid) { throw "Run $RuntimeIdentifier on its native host; this process is $hostRid." }
+if (-not $OutputDirectory) { $OutputDirectory = "artifacts/ci/$RuntimeIdentifier" }
+$output = [IO.Path]::GetFullPath($OutputDirectory, $projectRoot)
+$artifactRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'artifacts')) + [IO.Path]::DirectorySeparatorChar
+$comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+if (-not $output.StartsWith($artifactRoot, $comparison)) { throw 'CI output must be inside this checkout artifacts directory.' }
+if (Test-Path -LiteralPath $output) { throw "Output already exists: $output. Choose a new directory; CI never deletes existing output." }
+$results = Join-Path $output 'results'
+$publish = Join-Path $output 'publish'
+New-Item -ItemType Directory -Path $results | Out-Null
+$savedEnvironment = @{}
+foreach ($name in @('GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE', 'GITX_DATA_DIR')) {
+    $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
+function Invoke-CiCommand([string]$File, [string[]]$Arguments, [string]$Log) {
+    Write-Host "> $File $($Arguments -join ' ')"
+    & $File @Arguments 2>&1 | Tee-Object -FilePath (Join-Path $results $Log)
+    if ($LASTEXITCODE -ne 0) { throw "$File exited $LASTEXITCODE. See $Log." }
+}
+Push-Location $projectRoot
+try {
+    # Hosted CI uses a fresh runner. Keep Git's standard source discovery: custom
+    # GIT_CONFIG_* overrides intentionally disable the product's blame cache.
+    # TestRepository creates disposable repos and sets its own author/config.
+    $env:GIT_TERMINAL_PROMPT = '0'
+    $env:GCM_INTERACTIVE = 'never'
+    $env:GITX_DATA_DIR = Join-Path $output 'application-data'
+    Invoke-CiCommand dotnet @('--version') 'dotnet-version.txt'
+    Invoke-CiCommand dotnet @('--list-sdks') 'dotnet-sdks.txt'
+    Invoke-CiCommand dotnet @('--list-runtimes') 'dotnet-runtimes.txt'
+    Invoke-CiCommand node @('--version') 'node-version.txt'
+    Invoke-CiCommand git @('--version') 'git-version.txt'
+    $nodeVersion = (node --version).TrimStart('v').Trim()
+    $expectedNode = (Get-Content -LiteralPath '.node-version' -Raw).Trim()
+    if ($nodeVersion -ne $expectedNode) { throw "Expected Node $expectedNode, found $nodeVersion." }
+    Invoke-CiCommand npm @('ci', '--prefix', 'src/GitX.Desktop/Editor', '--no-audit', '--no-fund') 'npm-ci.txt'
+    Invoke-CiCommand dotnet @('restore', 'Grove.slnx', '--locked-mode') 'restore.txt'
+    Invoke-CiCommand npm @('run', 'build', '--prefix', 'src/GitX.Desktop/Editor') 'editor-build.txt'
+    Invoke-CiCommand dotnet @('build', 'Grove.slnx', '-c', 'Release', '--no-restore', '--warnaserror', '-p:ContinuousIntegrationBuild=true') 'build.txt'
+    Invoke-CiCommand npm @('test', '--prefix', 'src/GitX.Desktop/Editor') 'editor-tests.txt'
+    Invoke-CiCommand dotnet @('test', 'tests/GitX.Core.Tests/GitX.Core.Tests.csproj', '-c', 'Release', '--no-build', '--no-restore', '--logger', 'trx;LogFileName=core.trx', '--results-directory', $results, '--blame-hang', '--blame-hang-timeout', '3m', '--blame-hang-dump-type', 'none') 'core-tests.txt'
+    [xml]$trx = Get-Content -LiteralPath (Join-Path $results 'core.trx') -Raw
+    $counts = $trx.TestRun.ResultSummary.Counters
+    if ([int]$counts.total -lt 1 -or [int]$counts.failed -ne 0 -or [int]$counts.error -ne 0 -or [int]$counts.executed -lt 1) { throw 'Core test results are empty or unsuccessful.' }
+    Invoke-CiCommand dotnet @('publish', 'src/GitX.Desktop/GitX.Desktop.csproj', '-c', 'Release', '-r', $RuntimeIdentifier, '--self-contained', 'true', '-p:RestoreLockedMode=true', '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:CopyOutputSymbolsToPublishDirectory=false', '-p:ContinuousIntegrationBuild=true', '--output', $publish, '--warnaserror') 'publish.txt'
+    $appHost = if ($IsWindows) { 'GitX.Desktop.exe' } else { 'GitX.Desktop' }
+    $required = @($appHost, 'GitX.Desktop.dll', 'GitX.Core.dll', 'GitX.Desktop.deps.json', 'GitX.Desktop.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
+    foreach ($grammar in @('java', 'c-sharp', 'python', 'javascript', 'typescript', 'tsx')) { $required += "Editor/dist/tree-sitter-$grammar.wasm" }
+    foreach ($relative in $required) { if (-not (Test-Path -LiteralPath (Join-Path $publish $relative) -PathType Leaf)) { throw "Missing published resource: $relative" } }
+    $nativePattern = if ($IsWindows) { '*git2*.dll' } else { '*git2*.dylib' }
+    if (-not (Get-ChildItem -LiteralPath $publish -Recurse -File -Filter $nativePattern)) { throw 'Published LibGit2 native library is missing.' }
+    $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File | Sort-Object FullName | ForEach-Object {
+        @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+    })
+    @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
+    if ($IsWindows) {
+        $archive = Join-Path $output "desktop-$RuntimeIdentifier.zip"
+        Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $archive
+    } else {
+        # tar retains the macOS apphost executable bit; uploading a loose folder does not.
+        $archive = Join-Path $output "desktop-$RuntimeIdentifier.tar.gz"
+        Invoke-CiCommand tar @('-czf', $archive, '-C', $publish, '.') 'archive.txt'
+    }
+    "$((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt') -Encoding utf8
+    Write-Host "Validated unsigned CI archive: $archive (no GUI launched)."
+} finally {
+    Pop-Location
+    foreach ($name in $savedEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process') }
+}

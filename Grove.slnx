@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GitX.Core/GitX.Core.csproj" />
+    <Project Path="src/GitX.Desktop/GitX.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GitX.Core.Tests/GitX.Core.Tests.csproj" />
+  </Folder>
+</Solution>

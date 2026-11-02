@@ -1,0 +1,5 @@
+/* Unmodified Inter 4.1 static faces, shared with Avalonia resources. */
+@font-face{font-family:GitXInter;src:url('../Assets/Fonts/Inter/Inter-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:GitXInter;src:url('../Assets/Fonts/Inter/Inter-Medium.ttf') format('truetype');font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:GitXInter;src:url('../Assets/Fonts/Inter/Inter-SemiBold.ttf') format('truetype');font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:GitXInter;src:url('../Assets/Fonts/Inter/Inter-Bold.ttf') format('truetype');font-weight:700;font-style:normal;font-display:swap}

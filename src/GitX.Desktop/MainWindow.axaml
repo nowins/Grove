@@ -1,0 +1,187 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GitX.Desktop.ViewModels" xmlns:core="using:GitX.Core" xmlns:controls="using:GitX.Desktop.Controls" xmlns:converters="using:Avalonia.Data.Converters" xmlns:automation="using:Avalonia.Automation" xmlns:chrome="using:Avalonia.Controls.Chrome"
+        x:Class="GitX.Desktop.MainWindow" x:DataType="vm:MainViewModel"
+        Title="{Binding Title}" Width="1380" Height="898" MinWidth="880" MinHeight="608"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32" WindowDecorationsTheme="{StaticResource GitXWindowChrome}"
+        WindowStartupLocation="CenterScreen">
+  <Window.Styles><Style Selector="Border.main-toolbar Button"><Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="User" /></Style><Style Selector="ListBox#FileList TextBlock.group"><Setter Property="FontSize" Value="{DynamicResource UiFontSize}" /></Style></Window.Styles>
+  <Grid RowDefinitions="36,Auto,Auto,*,24">
+    <Border Grid.Row="0" Background="{StaticResource TitleBrush}" IsHitTestVisible="False" />
+    <Border Classes="main-toolbar" chrome:WindowDecorationProperties.ElementRole="TitleBar" Background="{StaticResource TitleBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4" Margin="42,0,140,0">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+        <Button Classes="toolbar icon-button" x:Name="MainMenuButton" Click="MainMenuClicked" ToolTip.Tip="主菜单 · Alt+M" automation:AutomationProperties.Name="主菜单" Margin="0,0,6,0"><Path Classes="icon" Data="{StaticResource MenuIcon}" /></Button>
+        <Button Classes="toolbar" x:Name="RepositoryButton" Grid.Column="1" Click="RepositoriesClicked" IsEnabled="{Binding CanInteract}" MaxWidth="200" ToolTip.Tip="{Binding RepositoryPath}" automation:AutomationProperties.Name="项目选择器">
+          <Grid ColumnDefinitions="Auto,*,Auto"><Path Classes="icon" Data="{StaticResource FolderIcon}" /><TextBlock Grid.Column="1" Text="{Binding RepositoryName}" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" /><Path Grid.Column="2" Classes="icon" Data="{StaticResource ChevronDownIcon}" /></Grid>
+        </Button>
+        <Button Classes="toolbar" Grid.Column="2" x:Name="BranchButton" Click="BranchesClicked" IsEnabled="{Binding CanInteract}" Margin="8,0" MaxWidth="220" ToolTip.Tip="{Binding BranchContext}" automation:AutomationProperties.Name="分支" automation:AutomationProperties.HelpText="{Binding BranchContext}">
+          <Grid ColumnDefinitions="Auto,*,Auto"><Path Classes="icon" Data="{StaticResource BranchIcon}" /><TextBlock Grid.Column="1" Text="{Binding Branch}" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" /><Path Grid.Column="2" Classes="icon" Data="{StaticResource ChevronDownIcon}" /></Grid>
+        </Button>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="8,0">
+          <Button Classes="toolbar" x:Name="GitTaskButton" IsVisible="False" Click="GitTaskClicked" ToolTip.Tip="查看任务、耗时和输出；关闭任务窗口不停止写入" automation:AutomationProperties.Name="Git 任务"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource OutputIcon}" /><TextBlock x:Name="GitTaskLabel" Text="Git 任务" MaxWidth="200" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /></StackPanel></Button>
+          <Button x:Name="RemoteButton" Classes="toolbar icon-button" Click="RemoteToolbarClicked" IsEnabled="{Binding CanInteract}" ToolTip.Tip="同步 · Fetch / Pull / Push" automation:AutomationProperties.Name="同步"><Path Classes="icon" Data="{StaticResource RemoteIcon}" /></Button>
+          <Button Classes="toolbar icon-button" Click="StashClicked" IsEnabled="{Binding CanInteract}" ToolTip.Tip="Stash · 保存或恢复本地改动" automation:AutomationProperties.Name="Stash"><Path Classes="icon" Data="{StaticResource StashIcon}" /></Button>
+        </StackPanel>
+        <Button x:Name="EditorFocusButton" Classes="toolbar icon-button" Grid.Column="4" Click="ToggleEditorFocusClicked" ToolTip.Tip="聚焦代码 · 临时收起停靠工具窗口" automation:AutomationProperties.Name="聚焦代码"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
+        <Button x:Name="WorkspaceRefreshButton" Classes="toolbar icon-button" Grid.Column="5" Click="RefreshClicked" ToolTip.Placement="BottomEdgeAlignedRight" ToolTip.Tip="重新读取仓库 · F5" automation:AutomationProperties.Name="刷新"><Path Classes="icon" Data="{StaticResource RefreshIcon}" /></Button>
+        <Button Classes="toolbar icon-button" Grid.Column="6" Click="InfoClicked" IsVisible="False" Margin="6,0,0,0" ToolTip.Placement="BottomEdgeAlignedRight" ToolTip.Tip="显示或收起提交文件与详情" automation:AutomationProperties.Name="提交文件与详情"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
+      </Grid>
+    </Border>
+    <Border Grid.Row="1" IsVisible="{Binding HasOperation}" Background="{StaticResource OperationBrush}" Padding="10,5">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto"><TextBlock Text="{Binding OperationText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Click="ShowConflictsClicked" Margin="6,0" automation:AutomationProperties.Name="查看冲突"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource MergeIcon}" /><TextBlock Text="查看冲突" VerticalAlignment="Center" /></StackPanel></Button>
+        <Button Grid.Column="2" Click="AbortOperationClicked" IsEnabled="{Binding CanAbortOperation}" Margin="0,0,6,0" automation:AutomationProperties.Name="中止…"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource CloseIcon}" /><TextBlock Text="中止…" VerticalAlignment="Center" /></StackPanel></Button>
+        <Button Grid.Column="3" Click="ContinueOperationClicked" IsEnabled="{Binding CanContinueOperation}" automation:AutomationProperties.Name="继续"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource AcceptLeftIcon}" /><TextBlock Text="继续" VerticalAlignment="Center" /></StackPanel></Button>
+      </Grid>
+    </Border>
+    <ContentControl x:Name="DockWorkspaceHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+    <Panel x:Name="ToolContentStore" IsVisible="False">
+      <Grid x:Name="LocalNavigation" Background="{StaticResource PanelBrush}" RowDefinitions="*">
+        <GridSplitter x:Name="HistorySplitter" Grid.Row="1" IsVisible="False" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}" ToolTip.Tip="拖动调整历史与文件列表高度" />
+        <Grid x:Name="FilesPane" RowDefinitions="Auto,Auto,*,4,230">
+        <StackPanel Margin="8,2" Spacing="6">
+          <TextBox Classes="search" x:Name="FilterInput" TextChanged="ToolFilterChanged" PlaceholderText="筛选文件路径…" automation:AutomationProperties.Name="筛选文件路径"><TextBox.InnerLeftContent><Path Classes="icon" Data="{StaticResource SearchIcon}" Margin="7,0,0,0" IsHitTestVisible="False" /></TextBox.InnerLeftContent></TextBox>
+        </StackPanel>
+        <WrapPanel x:Name="CommitFileActions" Grid.Row="1" Margin="6,2,6,4">
+          <Button x:Name="FileRefreshButton" Classes="toolbar icon-button" Click="RefreshClicked" ToolTip.Tip="刷新 · F5" automation:AutomationProperties.Name="刷新"><Path Classes="icon" Data="{StaticResource RefreshIcon}" /></Button>
+          <Button Classes="toolbar icon-button" Click="DiscardClicked" IsEnabled="{Binding CanStageFile}" ToolTip.Tip="回退当前文件…" automation:AutomationProperties.Name="回退当前文件"><Path Classes="icon" Data="{StaticResource UndoIcon}" /></Button>
+          <Button x:Name="FileFilterButton" Classes="toolbar icon-button log-filter" Click="ShowFileFilterClicked" ToolTip.Tip="筛选文件" automation:AutomationProperties.Name="筛选文件"><Path Classes="icon" Data="{StaticResource SearchIcon}" /></Button>
+          <TextBlock x:Name="FileRefreshFeedback" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" VerticalAlignment="Center" Margin="6,0" />
+          <Button Classes="toolbar" Click="MergeClicked" IsVisible="{Binding HasOperation}" IsEnabled="{Binding CanOpenConflict}" automation:AutomationProperties.Name="合并…"><StackPanel Orientation="Horizontal" Spacing="2"><Path Classes="icon" Data="{StaticResource MergeIcon}" /><TextBlock Text="合并…" VerticalAlignment="Center" /></StackPanel></Button>
+        </WrapPanel>
+        <Grid Grid.Row="2">
+          <ListBox x:Name="FileList" Classes="file-navigation" Focusable="True" FocusAdorner="{x:Null}" Background="Transparent" BorderThickness="0" AutoScrollToSelectedItem="False" DoubleTapped="FileDoubleTapped" SelectionChanged="NavigationSelectionChanged">
+            <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="automation:AutomationProperties.Name" Value="{ReflectionBinding AccessibleName}" /></Style></ListBox.Styles>
+            <ListBox.ItemTemplate><DataTemplate x:DataType="vm:FileNavigationRow"><Grid ColumnDefinitions="Auto,Auto,20,Auto,*,18" ToolTip.Tip="{Binding Tooltip}">
+              <StackPanel Orientation="Horizontal"><Border Width="{Binding Indent}" /><Border Width="{Binding ChevronWidth}"><Button Classes="tree-toggle" IsVisible="{Binding CanExpand}" Click="DirectoryClicked" Focusable="False" ToolTip.Tip="{Binding ToggleName}" automation:AutomationProperties.Name="{Binding ToggleName}"><Path Classes="icon chevron" Classes.expanded="{Binding IsExpanded}" /></Button></Border><CheckBox Classes="inclusion" IsEnabled="{Binding IncludeEnabled}" IsVisible="{Binding CanInclude}" IsChecked="{Binding Included, Mode=OneWay}" Click="IncludeFileClicked" Margin="2,0,5,0" VerticalAlignment="Center" ToolTip.Tip="包含到提交；勾选不会写入 Git 索引" automation:AutomationProperties.Name="包含到提交" /></StackPanel>
+
+              <TextBlock Grid.Column="2" Grid.ColumnSpan="4" Text="{Binding Name}" IsVisible="{Binding IsGroup}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="4,0,0,0" />
+              <Grid Grid.Column="2" IsVisible="{Binding !IsGroup}">
+                <Path IsVisible="{Binding IsDirectory}" Classes="icon" Data="{StaticResource FolderIcon}" Stroke="{StaticResource FolderBrush}" Fill="#40C9A24F" HorizontalAlignment="Left" />
+                <Grid IsVisible="{Binding IsFile}" Width="17" Height="17" VerticalAlignment="Center" HorizontalAlignment="Left">
+                  <Path IsVisible="{Binding IsJava}" Data="M2 7 H11 V10 C11 14 2 14 2 10 Z M11 7 H13 C16 7 16 11 11 11 M1 15 H13 M5 5 C2 2 9 3 7 0" Stroke="#77A7DF" StrokeThickness="1.2" />
+                  <TextBlock Text="{Binding TypeGlyph}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+              </Grid>
+              <TextBlock Grid.Column="3" Text="{Binding Name}" IsVisible="{Binding !IsGroup}" MaxWidth="180" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Classes="git-status file-name" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" Classes.conflict="{Binding IsConflict}" />
+              <TextBlock Grid.Column="4" Text="{Binding ParentLabel}" Classes="muted file-parent" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="6,0" />
+              <TextBlock Grid.Column="5" Text="{Binding StatusCode}" FontSize="{DynamicResource UiSecondaryFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="git-status" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" Classes.conflict="{Binding IsConflict}" />
+            </Grid></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock x:Name="EmptyCommitHint" Text="没有本地改动" IsVisible="False" Classes="muted" Margin="12,14" IsHitTestVisible="False" />
+        </Grid>
+        <GridSplitter x:Name="CommitMessageSplitter" Grid.Row="3" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" HorizontalAlignment="Stretch" ToolTip.Tip="拖动调整提交说明区域高度" />
+        <Grid x:Name="CommitMessagePane" Grid.Row="4" Margin="8,4,8,8" RowDefinitions="Auto,*,Auto" RowSpacing="6">
+          <Button Classes="toolbar" HorizontalAlignment="Left" Click="AmendClicked" IsEnabled="{Binding CanInteract}" Content="Amend 当前索引…" ToolTip.Tip="修改上次提交，使用当前 Git 索引；不采用本次勾选范围" />
+          <TextBox Grid.Row="1" x:Name="CommitInput" FontFamily="{StaticResource UiFontFamily}" FontSize="{StaticResource UiFontSize}" LineHeight="20" Text="{Binding CommitMessage, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" VerticalAlignment="Stretch" IsEnabled="{Binding CanInteract}" PlaceholderText="提交说明…" automation:AutomationProperties.Name="提交说明" />
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
+            <Button Classes="primary" Click="CommitClicked" IsEnabled="{Binding CanCommit}" automation:AutomationProperties.Name="提交所选改动"><TextBlock Text="提交" VerticalAlignment="Center" /></Button>
+            <Button Click="CommitAndPushClicked" IsEnabled="{Binding CanCommit}" automation:AutomationProperties.Name="提交并推送"><TextBlock Text="提交并推送…" VerticalAlignment="Center" /></Button>
+            <Button Classes="icon-button" Click="RestoreDiscardClicked" IsEnabled="{Binding CanRestoreDiscard}" ToolTip.Tip="{Binding RecoveryDescription}" automation:AutomationProperties.Name="撤销丢弃"><Path Classes="icon" Data="{StaticResource UndoIcon}" /></Button>
+          </StackPanel>
+        </Grid>
+        </Grid>
+      </Grid>
+        <Grid x:Name="EditorPane" RowDefinitions="Auto,*,Auto">
+        <Border x:Name="FallbackFileToolbar" IsVisible="False" Height="34" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,3">
+          <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+            <TextBlock Text="{Binding FileTitle}" ToolTip.Tip="{Binding FileTitle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="1" Content="{Binding BlameLabel}" Click="BlameClicked" IsEnabled="{Binding CanBlame}" Margin="0,0,6,0" ToolTip.Tip="当前工作区文件的逐行 Git 注解" />
+            <Button Grid.Column="2" Click="PreviousHunkClicked" ToolTip.Tip="上一变更块 · Shift+F7" automation:AutomationProperties.Name="上一变更块"><Path Classes="icon" Data="{StaticResource UpIcon}" /></Button>
+            <Button Grid.Column="3" Click="NextHunkClicked" ToolTip.Tip="下一变更块 · F7" Margin="3,0,0,0" automation:AutomationProperties.Name="下一变更块"><Path Classes="icon" Data="{StaticResource DownIcon}" /></Button>
+          </Grid>
+        </Border>
+        <ContentControl x:Name="EditorHost" Grid.Row="1" Margin="0,0,4,0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+        <TextBlock x:Name="EditorDetailFooter" Grid.Row="2" Text="{Binding Detail}" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" Margin="10,3" TextTrimming="CharacterEllipsis" />
+        </Grid>
+      <Grid x:Name="GitLogWorkspace" ColumnDefinitions="180,4,*,4,280" TextElement.FontSize="{DynamicResource GitLogFontSize}">
+      <Border Grid.Column="0" x:Name="HistoryBranchesPane" IsVisible="False" Background="{StaticResource PanelBrush}">
+        <Grid RowDefinitions="34,*">
+          <TextBox Classes="search" Text="{Binding HistoryBranchSearch}" PlaceholderText="分支或标签" Margin="4,3" automation:AutomationProperties.Name="搜索历史分支或标签"><TextBox.InnerLeftContent><Path Classes="icon" Data="{StaticResource SearchIcon}" Margin="6,0,0,0" /></TextBox.InnerLeftContent></TextBox>
+          <TreeView x:Name="HistoryBranchTree" Grid.Row="1" ItemsSource="{Binding HistoryBranches}" SelectionChanged="HistoryBranchSelected" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <TreeView.Styles>
+              <Style Selector="TreeViewItem"><Setter Property="IsExpanded" Value="True" /><Setter Property="Padding" Value="0" /><Setter Property="MinHeight" Value="22" /></Style>
+              <Style Selector="TreeViewItem /template/ ContentPresenter#PART_HeaderPresenter"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+              <Style Selector="TreeViewItem /template/ Panel#PART_ExpandCollapseChevronContainer"><Setter Property="Margin" Value="6,0" /></Style>
+              <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot:pointerover"><Setter Property="Background" Value="{StaticResource HoverBrush}" /></Style>
+              <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{StaticResource InactiveSelectionBrush}" /></Style>
+              <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot:pointerover"><Setter Property="Background" Value="{StaticResource InactiveSelectionBrush}" /></Style>
+              <Style Selector="TreeView:focus-within TreeViewItem:selected /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{StaticResource SelectionBrush}" /></Style>
+            </TreeView.Styles>
+            <TreeView.ItemTemplate><TreeDataTemplate x:DataType="vm:HistoryBranchNode" ItemsSource="{Binding Children}">
+              <Grid Height="22" ColumnDefinitions="18,*,Auto" ColumnSpacing="4" Margin="0,0,8,0" ToolTip.Tip="{Binding Tooltip}">
+                <Path Classes="icon" Data="{StaticResource FolderIcon}" IsVisible="{Binding IsGroup}" />
+                <Path Classes="icon" Data="{StaticResource BranchIcon}" IsVisible="{Binding IsReference}" />
+                <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <Path Grid.Column="2" Classes="icon" Data="{StaticResource CheckIcon}" IsVisible="{Binding Current}" Stroke="{StaticResource AddedBrush}" Width="12" Height="12" VerticalAlignment="Center" ToolTip.Tip="当前工作区分支" />
+              </Grid>
+            </TreeDataTemplate></TreeView.ItemTemplate>
+          </TreeView>
+        </Grid>
+      </Border>
+      <GridSplitter x:Name="HistoryBranchSplitter" Grid.Column="1" ResizeDirection="Columns" />
+      <Grid x:Name="GitLogCenter" Grid.Column="2" RowDefinitions="Auto,*">
+        <Border x:Name="HistoryHeader" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,3">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button x:Name="HistoryBranchesButton" Classes="toolbar icon-button" Click="HistoryBranchesToggled" ToolTip.Tip="显示或收起分支树" automation:AutomationProperties.Name="历史分支树"><Path Classes="icon" Data="{StaticResource BranchIcon}" /></Button>
+            <WrapPanel Grid.Column="1" Orientation="Horizontal">
+              <TextBox x:Name="HistorySearchInput" Classes="search" Text="{Binding HistoryText}" PlaceholderText="文本或 SHA" KeyDown="HistorySearchKeyDown" Width="230" Height="28" Margin="2,0" automation:AutomationProperties.Name="历史文本或 SHA 查询">
+                <TextBox.InnerLeftContent><Button Classes="toolbar icon-button" Click="HistorySearchClicked" Padding="5,0" ToolTip.Tip="查询完整历史 · Enter" automation:AutomationProperties.Name="查询完整历史"><Path Classes="icon" Data="{StaticResource SearchIcon}" /></Button></TextBox.InnerLeftContent>
+                <TextBox.InnerRightContent><StackPanel Orientation="Horizontal" Spacing="1" Margin="0,0,3,0"><ToggleButton Classes="log-search-option" Content=".*" IsChecked="{Binding HistoryUseRegex}" Click="HistorySearchOptionClicked" ToolTip.Tip="正则表达式" automation:AutomationProperties.Name="历史搜索正则表达式" /><ToggleButton Classes="log-search-option" Content="Cc" IsChecked="{Binding HistoryMatchCase}" Click="HistorySearchOptionClicked" ToolTip.Tip="区分大小写" automation:AutomationProperties.Name="历史搜索区分大小写" /></StackPanel></TextBox.InnerRightContent>
+              </TextBox>
+              <Button Classes="toolbar log-filter" Classes.active="{Binding HasHistoryBranchFilter}" Click="HistoryBranchFilterClicked" ToolTip.Tip="{Binding HistoryScope}" automation:AutomationProperties.Name="历史分支筛选"><StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{Binding HistoryBranchLabel}" MaxWidth="130" TextTrimming="CharacterEllipsis" /><Path Classes="icon" Data="{StaticResource ChevronDownIcon}" Width="12" /></StackPanel></Button>
+              <Button Classes="toolbar log-filter" Classes.active="{Binding HasHistoryAuthorFilter}" Click="HistoryAuthorFilterClicked" ToolTip.Tip="{Binding HistoryAuthorLabel}" automation:AutomationProperties.Name="历史作者筛选"><StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{Binding HistoryAuthorLabel}" MaxWidth="110" TextTrimming="CharacterEllipsis" /><Path Classes="icon" Data="{StaticResource ChevronDownIcon}" Width="12" /></StackPanel></Button>
+              <Button Classes="toolbar log-filter" Classes.active="{Binding HasHistoryDateFilter}" Click="HistoryDateFilterClicked" ToolTip.Tip="{Binding HistoryDateLabel}" automation:AutomationProperties.Name="历史日期筛选"><StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{Binding HistoryDateLabel}" MaxWidth="140" TextTrimming="CharacterEllipsis" /><Path Classes="icon" Data="{StaticResource ChevronDownIcon}" Width="12" /></StackPanel></Button>
+              <Button Classes="toolbar log-filter" Classes.active="{Binding HasHistoryPathFilter}" Click="HistoryPathFilterClicked" ToolTip.Tip="{Binding HistoryPathLabel}" automation:AutomationProperties.Name="历史路径筛选"><StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{Binding HistoryPathLabel}" MaxWidth="120" TextTrimming="CharacterEllipsis" /><Path Classes="icon" Data="{StaticResource ChevronDownIcon}" Width="12" /></StackPanel></Button>
+              <Button Classes="toolbar icon-button" IsVisible="{Binding HasHistoryFilters}" Click="HistoryClearFilterClicked" ToolTip.Tip="清空搜索、作者、日期和路径条件" automation:AutomationProperties.Name="清空历史查询条件"><Path Classes="icon" Data="{StaticResource CloseIcon}" Width="12" /></Button>
+            </WrapPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+              <Button Classes="toolbar icon-button" Click="HistoryActionsClicked" IsEnabled="{Binding CanInteract}" ToolTip.Tip="提交操作与版本比较" automation:AutomationProperties.Name="提交操作"><Path Classes="icon" Data="{StaticResource MoreIcon}" /></Button>
+              <Button Classes="toolbar icon-button" Click="HistorySettingsClicked" ToolTip.Tip="Log 显示设置" automation:AutomationProperties.Name="历史显示设置"><Path Classes="icon" Data="{StaticResource SettingsIcon}" /></Button>
+              <Button Classes="toolbar icon-button" Click="HistoryFilesToggled" ToolTip.Tip="显示或收起文件和提交详情" automation:AutomationProperties.Name="历史文件与详情"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
+            </StackPanel>
+          </Grid>
+        </Border>
+        <Grid x:Name="HistoryLogPane" Grid.Row="1" IsVisible="True" RowDefinitions="*,Auto">
+          <ListBox x:Name="CommitList" Focusable="True" FocusAdorner="{x:Null}" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}" SelectionMode="Multiple" AutoScrollToSelectedItem="False" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="Padding" Value="4,0" /><Setter Property="Height" Value="24" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="automation:AutomationProperties.Name" Value="{ReflectionBinding Caption}" /><Setter Property="automation:AutomationProperties.HelpText" Value="{ReflectionBinding Detail}" /></Style></ListBox.Styles>
+            <ListBox.ItemTemplate><DataTemplate x:DataType="core:CommitEntry"><controls:CommitRowPanel ColumnDefinitions="Auto,Auto,*,100,126" Height="24" ShowAuthor="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).HistoryShowAuthor}" ShowDate="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).HistoryShowDate}" ShowReferences="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).HistoryShowReferences}" ToolTip.Tip="{Binding Tooltip}">
+              <controls:CommitGraph Row="{Binding Graph}" />
+              <controls:CommitReferences Grid.Column="1" References="{Binding ReferenceLabels}" MaxWidth="170" ClipToBounds="True" Margin="4,0,6,0" VerticalAlignment="Center" ToolTip.Tip="{Binding References}" />
+              <TextBlock Grid.Column="2" Text="{Binding Subject}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="3" Text="{Binding Author}" Classes="muted commit-meta" FontSize="{DynamicResource GitLogMetaFontSize}" Margin="8,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="4" Text="{Binding DateLabel}" Classes="muted commit-meta" FontSize="{DynamicResource GitLogMetaFontSize}" VerticalAlignment="Center" />
+            </controls:CommitRowPanel></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Text="{Binding HistoryEmptyText}" IsVisible="{Binding !HasHistory}" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="muted" />
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="8,3">
+            <TextBlock Text="{Binding HistoryPagingText}" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="1" Classes="toolbar" IsVisible="{Binding HistoryLoadFailed}" IsEnabled="{Binding !HistoryLoading}" Click="MoreHistoryClicked" Content="重试" automation:AutomationProperties.Name="重试加载提交" />
+          </Grid>
+        </Grid>
+      </Grid>
+      <GridSplitter x:Name="RightWorkspaceSplitter" Grid.Column="3" ResizeDirection="Columns" />
+      <Border x:Name="HistoryFilesPane" Grid.Column="4" Background="{StaticResource PanelBrush}">
+        <Grid x:Name="AuxiliaryLayout" RowDefinitions="Auto,*,0,0">
+          <Grid Grid.Row="1" RowDefinitions="28,*">
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding HistoryFilesTitle}" Classes="muted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0" /><Button Grid.Column="1" Classes="toolbar icon-button" Click="HistoryFileSettingsClicked" ToolTip.Tip="文件列表显示选项" automation:AutomationProperties.Name="历史文件显示选项"><Path Classes="icon" Data="{StaticResource SettingsIcon}" Width="14" /></Button></Grid>
+            <ListBox x:Name="HistoryFileList" Classes="file-navigation" Grid.Row="1" SelectionMode="Multiple" Focusable="True" FocusAdorner="{x:Null}" SelectionChanged="HistoryFileSelected" DoubleTapped="HistoryFileDoubleTapped" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="Height" Value="22" /><Setter Property="Padding" Value="4,0" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="automation:AutomationProperties.Name" Value="{ReflectionBinding AccessibleName}" /></Style></ListBox.Styles>
+              <ListBox.ItemTemplate><DataTemplate x:DataType="vm:FileNavigationRow"><Grid ColumnDefinitions="Auto,18,*,18" Height="22" ToolTip.Tip="{Binding Tooltip}">
+                <StackPanel Orientation="Horizontal"><Border Width="{Binding Indent}" /><Border Width="{Binding ChevronWidth}"><Button Classes="tree-toggle" IsVisible="{Binding CanExpand}" Click="HistoryDirectoryClicked" Focusable="False" automation:AutomationProperties.Name="{Binding ToggleName}"><Path Classes="icon chevron" Classes.expanded="{Binding IsExpanded}" /></Button></Border></StackPanel>
+                <Path Grid.Column="1" IsVisible="{Binding IsDirectory}" Classes="icon" Data="{StaticResource FolderIcon}" Stroke="{StaticResource FolderBrush}" />
+                <TextBlock Grid.Column="1" IsVisible="{Binding IsFile}" Text="{Binding TypeGlyph}" FontSize="9" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Classes="git-status file-name" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" />
+                <TextBlock Grid.Column="3" Text="{Binding StatusCode}" FontSize="{DynamicResource UiSecondaryFontSize}" VerticalAlignment="Center" Classes="git-status" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" />
+              </Grid></DataTemplate></ListBox.ItemTemplate>
+            </ListBox>
+          </Grid>
+          <GridSplitter x:Name="HistoryDetailsSplitter" Grid.Row="2" IsVisible="False" ResizeDirection="Rows" Background="{StaticResource BorderBrush}" />
+          <Border x:Name="HistoryDetailsPanel" Grid.Row="3" IsVisible="False" Padding="12,10"><ScrollViewer><StackPanel Spacing="8"><TextBlock Text="{Binding SelectedCommit.Subject}" FontWeight="SemiBold" TextWrapping="Wrap" FontSize="14" /><SelectableTextBlock Text="{Binding SelectedCommit.Sha}" FontFamily="{StaticResource CodeFontFamily}" FontSize="{DynamicResource UiSecondaryFontSize}" TextWrapping="Wrap" /><TextBlock Text="{Binding SelectedCommit.Author}" /><TextBlock Text="{Binding SelectedCommit.DateLabel}" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" /><SelectableTextBlock Text="{Binding HistoryCommitDetail}" TextWrapping="Wrap" FontSize="{DynamicResource UiSecondaryFontSize}" /></StackPanel></ScrollViewer></Border>
+        </Grid>
+      </Border>
+      </Grid>
+      <ContentControl x:Name="FileHistoryHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+    </Panel>
+    <Border Grid.Row="4" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,1,0,0" Padding="10,1"><Grid ColumnDefinitions="*,Auto,Auto"><TextBlock Text="{Binding FileTitle}" IsVisible="{Binding !HasError}" ToolTip.Tip="{Binding Status}" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Classes="toolbar" IsVisible="{Binding HasError}" Click="ErrorDetailsClicked" Height="20" MinHeight="20" Padding="0" HorizontalContentAlignment="Stretch" Foreground="{StaticResource ErrorTextBrush}" ToolTip.Tip="{Binding Error}" automation:AutomationProperties.Name="查看错误详情"><TextBlock Text="{Binding Error}" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" /></Button><TextBlock Grid.Column="1" x:Name="EditorPosition" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" Margin="12,0" VerticalAlignment="Center" /><TextBlock Grid.Column="2" Text="{Binding Comparison}" Foreground="{StaticResource MutedBrush}" FontSize="{DynamicResource UiSecondaryFontSize}" VerticalAlignment="Center" /></Grid></Border>
+  </Grid>
+</Window>

@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:automation="using:Avalonia.Automation"
+        x:Class="GitX.Desktop.MergeWindow" Title="合并修订" Width="1440" Height="898" MinWidth="1000" MinHeight="608" WindowStartupLocation="CenterOwner"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32" WindowDecorationsTheme="{StaticResource GitXWindowChrome}">
+  <Window.Styles>
+    <Style Selector="TextBlock.merge-state"><Setter Property="Foreground" Value="{StaticResource WarningBrush}" /></Style>
+    <Style Selector="TextBlock.merge-state.complete"><Setter Property="Foreground" Value="{StaticResource AddedBrush}" /></Style>
+  </Window.Styles>
+  <Grid RowDefinitions="36,Auto,*,50" Margin="0,32,0,0">
+    <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,4">
+      <Grid ColumnDefinitions="Auto,*">
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button x:Name="PreviousButton" Classes="toolbar" Tag="previous" Click="EditorCommandClicked" ToolTip.Tip="上一处未处理冲突 · Shift+F7" automation:AutomationProperties.Name="上一处未处理冲突" IsEnabled="False"><Path Classes="icon" Data="{StaticResource UpIcon}" /></Button>
+          <Button x:Name="NextButton" Classes="toolbar" Tag="next" Click="EditorCommandClicked" ToolTip.Tip="下一处未处理冲突 · F7" automation:AutomationProperties.Name="下一处未处理冲突" IsEnabled="False"><Path Classes="icon" Data="{StaticResource DownIcon}" /></Button>
+          <Border Width="1" Height="16" Background="{StaticResource BorderBrush}" Margin="4,0" />
+          <Button x:Name="AutomaticButton" Classes="toolbar" Tag="automatic" Click="EditorCommandClicked" IsEnabled="False" ToolTip.Tip="应用尚未处理的非冲突改动，保留已有选择与手工编辑；可撤销" automation:AutomationProperties.Name="应用非冲突改动"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource MergeIcon}" /><TextBlock Text="应用非冲突改动" VerticalAlignment="Center" /></StackPanel></Button>
+          <Button x:Name="UndoButton" Classes="toolbar" Tag="undo" Click="EditorCommandClicked" ToolTip.Tip="撤销 · Ctrl+Z" automation:AutomationProperties.Name="撤销" IsEnabled="False"><Path Classes="icon" Data="{StaticResource UndoIcon}" /></Button>
+          <Border Width="1" Height="16" Background="{StaticResource BorderBrush}" Margin="4,0" />
+          <Button x:Name="AcceptLeftButton" Classes="toolbar" Tag="resolve-left" Click="EditorCommandClicked" IsEnabled="False" ToolTip.Tip="采用左侧并忽略右侧，解决当前整块" automation:AutomationProperties.Name="使用左侧解决"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource AcceptLeftIcon}" /><TextBlock Text="使用左侧解决" /></StackPanel></Button>
+          <Button x:Name="AcceptRightButton" Classes="toolbar" Tag="resolve-right" Click="EditorCommandClicked" IsEnabled="False" ToolTip.Tip="采用右侧并忽略左侧，解决当前整块" automation:AutomationProperties.Name="使用右侧解决"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource AcceptRightIcon}" /><TextBlock Text="使用右侧解决" /></StackPanel></Button>
+          <Button x:Name="AcceptBothButton" Classes="toolbar" Tag="both" Click="EditorCommandClicked" IsEnabled="False" ToolTip.Tip="左侧内容在前，右侧在后；请检查语义重复" automation:AutomationProperties.Name="两者都要"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource BothIcon}" /><TextBlock Text="两者都要" VerticalAlignment="Center" /></StackPanel></Button>
+          <Button x:Name="KeepResultButton" Classes="toolbar" Tag="keep" Click="EditorCommandClicked" IsEnabled="False" ToolTip.Tip="保留中间当前结果，将此块确认为已处理" automation:AutomationProperties.Name="保留结果"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource CheckIcon}" /><TextBlock Text="保留结果" /></StackPanel></Button>
+          <Button x:Name="CompareButton" Classes="toolbar" Click="CompareClicked" IsEnabled="False" Content="比较内容…" />
+        </StackPanel>
+        <TextBlock Grid.Column="1" x:Name="StateLabel" Classes="merge-state" Text="正在读取冲突…" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,4,0" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+      </Grid>
+    </Border>
+    <Border x:Name="ErrorPanel" Grid.Row="1" IsVisible="False" Background="{StaticResource ErrorSurfaceBrush}" Padding="10,5"><TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{StaticResource ErrorTextBrush}" /></Border>
+    <Grid Grid.Row="2">
+      <!-- Native child HWNDs cover Avalonia overlays: leave the 4 DIP resize
+           strips outside the WebView so dragging an edge never scrolls code. -->
+      <ContentControl x:Name="MergeHost" Margin="4,0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+      <Border x:Name="SpecialPanel" IsVisible="False" Background="{StaticResource SurfaceBrush}" Padding="28">
+        <StackPanel Spacing="16" MaxWidth="850" HorizontalAlignment="Left">
+          <TextBlock x:Name="SpecialTitle" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock x:Name="SpecialDescription" TextWrapping="Wrap" />
+          <TextBlock x:Name="SideDescription" TextWrapping="Wrap" Classes="muted" />
+          <StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="UseLeftButton" Click="UseLeftClicked" automation:AutomationProperties.Name="采用完整左侧"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource AcceptLeftIcon}" /><TextBlock Text="采用完整左侧" VerticalAlignment="Center" /></StackPanel></Button><Button x:Name="UseRightButton" Click="UseRightClicked" automation:AutomationProperties.Name="采用完整右侧"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource AcceptRightIcon}" /><TextBlock Text="采用完整右侧" VerticalAlignment="Center" /></StackPanel></Button></StackPanel>
+          <TextBlock Text="采用一侧只改变工作区并备份原文件。核对结果后，再点击“标记解决”；也可关闭窗口，在外部工具处理后重新打开。重命名相关路径须逐项核对。" TextWrapping="Wrap" Classes="muted" />
+        </StackPanel>
+      </Border>
+    </Grid>
+    <Border Grid.Row="3" Background="{StaticResource PanelBrush}" Padding="10,6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0" Spacing="2">
+          <TextBlock x:Name="SaveStateLabel" Text="左：当前 · 中：结果（可编辑）· 右：传入" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" />
+          <TextBlock x:Name="DetailLabel" Classes="muted" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </StackPanel>
+        <Button Grid.Column="1" x:Name="SaveButton" Tag="save" Click="EditorCommandClicked" IsEnabled="False" ToolTip.Placement="Top" ToolTip.Tip="只保存工作区 · Ctrl+S" automation:AutomationProperties.Name="保存工作区"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource SaveIcon}" /><TextBlock Text="保存工作区" VerticalAlignment="Center" /></StackPanel></Button>
+        <Button Grid.Column="2" x:Name="ResolveButton" Click="ResolveClicked" IsEnabled="False" Margin="8,0" automation:AutomationProperties.Name="标记解决"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource CheckIcon}" /><TextBlock Text="标记解决" VerticalAlignment="Center" /></StackPanel></Button>
+        <Button Grid.Column="3" x:Name="ApplyButton" Classes="primary" Tag="apply" Click="EditorCommandClicked" IsEnabled="False" Content="保存并解决" ToolTip.Tip="只保存中间结果；尚未应用的改动不会自动加入，未处理时会再次确认" Margin="0,0,8,0" />
+        <Button Grid.Column="4" Content="关闭" Click="CloseClicked" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

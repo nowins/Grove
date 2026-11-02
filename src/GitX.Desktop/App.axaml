@@ -1,0 +1,92 @@
+﻿<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="GitX.Desktop.App" RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <ResourceDictionary>
+    <ResourceDictionary.MergedDictionaries><ResourceInclude Source="/Resources/Icons.axaml" /><ResourceInclude Source="/Resources/WindowChrome.axaml" /></ResourceDictionary.MergedDictionaries>
+    <SolidColorBrush x:Key="SurfaceBrush">#1E1F22</SolidColorBrush>
+    <SolidColorBrush x:Key="TitleBrush">#27282C</SolidColorBrush>
+    <SolidColorBrush x:Key="PanelBrush">#191A1C</SolidColorBrush>
+    <SolidColorBrush x:Key="MenuBrush">#27282C</SolidColorBrush>
+    <SolidColorBrush x:Key="InactiveSelectionBrush">#323439</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderBrush">#393B40</SolidColorBrush>
+    <SolidColorBrush x:Key="SubtleBorderBrush">#2F3134</SolidColorBrush>
+    <SolidColorBrush x:Key="MutedBrush">#9B9FA6</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentBrush">#5E95F8</SolidColorBrush>
+    <SolidColorBrush x:Key="FocusBrush">#3574F0</SolidColorBrush>
+    <SolidColorBrush x:Key="FocusRingBrush">#8AB4FF</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryBrush">#2F68E0</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryHoverBrush">#2A62D6</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryPressedBrush">#2558C4</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionBrush">#2E436E</SolidColorBrush>
+    <SolidColorBrush x:Key="HoverBrush">#36383D</SolidColorBrush>
+    <SolidColorBrush x:Key="TextBrush">#DFE1E5</SolidColorBrush>
+    <SolidColorBrush x:Key="CodeTextBrush">#BCBEC4</SolidColorBrush>
+    <SolidColorBrush x:Key="SecondaryTextBrush">#B4B8BF</SolidColorBrush>
+    <SolidColorBrush x:Key="InputBrush">#1B1C1F</SolidColorBrush>
+    <SolidColorBrush x:Key="AddedBrush">#7CC483</SolidColorBrush>
+    <SolidColorBrush x:Key="DeletedBrush">#E8716F</SolidColorBrush>
+    <SolidColorBrush x:Key="ModifiedBrush">#8FB4FA</SolidColorBrush>
+    <SolidColorBrush x:Key="FileIconBrush">#58667A</SolidColorBrush>
+    <SolidColorBrush x:Key="SourceIconBrush">#8B5FD3</SolidColorBrush>
+    <SolidColorBrush x:Key="MarkdownIconBrush">#4A8FD6</SolidColorBrush>
+    <SolidColorBrush x:Key="DataIconBrush">#C58A2A</SolidColorBrush>
+    <SolidColorBrush x:Key="FolderBrush">#C9A24F</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#DDAA55</SolidColorBrush>
+    <SolidColorBrush x:Key="OperationBrush">#423A28</SolidColorBrush>
+    <SolidColorBrush x:Key="ErrorSurfaceBrush">#492B2E</SolidColorBrush>
+    <SolidColorBrush x:Key="ErrorTextBrush">#F4B5B8</SolidColorBrush>
+    <!-- Native and Web UI share bundled Inter; CJK keeps the platform UI face. -->
+    <FontFamily x:Key="UiFontFamily">avares://GitX.Desktop/Assets/Fonts/Inter#Inter, Microsoft YaHei UI, Segoe UI, Noto Sans CJK SC</FontFamily>
+    <FontFamily x:Key="CodeFontFamily">avares://GitX.Desktop/Editor/fonts#JetBrains Mono, Cascadia Mono, Consolas, Microsoft YaHei UI, Noto Sans Mono CJK SC</FontFamily>
+    <x:Double x:Key="UiFontSize">12.5</x:Double>
+    <x:Double x:Key="UiSecondaryFontSize">12</x:Double>
+    <x:Double x:Key="GitLogFontSize">12</x:Double>
+    <x:Double x:Key="GitLogMetaFontSize">11</x:Double>
+    <x:Double x:Key="MenuFontSize">12</x:Double>
+    <x:Double x:Key="CodeFontSize">12</x:Double>
+    <x:Double x:Key="FileRowHeight">22</x:Double>
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme><FluentTheme.Palettes><ColorPaletteResources x:Key="Dark" Accent="#3574F0" /></FluentTheme.Palettes></FluentTheme>
+    <Style Selector="Window"><Setter Property="Icon" Value="/Assets/gitx.ico" /><Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" /><Setter Property="FontSize" Value="{StaticResource UiFontSize}" /><Setter Property="Foreground" Value="{StaticResource TextBrush}" /><Setter Property="Background" Value="{StaticResource SurfaceBrush}" /></Style>
+    <Style Selector="Button"><Setter Property="Padding" Value="8,3" /><Setter Property="MinHeight" Value="26" /><Setter Property="CornerRadius" Value="4" /></Style>
+    <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{StaticResource MutedBrush}" /></Style>
+    <Style Selector="ListBoxItem"><Setter Property="Padding" Value="8,1" /><Setter Property="MinHeight" Value="{StaticResource FileRowHeight}" /></Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{StaticResource HoverBrush}" /></Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{StaticResource InactiveSelectionBrush}" /></Style>
+    <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{StaticResource InactiveSelectionBrush}" /></Style>
+    <Style Selector="ListBox:focus-within ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{StaticResource SelectionBrush}" /></Style>
+    <Style Selector="Button.toolbar"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" /></Style>
+    <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{StaticResource HoverBrush}" /></Style>
+    <Style Selector="Button.log-filter"><Setter Property="Padding" Value="6,3" /></Style>
+    <Style Selector="Button.log-filter.active"><Setter Property="Foreground" Value="{StaticResource AccentBrush}" /></Style>
+    <Style Selector="ToggleButton.log-search-option"><Setter Property="Width" Value="24" /><Setter Property="MinHeight" Value="22" /><Setter Property="Height" Value="22" /><Setter Property="Padding" Value="0" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="3" /><Setter Property="FontSize" Value="{DynamicResource UiSecondaryFontSize}" /><Setter Property="Foreground" Value="{StaticResource MutedBrush}" /></Style>
+    <Style Selector="ToggleButton.log-search-option:checked"><Setter Property="Background" Value="{StaticResource SelectionBrush}" /><Setter Property="Foreground" Value="{StaticResource AccentBrush}" /></Style>
+    <Style Selector="Path.icon"><Setter Property="Width" Value="16" /><Setter Property="Height" Value="16" /><Setter Property="Stroke" Value="{StaticResource SecondaryTextBrush}" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="StrokeLineCap" Value="Round" /><Setter Property="StrokeJoin" Value="Round" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+    <Style Selector="Path.chevron"><Setter Property="Data" Value="{StaticResource ChevronRightIcon}" /></Style>
+    <Style Selector="Path.chevron.expanded"><Setter Property="Data" Value="{StaticResource ChevronDownIcon}" /></Style>
+    <Style Selector="Button.close:pointerover Path.icon"><Setter Property="Stroke" Value="White" /></Style>
+    <Style Selector="TextBlock.git-status.added"><Setter Property="Foreground" Value="{StaticResource AddedBrush}" /></Style>
+    <Style Selector="TextBlock.git-status.deleted"><Setter Property="Foreground" Value="{StaticResource DeletedBrush}" /></Style>
+    <Style Selector="TextBlock.git-status.modified"><Setter Property="Foreground" Value="{StaticResource ModifiedBrush}" /></Style>
+    <Style Selector="TextBlock.git-status.conflict"><Setter Property="Foreground" Value="{StaticResource WarningBrush}" /></Style>
+    <Style Selector="TextBlock.git-status.group"><Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="FontSize" Value="{DynamicResource UiSecondaryFontSize}" /></Style>
+    <Style Selector="Button.tree-toggle"><Setter Property="Width" Value="14" /><Setter Property="MinHeight" Value="20" /><Setter Property="Height" Value="20" /><Setter Property="Padding" Value="0" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{StaticResource MutedBrush}" /></Style>
+    <Style Selector="Border.file-icon"><Setter Property="Background" Value="{StaticResource FileIconBrush}" /></Style>
+    <Style Selector="Border.file-icon.source"><Setter Property="Background" Value="{StaticResource SourceIconBrush}" /></Style>
+    <Style Selector="Border.file-icon.markdown"><Setter Property="Background" Value="{StaticResource MarkdownIconBrush}" /></Style>
+    <Style Selector="Border.file-icon.data"><Setter Property="Background" Value="{StaticResource DataIconBrush}" /></Style>
+    <Style Selector="TextBox"><Setter Property="CornerRadius" Value="4" /><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="7,4" /></Style>
+    <Style Selector="TextBox.search"><Setter Property="Background" Value="{StaticResource InputBrush}" /><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" /></Style>
+    <Style Selector="ToggleButton.view-tab">
+      <Setter Property="Width" Value="34" /><Setter Property="Height" Value="32" />
+      <Setter Property="Template"><ControlTemplate><Border Name="TabBorder" CornerRadius="6" Background="Transparent" BorderThickness="2,0,0,0" BorderBrush="Transparent"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Content="{TemplateBinding Content}" /></Border></ControlTemplate></Setter>
+    </Style>
+    <Style Selector="ToggleButton.view-tab Path"><Setter Property="Width" Value="16" /><Setter Property="Height" Value="16" /><Setter Property="Stroke" Value="{StaticResource SecondaryTextBrush}" /><Setter Property="StrokeThickness" Value="1.4" /></Style>
+    <Style Selector="ToggleButton.view-tab:focus-visible /template/ Border#TabBorder"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Style>
+    <Style Selector="ToggleButton.view-tab:pointerover /template/ Border#TabBorder"><Setter Property="Background" Value="{StaticResource HoverBrush}" /></Style>
+    <Style Selector="ToggleButton.view-tab:checked /template/ Border#TabBorder"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /><Setter Property="Background" Value="{StaticResource SelectionBrush}" /></Style>
+    <StyleInclude Source="/Resources/Controls.axaml" />
+  </Application.Styles>
+</Application>

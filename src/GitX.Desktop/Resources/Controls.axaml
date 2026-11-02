@@ -1,0 +1,117 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="GridSplitter"><Setter Property="Background" Value="Transparent" /><Setter Property="Template"><ControlTemplate><Border Background="Transparent"><Border Width="1" Background="{DynamicResource BorderBrush}" HorizontalAlignment="Center" /></Border></ControlTemplate></Setter></Style>
+  <Style Selector="GridSplitter[ResizeDirection=Rows]"><Setter Property="Template"><ControlTemplate><Border Background="Transparent"><Border Height="1" Background="{DynamicResource BorderBrush}" VerticalAlignment="Center" /></Border></ControlTemplate></Setter></Style>
+  <Style Selector="MenuFlyoutPresenter"><Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" /><Setter Property="FontSize" Value="{DynamicResource MenuFontSize}" /><Setter Property="Background" Value="{DynamicResource MenuBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="MenuFlyoutPresenter /template/ ItemsPresenter#PART_ItemsPresenter"><Setter Property="Margin" Value="4" /></Style>
+  <Style Selector="MenuItem"><Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" /><Setter Property="FontSize" Value="{DynamicResource MenuFontSize}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="MinHeight" Value="24" /><Setter Property="Padding" Value="8,2" /><Setter Property="CornerRadius" Value="3" /></Style>
+  <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /></Style>
+  <Style Selector="MenuItem:selected /template/ ContentPresenter#PART_HeaderPresenter"><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /><Setter Property="Opacity" Value="1" /></Style>
+  <Style Selector="MenuFlyoutPresenter Separator, FlyoutPresenter.shell-popup Separator"><Setter Property="Height" Value="1" /><Setter Property="Background" Value="{DynamicResource SubtleBorderBrush}" /><Setter Property="Margin" Value="6,4" /></Style>
+  <Style Selector="MenuItem.menu-caption"><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="FontSize" Value="{DynamicResource UiSecondaryFontSize}" /><Setter Property="Margin" Value="0,2,0,4" /><Setter Property="Opacity" Value="1" /></Style>
+  <Style Selector="MenuItem.menu-caption /template/ ContentPresenter#PART_HeaderPresenter"><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <Style Selector="FlyoutPresenter.shell-popup, FlyoutPresenter.history-filter">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" /><Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="Background" Value="{DynamicResource MenuBrush}" />
+    <Setter Property="Padding" Value="4" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="FlyoutPresenter.history-filter"><Setter Property="Padding" Value="12" /></Style>
+  <!-- Quiet hover, stable selection and an independent keyboard focus indicator. -->
+  <Style Selector="ListBox.file-navigation ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+  <Style Selector="ListBox.file-navigation ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#27292D" /></Style>
+  <Style Selector="ListBox.file-navigation ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource InactiveSelectionBrush}" /></Style>
+  <Style Selector="ListBox.file-navigation:focus-within ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /></Style>
+  <Style Selector="ListBox.file-navigation ListBoxItem:pointerover TextBlock.file-parent, ListBox.file-navigation ListBoxItem:selected TextBlock.file-parent"><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <Style Selector="Button.filter-clear"><Setter Property="Width" Value="22" /><Setter Property="Height" Value="22" /><Setter Property="MinHeight" Value="22" /><Setter Property="Padding" Value="3" /><Setter Property="Margin" Value="0,0,2,0" /></Style>
+  <Style Selector="Button.log-filter.active /template/ ContentPresenter#PART_ContentPresenter, Button.popup-open /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#29344B" /><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></Style>
+  <Style Selector="Button.toolbar:focus-visible /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}" /><Setter Property="BorderThickness" Value="1" /></Style>
+  <Style Selector="TextBlock.filter-summary"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /><Setter Property="FontSize" Value="{DynamicResource UiSecondaryFontSize}" /><Setter Property="TextTrimming" Value="CharacterEllipsis" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter AutoCompleteBox"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" /><Setter Property="Padding" Value="8,4" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter AutoCompleteBox /template/ Border#PART_SuggestionsContainer"><Setter Property="Background" Value="{DynamicResource MenuBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter AutoCompleteBox /template/ ListBox#PART_SelectingItemsControl"><Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" /><Setter Property="FontSize" Value="{DynamicResource UiFontSize}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter AutoCompleteBox /template/ ListBox#PART_SelectingItemsControl ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter ComboBoxItem"><Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" /><Setter Property="FontSize" Value="{DynamicResource UiFontSize}" /><Setter Property="MinHeight" Value="24" /><Setter Property="Padding" Value="8,2" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter ComboBox"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="8,3" /><Setter Property="CornerRadius" Value="6" /><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter ComboBox:pointerover /template/ Border#Background"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter ComboBox:focus /template/ Border#Background, FlyoutPresenter.history-filter ComboBox:focus-visible /template/ Border#HighlightBackground"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter ComboBox /template/ Border#PopupBorder"><Setter Property="Background" Value="{DynamicResource MenuBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="Button.shell-action"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="MinHeight" Value="26" /><Setter Property="Padding" Value="8,4" /></Style>
+  <Style Selector="CheckBox.inclusion">
+    <Setter Property="Width" Value="16" /><Setter Property="Height" Value="16" /><Setter Property="MinWidth" Value="16" /><Setter Property="MinHeight" Value="0" /><Setter Property="Padding" Value="0" />
+    <Setter Property="Template"><ControlTemplate><Border x:Name="Box" Width="14" Height="14" CornerRadius="2" BorderThickness="1" BorderBrush="#92979e" Background="Transparent"><Grid><Path x:Name="Tick" IsVisible="False" Data="M2 6 L5 9 L11 2" Stroke="White" StrokeThickness="1.5" Width="12" Height="12" /><Border x:Name="Mixed" IsVisible="False" Width="7" Height="2" Background="#b4b8bf" /></Grid></Border></ControlTemplate></Setter>
+  </Style>
+  <Style Selector="CheckBox.inclusion:checked /template/ Border#Box"><Setter Property="Background" Value="#548af0" /><Setter Property="BorderBrush" Value="#548af0" /></Style>
+  <Style Selector="CheckBox.inclusion:checked /template/ Path#Tick"><Setter Property="IsVisible" Value="True" /></Style>
+  <Style Selector="CheckBox.inclusion:indeterminate /template/ Border#Mixed"><Setter Property="IsVisible" Value="True" /></Style>
+  <Style Selector="CheckBox.inclusion:focus-visible /template/ Border#Box"><Setter Property="BorderBrush" Value="#75a6fb" /></Style>
+  <!-- Overlay the keyboard indicator without changing row geometry. -->
+  <Style Selector="ListBoxItem"><Setter Property="FocusAdorner"><Template><Border BorderBrush="{DynamicResource FocusBrush}" BorderThickness="1" CornerRadius="2" IsHitTestVisible="False" /></Template></Setter></Style>
+  <Style Selector="TextBox.code"><Setter Property="FontFamily" Value="{DynamicResource CodeFontFamily}" /><Setter Property="FontSize" Value="{DynamicResource CodeFontSize}" /><Setter Property="LineHeight" Value="20" /><Setter Property="Foreground" Value="{DynamicResource CodeTextBrush}" /></Style>
+  <!-- Match prototype .tbtn/.search states without replacing input or focus behavior. -->
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" /><Setter Property="CornerRadius" Value="4" />
+    <Setter Property="FocusAdorner"><Template><Border BorderBrush="{DynamicResource FocusRingBrush}" BorderThickness="2" Margin="2" CornerRadius="4" IsHitTestVisible="False" /></Template></Setter>
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Style>
+  <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PanelBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="Opacity" Value="0.45" /></Style>
+  <Style Selector="Button.toolbar"><Setter Property="Height" Value="28" /><Setter Property="CornerRadius" Value="6" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Button.toolbar:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <!-- Icon actions share a square hit area; tool headers use the compact variant. -->
+  <Style Selector="Button.icon-button"><Setter Property="Width" Value="28" /><Setter Property="MinWidth" Value="28" /><Setter Property="Height" Value="28" /><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="5" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
+  <Style Selector="Button.tool-header-action"><Setter Property="Width" Value="24" /><Setter Property="MinWidth" Value="24" /><Setter Property="Height" Value="24" /><Setter Property="MinHeight" Value="24" /><Setter Property="Padding" Value="4" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+  <!-- A tab's straight underline must survive hover and press; it is not a button border. -->
+  <Style Selector="Button.dock-tab">
+    <Setter Property="Height" Value="27" /><Setter Property="MinHeight" Value="27" /><Setter Property="Padding" Value="10,0" /><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="Template"><ControlTemplate><Border x:Name="DockTabSurface" Background="Transparent"><Grid><ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{TemplateBinding Foreground}" /><Border x:Name="DockTabIndicator" Height="2" VerticalAlignment="Bottom" Background="Transparent" /></Grid></Border></ControlTemplate></Setter>
+  </Style>
+  <Style Selector="Button.dock-tab:pointerover /template/ Border#DockTabSurface"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
+  <Style Selector="Button.dock-tab:pressed /template/ Border#DockTabSurface"><Setter Property="Background" Value="{DynamicResource InactiveSelectionBrush}" /></Style>
+  <Style Selector="Button.dock-tab.active"><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="Button.dock-tab.active /template/ Border#DockTabIndicator"><Setter Property="Background" Value="{DynamicResource FocusBrush}" /></Style>
+  <Style Selector="Button.tool-stripe"><Setter Property="CornerRadius" Value="4" /><Setter Property="Padding" Value="6,0" /></Style>
+  <Style Selector="Button.tool-stripe.active"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="Button.tool-stripe.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="Button.tool-stripe.active Path.icon"><Setter Property="Stroke" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="TextBox"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement"><Setter Property="BorderBrush" Value="#555A61" /><Setter Property="Background" Value="{DynamicResource InputBrush}" /></Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement"><Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="Background" Value="{DynamicResource InputBrush}" /></Style>
+  <Style Selector="TextBlock.file-name.deleted"><Setter Property="TextDecorations" Value="Strikethrough" /></Style>
+  <Style Selector="ListBoxItem:selected TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <!-- Keep four labelled file actions on one line in the 270 DIP navigation pane. -->
+  <Style Selector="WrapPanel.file-actions Button"><Setter Property="Padding" Value="3,3" /></Style>
+  <Style Selector="Window.gitx-dialog Button"><Setter Property="MinHeight" Value="28" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="Button.dialog-action"><Setter Property="MinWidth" Value="72" /><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="12,3" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
+  <Style Selector="Border.dialog-footer"><Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" /><Setter Property="BorderThickness" Value="0,1,0,0" /><Setter Property="Padding" Value="0,12,0,0" /></Style>
+  <Style Selector="TextBlock.dialog-label"><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <Style Selector="TextBlock.dialog-hint"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /><Setter Property="FontSize" Value="{DynamicResource UiSecondaryFontSize}" /></Style>
+  <Style Selector="Border.dialog-context"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="4" /><Setter Property="Padding" Value="10,8" /></Style>
+  <Style Selector="FlyoutPresenter.shell-popup ListBox"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter ListBox"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" /><Setter Property="CornerRadius" Value="4" /></Style>
+  <Style Selector="FlyoutPresenter.shell-popup ListBoxItem"><Setter Property="MinHeight" Value="26" /><Setter Property="Padding" Value="8,2" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+  <Style Selector="FlyoutPresenter.history-filter Button.dialog-action"><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource PrimaryBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" /><Setter Property="Foreground" Value="White" /></Style>
+  <Style Selector="Button.primary"><Setter Property="FocusAdorner"><Template><Border BorderBrush="White" BorderThickness="2" Margin="2" CornerRadius="4" IsHitTestVisible="False" /></Template></Setter></Style>
+  <Style Selector="Button.primary Path.icon"><Setter Property="Stroke" Value="White" /></Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource PrimaryHoverBrush}" /><Setter Property="Foreground" Value="White" /></Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PrimaryPressedBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource PrimaryPressedBrush}" /></Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PanelBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <Style Selector="Window.gitx-dialog ComboBox"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="8,3" /><Setter Property="CornerRadius" Value="6" /><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /></Style>
+  <Style Selector="Window.gitx-dialog ComboBox:pointerover /template/ Border#Background"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource SecondaryTextBrush}" /></Style>
+  <Style Selector="Window.gitx-dialog ComboBox:focus /template/ Border#Background"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" /></Style>
+  <Style Selector="Window.gitx-dialog ComboBox:focus-visible /template/ Border#HighlightBackground"><Setter Property="Background" Value="{DynamicResource InputBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" /></Style>
+  <Style Selector="Window.gitx-dialog ComboBox /template/ Border#PopupBorder"><Setter Property="Background" Value="{DynamicResource PanelBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="Window.gitx-dialog CheckBox"><Setter Property="MinHeight" Value="24" /></Style>
+  <Style Selector="Window.gitx-dialog ListBox"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" /></Style>
+  <Style Selector="FlyoutPresenter.shell-popup Button.shell-action"><Setter Property="MinHeight" Value="26" /><Setter Property="Padding" Value="8,3" /></Style>
+  <Style Selector="FlyoutPresenter.shell-popup Button.shell-action:focus-visible /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /></Style>
+  <Style Selector="FlyoutPresenter.shell-popup Button.shell-action:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /><Setter Property="Opacity" Value="1" /></Style>
+  <Style Selector="ToggleButton.tool-tab">
+    <Setter Property="Height" Value="28" /><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="12,0" />
+    <Setter Property="Template"><ControlTemplate><Border x:Name="ToolTabBorder" Padding="{TemplateBinding Padding}" BorderThickness="0,0,0,2" BorderBrush="Transparent" Background="Transparent"><ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border></ControlTemplate></Setter>
+  </Style>
+  <Style Selector="ToggleButton.tool-tab:checked /template/ Border#ToolTabBorder"><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
+  <Style Selector="ToggleButton.tool-tab:pointerover /template/ Border#ToolTabBorder"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
+</Styles>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RuntimeIdentifiers>win-x64;osx-arm64;osx-x64</RuntimeIdentifiers></PropertyGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <Title>Grove</Title>
+    <Product>Grove</Product>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/gitx.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../GitX.Core/GitX.Core.csproj" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+    <AvaloniaResource Include="Editor/fonts/*.ttf" />
+    <Content Include="Editor/dist/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup><EditorSource Include="Editor/*.js;Editor/*.mjs;Editor/*.css;Editor/*.html;Editor/*.json;Editor/*.txt;Editor/fonts/*;Assets/Fonts/**/*;../GitX.Core/SourceLanguages.json" /></ItemGroup>
+  <Target Name="BuildEditorAssets" BeforeTargets="PrepareForBuild" Inputs="@(EditorSource)" Outputs="Editor/dist/.buildstamp;Editor/dist/index.html;Editor/dist/editor.js;Editor/dist/merge.js;Editor/dist/source-symbols.worker.js;Editor/dist/tree-sitter-runtime.js;Editor/dist/tree-sitter.wasm;Editor/dist/tree-sitter-java.wasm;Editor/dist/tree-sitter-c-sharp.wasm;Editor/dist/tree-sitter-python.wasm;Editor/dist/tree-sitter-javascript.wasm;Editor/dist/tree-sitter-typescript.wasm;Editor/dist/tree-sitter-tsx.wasm" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('Editor/node_modules/esbuild')" Text="Editor dependencies missing. Run: npm ci --prefix src/GitX.Desktop/Editor" />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/Editor" />
+    <ItemGroup><Content Remove="Editor/dist/**/*" /><Content Include="Editor/dist/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,15 @@
+.source-symbol-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:40px 12px 12px;box-sizing:border-box;background:#0002}
+.source-symbol-dialog{display:flex;flex-direction:column;min-height:150px;max-height:100%;width:620px;max-width:100%;box-sizing:border-box;background:var(--panel);border:1px solid #4b4e55;border-radius:6px;box-shadow:0 5px 18px #0008;overflow:hidden}
+.source-symbol-head{display:flex;align-items:center;gap:8px;height:30px;flex:none;padding:0 6px 0 10px;border-bottom:1px solid var(--border)}
+.source-symbol-head strong{font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.source-symbol-close{display:grid;place-items:center;width:24px;height:24px;padding:3px;color:var(--muted);border:0;border-radius:3px;background:transparent;cursor:pointer}
+.source-symbol-close:hover{background:var(--hover);color:var(--text)}.source-symbol-close:focus-visible{outline:1px solid var(--accent)}
+.source-symbol-query{flex:none;margin:8px;width:calc(100% - 16px);height:28px;padding:2px 7px;box-sizing:border-box;font:inherit;color:var(--text);background:var(--input);border:1px solid #4b4e55;border-radius:4px;outline:none}
+.source-symbol-query:focus{border-color:var(--accent)}
+.source-symbol-list{overflow:auto;min-height:50px;flex:1;max-height:430px;padding:3px 0;color-scheme:dark}
+.source-symbol-row{display:grid;grid-template-columns:18px minmax(0,1fr) minmax(0,130px) auto;align-items:center;gap:6px;min-height:26px;padding:0 8px;cursor:pointer;box-sizing:border-box}
+.source-symbol-row:hover{background:var(--hover)}.source-symbol-row[aria-selected=true]{background:var(--selection)}
+.source-symbol-kind{color:#ae85e2;font:11px var(--code-font);text-align:center}.source-symbol-kind.method{color:#88b886}
+.source-symbol-label,.source-symbol-container{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.source-symbol-label{font:12px var(--code-font)}
+.source-symbol-container,.source-symbol-line{color:var(--muted);font-size:11px}.source-symbol-status{flex:none;min-height:24px;box-sizing:border-box;padding:4px 8px;border-top:1px solid var(--border);color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+@media(max-width:520px){.source-symbol-row{grid-template-columns:18px minmax(0,1fr) auto}.source-symbol-container{display:none}.source-symbol-overlay{padding-top:28px}}

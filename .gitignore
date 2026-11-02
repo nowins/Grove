@@ -1,0 +1,40 @@
+# Build and restored dependencies
+**/bin/
+**/obj/
+**/node_modules/
+src/GitX.Desktop/Editor/dist/
+artifacts/
+TestResults/
+.work/
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+
+# Local archives and earlier reference-app evidence (kept on disk)
+archive/
+archives/
+*-archive*/
+validation/windows-2026-10-25/
+validation/windows-2026-10-25-evidence.zip
+validation/**/raw/
+*.zip
+Thumbs.db
+.DS_Store
+
+# Private local configuration and signing material
+.env
+.env.*
+!.env.example
+**/.aws/
+**/.ssh/
+**/.codex/
+**/*.pfx
+**/*.p12
+**/*.key
+**/*.pem
+**/recent-repositories.json
+**/tool-layout.json
+**/blame-view.json
+**/gitx-recovery/

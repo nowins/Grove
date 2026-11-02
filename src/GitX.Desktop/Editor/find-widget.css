@@ -1,0 +1,26 @@
+/* Keep Monaco's controller, DOM, keyboard order and localized labels. Narrow
+   panes use a second row for match count/navigation instead of hiding them. */
+.pane { container-type: inline-size; }
+@container (max-width: 550px) {
+  .pane .monaco-editor .find-widget {
+    max-width: calc(100cqw - 20px) !important;
+    right: 10px !important;
+    height: auto !important;
+    padding-bottom: 4px;
+  }
+  .pane .monaco-editor .find-widget > .find-part {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 2px;
+  }
+  .pane .monaco-editor .find-widget > .find-part .monaco-findInput {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .pane .monaco-editor .find-widget .matchesCount { display: flex; margin: 0; min-width: 0; }
+  .pane .monaco-editor .find-widget .button:is(.previous,.next,.replace,.replace-all),
+  .pane .monaco-editor .find-widget > .find-part .monaco-findInput .controls { display: flex; }
+  .pane .monaco-editor .find-widget > .find-part .monaco-findInput .input { width: calc(100% - 66px) !important; }
+  .pane .monaco-editor .find-widget > .find-part .monaco-findInput .mirror { padding-right: 66px !important; }
+  .pane .monaco-editor .find-widget > .replace-part > .monaco-findInput { flex: 1; min-width: 0; width: auto !important; }
+}

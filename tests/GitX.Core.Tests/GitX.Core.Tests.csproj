@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/GitX.Core/GitX.Core.csproj" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/MainViewModel.cs" Link="MainViewModel.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/WorkspaceNavigation.cs" Link="WorkspaceNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/ToolDockLayout.cs" Link="ToolDockLayout.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryNavigation.cs" Link="HistoryNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/FileHistoryViewModel.cs" Link="FileHistoryViewModel.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryQueryInput.cs" Link="HistoryQueryInput.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/BlameNavigation.cs" Link="BlameNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/CodeNavigation.cs" Link="CodeNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/FileNavigation.cs" Link="FileNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/RecentRepositoryStore.cs" Link="RecentRepositoryStore.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/BranchActionAvailability.cs" Link="BranchActionAvailability.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/EditorServer.cs" Link="EditorServer.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/BlameViewStore.cs" Link="BlameViewStore.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/EditorMessage.cs" Link="EditorMessage.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/DoubleShiftGesture.cs" Link="DoubleShiftGesture.cs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

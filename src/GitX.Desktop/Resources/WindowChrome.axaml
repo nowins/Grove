@@ -1,0 +1,70 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:chrome="using:Avalonia.Controls.Chrome" xmlns:controls="using:GitX.Desktop.Controls">
+  <!-- Avalonia 12 owns caption actions, non-client hit testing and resize behavior. -->
+  <ControlTheme x:Key="GitXCaptionButton" TargetType="Button">
+    <Setter Property="Width" Value="46" /><Setter Property="Height" Value="32" /><Setter Property="MinHeight" Value="0" /><Setter Property="Focusable" Value="False" />
+    <Setter Property="Template"><ControlTemplate><Border Name="CaptionBackground" Background="Transparent"><ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border></ControlTemplate></Setter>
+    <Style Selector="^:pointerover /template/ Border#CaptionBackground"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
+    <Style Selector="^:pressed /template/ Border#CaptionBackground"><Setter Property="Background" Value="{DynamicResource SelectionBrush}" /></Style>
+    <Style Selector="^.close:pointerover /template/ Border#CaptionBackground"><Setter Property="Background" Value="#C42B1C" /></Style>
+    <Style Selector="^.close:pressed /template/ Border#CaptionBackground"><Setter Property="Background" Value="#A92318" /></Style>
+  </ControlTheme>
+  <ControlTheme x:Key="GitXWindowChrome" TargetType="chrome:WindowDrawnDecorations">
+    <Setter Property="DefaultTitleBarHeight" Value="32" /><Setter Property="DefaultFrameThickness" Value="1" /><Setter Property="DefaultShadowThickness" Value="8" />
+    <Setter Property="Template"><WindowDrawnDecorationsTemplate><chrome:WindowDrawnDecorationsContent>
+      <chrome:WindowDrawnDecorationsContent.Underlay>
+        <Panel Name="ChromeUnderlay">
+          <Border Name="ChromeFrame" BorderThickness="{TemplateBinding FrameThickness}" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
+          <Panel Name="PART_TitleBar" Height="{TemplateBinding TitleBarHeight}" VerticalAlignment="Top" Background="{DynamicResource TitleBrush}" IsVisible="{TemplateBinding HasTitleBar}" chrome:WindowDecorationProperties.ElementRole="TitleBar">
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" />
+          </Panel>
+        </Panel>
+      </chrome:WindowDrawnDecorationsContent.Underlay>
+      <chrome:WindowDrawnDecorationsContent.Overlay>
+        <controls:CaptionPanel Name="ChromeOverlay">
+          <Grid Name="ChromeTitle" Height="{TemplateBinding TitleBarHeight}" VerticalAlignment="Top" ColumnDefinitions="46,*,Auto" IsHitTestVisible="False" IsVisible="{TemplateBinding HasTitleBar}">
+            <Border Width="18" Height="18" CornerRadius="5" VerticalAlignment="Center"><Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#3574F0" Offset="0" /><GradientStop Color="#8A5CF5" Offset="1" /></LinearGradientBrush></Border.Background><TextBlock Text="G" FontSize="10" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+            <TextBlock Name="WindowCaption" Grid.Column="1" Text="{TemplateBinding Title}" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0" />
+            <Border Grid.Column="2" Width="{ReflectionBinding Bounds.Width, ElementName=ChromeButtons}" />
+          </Grid>
+          <StackPanel Name="ChromeButtons" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{TemplateBinding HasTitleBar}">
+            <Button Name="PART_MinimizeButton" Theme="{StaticResource GitXCaptionButton}" chrome:WindowDecorationProperties.ElementRole="MinimizeButton" ToolTip.Tip="最小化"><Path Classes="icon" Data="{StaticResource MinimizeIcon}" /></Button>
+            <Button Name="PART_MaximizeButton" Theme="{StaticResource GitXCaptionButton}" chrome:WindowDecorationProperties.ElementRole="MaximizeButton" ToolTip.Tip="最大化 / 还原"><Path Name="MaximizePath" Classes="icon" Data="{StaticResource MaximizeIcon}" /></Button>
+            <Button Name="PART_CloseButton" Classes="close" Theme="{StaticResource GitXCaptionButton}" chrome:WindowDecorationProperties.ElementRole="CloseButton" ToolTip.Tip="关闭"><Path Classes="icon" Data="{StaticResource CloseIcon}" /></Button>
+          </StackPanel>
+          <!-- Keep a small, visible-window resize target; DWM's invisible frame
+               can sit outside the captured/client bounds on Windows. -->
+          <Panel Name="ResizeEdges">
+            <Border Width="4" HorizontalAlignment="Left" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeW" />
+            <Border Width="4" HorizontalAlignment="Right" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeE" />
+            <Border Height="4" VerticalAlignment="Top" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeN" />
+            <Border Height="4" VerticalAlignment="Bottom" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeS" />
+            <Border Width="8" Height="8" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeNW" />
+            <Border Width="8" Height="8" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeNE" />
+            <Border Width="8" Height="8" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeSW" />
+            <Border Width="8" Height="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="ResizeSE" />
+          </Panel>
+        </controls:CaptionPanel>
+      </chrome:WindowDrawnDecorationsContent.Overlay>
+    </chrome:WindowDrawnDecorationsContent></WindowDrawnDecorationsTemplate></Setter>
+    <Style Selector="^:has-shadow /template/ Panel#ChromeUnderlay"><Setter Property="Margin" Value="{TemplateBinding ShadowThickness}" /></Style>
+    <Style Selector="^:has-shadow /template/ controls|CaptionPanel#ChromeOverlay"><Setter Property="Margin" Value="{TemplateBinding ShadowThickness}" /></Style>
+    <Style Selector="^ /template/ controls|CaptionPanel.inactive Grid#ChromeTitle"><Setter Property="Opacity" Value="0.6" /></Style>
+    <Style Selector="^ /template/ controls|CaptionPanel.integrated TextBlock#WindowCaption"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="^ /template/ controls|CaptionPanel.inactive StackPanel#ChromeButtons Path"><Setter Property="Opacity" Value="0.55" /></Style>
+    <Style Selector="^:has-shadow /template/ Border#ChromeFrame"><Setter Property="BoxShadow" Value="0 2 10 2 #80000000" /></Style>
+    <Style Selector="^:has-border /template/ Panel#PART_TitleBar"><Setter Property="Margin" Value="1,1,1,0" /></Style>
+    <Style Selector="^:has-border /template/ Grid#ChromeTitle"><Setter Property="Margin" Value="1,1,1,0" /></Style>
+    <Style Selector="^:has-border /template/ StackPanel#ChromeButtons"><Setter Property="Margin" Value="0,1,1,0" /></Style>
+    <Style Selector="^:maximized /template/ Path#MaximizePath"><Setter Property="Data" Value="{StaticResource RestoreIcon}" /></Style>
+    <Style Selector="^:not(:normal) /template/ Panel#ResizeEdges"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="^ /template/ Button:disabled"><Setter Property="Opacity" Value="0.35" /></Style>
+    <Style Selector="^:not(:has-minimize) /template/ Button#PART_MinimizeButton"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="^:not(:has-maximize) /template/ Button#PART_MaximizeButton"><Setter Property="IsVisible" Value="False" /></Style>
+  </ControlTheme>
+  <!-- Fixed-size modal dialogs have only Close and no resize hit targets. -->
+  <ControlTheme x:Key="GitXDialogChrome" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource GitXWindowChrome}">
+    <Style Selector="^ /template/ Button#PART_MinimizeButton"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="^ /template/ Button#PART_MaximizeButton"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="^ /template/ Panel#ResizeEdges"><Setter Property="IsVisible" Value="False" /></Style>
+  </ControlTheme>
+</ResourceDictionary>

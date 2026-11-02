@@ -1,0 +1,20 @@
+@import './inter-font.css';
+
+/* Native equivalents live in App.axaml. Both engines use these bundled faces
+   without installing fonts or making network requests at runtime. */
+:root {
+  --ui-font: GitXInter, "Microsoft YaHei UI", "Segoe UI", "Noto Sans CJK SC", system-ui, sans-serif;
+  --code-font: "JetBrains Mono", "Cascadia Mono", Consolas, "Noto Sans Mono CJK SC", "Microsoft YaHei UI", monospace;
+  --ui-font-size: 12.5px;
+  --ui-secondary-font-size: 12px;
+  --code-font-size: 12px;
+  --code-line-height: 20px;
+}
+
+/* Scope to Find text: codicon glyphs retain their own icon font. */
+.monaco-editor .find-widget { font-family: var(--ui-font); }
+.monaco-editor .find-widget .monaco-inputbox .input,
+.monaco-editor .find-widget .monaco-inputbox .mirror {
+  font-family: var(--code-font);
+  font-size: var(--code-font-size);
+}
