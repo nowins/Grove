@@ -38,3 +38,6 @@ Thumbs.db
 **/tool-layout.json
 **/blame-view.json
 **/gitx-recovery/
+
+# Local visual QA evidence stays outside source commits
+/validation/

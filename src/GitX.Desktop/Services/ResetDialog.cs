@@ -14,23 +14,37 @@ internal static class ResetDialog
     {
         if (owner is MainWindow main) owner = main.InteractionWindow;
         var dialog = new Window { Title = "Git Reset", Width = 540, SizeToContent = SizeToContent.Height,
-            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            CanResize = false, MaxHeight = Math.Max(420, owner.ClientSize.Height - 48), WindowStartupLocation = WindowStartupLocation.CenterOwner };
         var selected = HistoryAction.ResetMixed;
         var confirm = new Button { Content = "Reset", Classes = { "primary" } };
         var cancel = new Button { Content = "取消", IsCancel = true };
         var body = new StackPanel { Spacing = 12 };
         var branch = context.Detached ? $"分离 HEAD · {context.Head?[..8]}" : context.Branch;
         var summary = $"{branch} → {commit.ShortSha}  “{commit.Subject}” · {commit.Author}";
-        var heading = new TextBlock { Text = summary, FontWeight = FontWeight.Medium,
+        var contextPanel = new StackPanel { Spacing = 4 };
+        var revision = new Grid { ColumnDefinitions = new("*,Auto,Auto"), ColumnSpacing = 8 };
+        var branchLabel = new TextBlock { Text = branch, FontWeight = FontWeight.Medium,
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(branchLabel, branch); revision.Children.Add(branchLabel);
+        var arrow = new TextBlock { Text = "→", Classes = { "dialog-hint" }, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(arrow, 1); revision.Children.Add(arrow);
+        var sha = new TextBlock { Text = commit.ShortSha, FontFamily = (FontFamily)Application.Current!.FindResource("CodeFontFamily")!,
+            FontSize = UiTypography.SecondarySize, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(sha, commit.Sha); Grid.SetColumn(sha, 2); revision.Children.Add(sha);
+        contextPanel.Children.Add(revision);
+        var heading = new TextBlock { Text = commit.Subject, Classes = { "dialog-title" },
             TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
-        ToolTip.SetTip(heading, summary); body.Children.Add(heading);
+        ToolTip.SetTip(heading, summary); contextPanel.Children.Add(heading);
+        contextPanel.Children.Add(new TextBlock { Text = commit.Author, Classes = { "dialog-hint" },
+            TextTrimming = TextTrimming.CharacterEllipsis });
+        body.Children.Add(new Border { Classes = { "dialog-context" }, Child = contextPanel });
         var location = new TextBlock { Text = "工作树：" + context.Root, Classes = { "dialog-hint" },
             TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
         ToolTip.SetTip(location, context.Root); body.Children.Add(location);
         if (context.Detached) body.Children.Add(new TextBlock { Text = "当前为分离 HEAD；Reset 只移动此工作树的 HEAD，不移动分支。",
             Classes = { "dialog-hint" }, TextWrapping = TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text = "将当前 HEAD 移动到所选提交，并按所选模式更新索引和工作区：", TextWrapping = TextWrapping.Wrap });
-        var modes = new StackPanel { Spacing = 10 };
+        var modes = new StackPanel { Spacing = 12 };
         var radios = new List<RadioButton>();
         foreach (var (action, name, description) in new[]
         {
@@ -40,11 +54,11 @@ internal static class ResetDialog
             (HistoryAction.ResetKeep, "Keep", "保留不冲突的工作区修改并重置索引；与 HEAD 到目标提交间的差异重叠时拒绝操作。")
         })
         {
-            var row = new StackPanel { Spacing = 2 };
+            var row = new StackPanel { Spacing = 4 };
             var hint = new TextBlock { Text = description, Classes = { "dialog-hint" }, TextWrapping = TextWrapping.Wrap, Margin = new(28, 0, 0, 0) };
             if (action == HistoryAction.ResetHard) hint.Foreground = (IBrush)Application.Current!.FindResource("ErrorTextBrush")!;
             var radio = new RadioButton { Content = name, GroupName = "ResetMode", IsChecked = action == selected,
-                MinHeight = 20, HorizontalAlignment = HorizontalAlignment.Stretch };
+                MinHeight = 20, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Stretch };
             AutomationProperties.SetName(radio, name + "。" + description);
             radio.IsCheckedChanged += (_, _) =>
             {
@@ -69,7 +83,7 @@ internal static class ResetDialog
         body.Children.Add(modes);
         cancel.Click += (_, _) => dialog.Close(null);
         confirm.Click += (_, _) => dialog.Close((HistoryAction?)selected);
-        dialog.Content = DialogChrome.Layout(body, DialogChrome.Buttons(confirm, cancel));
+        dialog.Content = DialogChrome.Layout(new ScrollViewer { Content = body, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto }, DialogChrome.Buttons(confirm, cancel));
         DialogChrome.Apply(dialog);
         // Keep GitX's existing destructive-confirmation focus: opening a menu
         // and pressing Enter must not rewrite history.

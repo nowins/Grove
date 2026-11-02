@@ -369,7 +369,11 @@ function changedMarks(blocks, side) {
 function sideHeader(element, side, other) {
   const state = !side.exists ? '不存在' : side.text.length === 0 ? '空文件' : `${side.lineEnding} · ${side.endsWithNewline ? '末尾有换行' : '末尾无换行'}`;
   const label = document.getElementById(element);
-  label.textContent = '只读 · ' + side.label;
+  const access = document.createElement('span');
+  access.className = 'side-access'; access.textContent = '只读 · ';
+  const revision = document.createElement('span');
+  revision.className = 'side-revision'; revision.textContent = side.label;
+  label.classList.add('side-revision-label'); label.replaceChildren(access, revision);
   label.title = `${side.label}\n${side.path}\n${state}`;
   document.getElementById(`${element}-path`).textContent = side.path;
   const format = document.getElementById(element === 'old-label' ? 'old-format' : 'new-format');

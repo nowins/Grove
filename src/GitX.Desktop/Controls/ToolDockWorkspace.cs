@@ -215,7 +215,7 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
                     var tool = _tools[state.Id];
                     var horizontal = edge is ToolEdge.Top or ToolEdge.Bottom;
                     var icon = new Button { Height = 28, MinHeight = 28, Classes = { "toolbar", "tool-stripe" }, Content = IconContent.Icon(tool.Icon), Tag = tool.Id };
-                    if (horizontal) icon.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5,
+                    if (horizontal) icon.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
                         Children = { IconContent.Icon(tool.Icon), new TextBlock { Text = tool.Title, MaxWidth = 160, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center } } };
                     if (!horizontal) icon.Width = 28;
                     ToolTip.SetTip(icon, tool.Title + (tool.Id switch { ToolId.Project => " · Ctrl+1", ToolId.Commit => " · Ctrl+2", ToolId.GitLog => " · Ctrl+3", _ => "" }));
@@ -226,7 +226,7 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
                     if (!state.Floating)
                     {
                         var tab = new Button { Classes = { "dock-tab" },
-                            Content = new TextBlock { Text = tool.Title, MaxWidth = 210, TextTrimming = TextTrimming.CharacterEllipsis }, Tag = tool.Id };
+                            Content = new TextBlock { Classes = { "tool-title" }, Text = tool.Title, MaxWidth = 210, TextTrimming = TextTrimming.CharacterEllipsis }, Tag = tool.Id };
                         ToolTip.SetTip(tab, tool.Title);
                         tab.Classes.Set("active", active?.Id == state.Id);
                         tab.Click += (_, _) => Show(tool.Id); region.Tabs.Children.Add(tab);
@@ -262,7 +262,7 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
         var menu = new Button { Classes = { "toolbar", "icon-button", "tool-header-action" }, Content = IconContent.Icon("MoreIcon"), Focusable = false, Margin = new(0, 0, 4, 0) };
         AutomationProperties.SetName(menu, "工具窗口选项"); ToolTip.SetTip(menu, "工具窗口选项");
         DockPanel.SetDock(menu, Dock.Right); header.Children.Add(menu); menu.Click += (_, _) => ShowMenu(tool.Id, menu, false);
-        header.Children.Add(new TextBlock { Text = tool.Title, Margin = new(10, 0), VerticalAlignment = VerticalAlignment.Center });
+        header.Children.Add(new TextBlock { Classes = { "tool-title" }, Text = tool.Title, Margin = new(10, 0), VerticalAlignment = VerticalAlignment.Center });
         grid.Children.Add(header); Grid.SetRow(header, 1); AttachDrag(header, () => tool.Id, false);
         header.ContextRequested += (_, e) => { e.Handled = true; ShowMenu(tool.Id, header, true); };
         Detach(tool.Content); grid.Children.Add(tool.Content); Grid.SetRow(tool.Content, 2); window.Content = grid;

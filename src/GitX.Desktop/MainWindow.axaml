@@ -51,19 +51,19 @@
         <Grid Grid.Row="2">
           <ListBox x:Name="FileList" Classes="file-navigation" Focusable="True" FocusAdorner="{x:Null}" Background="Transparent" BorderThickness="0" AutoScrollToSelectedItem="False" DoubleTapped="FileDoubleTapped" SelectionChanged="NavigationSelectionChanged">
             <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="automation:AutomationProperties.Name" Value="{ReflectionBinding AccessibleName}" /></Style></ListBox.Styles>
-            <ListBox.ItemTemplate><DataTemplate x:DataType="vm:FileNavigationRow"><Grid ColumnDefinitions="Auto,Auto,20,Auto,*,18" ToolTip.Tip="{Binding Tooltip}">
+            <ListBox.ItemTemplate><DataTemplate x:DataType="vm:FileNavigationRow"><Grid ColumnDefinitions="Auto,0,20,*,Auto,18" ToolTip.Tip="{Binding Tooltip}">
               <StackPanel Orientation="Horizontal"><Border Width="{Binding Indent}" /><Border Width="{Binding ChevronWidth}"><Button Classes="tree-toggle" IsVisible="{Binding CanExpand}" Click="DirectoryClicked" Focusable="False" ToolTip.Tip="{Binding ToggleName}" automation:AutomationProperties.Name="{Binding ToggleName}"><Path Classes="icon chevron" Classes.expanded="{Binding IsExpanded}" /></Button></Border><CheckBox Classes="inclusion" IsEnabled="{Binding IncludeEnabled}" IsVisible="{Binding CanInclude}" IsChecked="{Binding Included, Mode=OneWay}" Click="IncludeFileClicked" Margin="2,0,5,0" VerticalAlignment="Center" ToolTip.Tip="包含到提交；勾选不会写入 Git 索引" automation:AutomationProperties.Name="包含到提交" /></StackPanel>
 
               <TextBlock Grid.Column="2" Grid.ColumnSpan="4" Text="{Binding Name}" IsVisible="{Binding IsGroup}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="4,0,0,0" />
               <Grid Grid.Column="2" IsVisible="{Binding !IsGroup}">
-                <Path IsVisible="{Binding IsDirectory}" Classes="icon" Data="{StaticResource FolderIcon}" Stroke="{StaticResource FolderBrush}" Fill="#40C9A24F" HorizontalAlignment="Left" />
-                <Grid IsVisible="{Binding IsFile}" Width="17" Height="17" VerticalAlignment="Center" HorizontalAlignment="Left">
+                <Path IsVisible="{Binding IsDirectory}" Classes="icon" Data="{StaticResource FolderIcon}" Stroke="{StaticResource FolderBrush}" Fill="#40C9A24F" HorizontalAlignment="Center" />
+                <Grid IsVisible="{Binding IsFile}" Width="17" Height="17" VerticalAlignment="Center" HorizontalAlignment="Center">
                   <Path IsVisible="{Binding IsJava}" Data="M2 7 H11 V10 C11 14 2 14 2 10 Z M11 7 H13 C16 7 16 11 11 11 M1 15 H13 M5 5 C2 2 9 3 7 0" Stroke="#77A7DF" StrokeThickness="1.2" />
                   <TextBlock Text="{Binding TypeGlyph}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Grid>
               </Grid>
-              <TextBlock Grid.Column="3" Text="{Binding Name}" IsVisible="{Binding !IsGroup}" MaxWidth="180" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Classes="git-status file-name" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" Classes.conflict="{Binding IsConflict}" />
-              <TextBlock Grid.Column="4" Text="{Binding ParentLabel}" Classes="muted file-parent" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="6,0" />
+              <TextBlock Grid.Column="3" Text="{Binding Name}" IsVisible="{Binding !IsGroup}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Classes="git-status file-name" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" Classes.conflict="{Binding IsConflict}" />
+              <TextBlock Grid.Column="4" Text="{Binding ParentLabel}" MaxWidth="120" Classes="muted file-parent" FontSize="{DynamicResource UiSecondaryFontSize}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="6,0" />
               <TextBlock Grid.Column="5" Text="{Binding StatusCode}" FontSize="{DynamicResource UiSecondaryFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="git-status" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.modified="{Binding IsModified}" Classes.conflict="{Binding IsConflict}" />
             </Grid></DataTemplate></ListBox.ItemTemplate>
           </ListBox>
@@ -82,7 +82,7 @@
         </Grid>
       </Grid>
         <Grid x:Name="EditorPane" RowDefinitions="Auto,*,Auto">
-        <Border x:Name="FallbackFileToolbar" IsVisible="False" Height="34" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,3">
+        <Border x:Name="FallbackFileToolbar" IsVisible="False" Height="34" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="10,3">
           <Grid ColumnDefinitions="*,Auto,Auto,Auto">
             <TextBlock Text="{Binding FileTitle}" ToolTip.Tip="{Binding FileTitle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <Button Grid.Column="1" Content="{Binding BlameLabel}" Click="BlameClicked" IsEnabled="{Binding CanBlame}" Margin="0,0,6,0" ToolTip.Tip="当前工作区文件的逐行 Git 注解" />
@@ -120,7 +120,7 @@
       </Border>
       <GridSplitter x:Name="HistoryBranchSplitter" Grid.Column="1" ResizeDirection="Columns" />
       <Grid x:Name="GitLogCenter" Grid.Column="2" RowDefinitions="Auto,*">
-        <Border x:Name="HistoryHeader" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,3">
+        <Border x:Name="HistoryHeader" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="4,3">
           <Grid ColumnDefinitions="Auto,*,Auto">
             <Button x:Name="HistoryBranchesButton" Classes="toolbar icon-button" Click="HistoryBranchesToggled" ToolTip.Tip="显示或收起分支树" automation:AutomationProperties.Name="历史分支树"><Path Classes="icon" Data="{StaticResource BranchIcon}" /></Button>
             <WrapPanel Grid.Column="1" Orientation="Horizontal">

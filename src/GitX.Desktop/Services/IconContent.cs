@@ -17,7 +17,7 @@ internal static class IconContent
 
     public static StackPanel Label(string key, string label) => new()
     {
-        Orientation = Orientation.Horizontal, Spacing = 5,
+        Orientation = Orientation.Horizontal, Spacing = 6,
         Children = { Icon(key), new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center } }
     };
 }

@@ -240,7 +240,7 @@ public sealed partial class MainWindow
         Item(git, "上次 Git 输出…", ShowOutput, "OutputIcon", _model.Root is not null);
         var help = Group("帮助");
         Item(help, "快捷键…", () => ShowShellText("快捷键", "Ctrl+O  打开仓库\nCtrl+1 / 2 / 3  项目 / 提交 / Git Log 工具\nShift+Esc  隐藏当前工具\nShift+F12  恢复默认布局\nAlt+M  主菜单\nF5  刷新\nCtrl+F  编辑器内查找\n双击 Shift  快速搜索（文件 / 代码内容）\nCtrl+Shift+F  跨文件内容搜索\nCtrl+Shift+N  文件定位\nCtrl+F12  当前文件结构（Java / C#）\nF7 / Shift+F7  下一处 / 上一处变更\nCtrl+Alt+R  回退当前差异块\nEsc  返回文件列表\n\n历史：Ctrl+D 打开 diff，Alt+← 返回 Log；Shift+F10 打开提交菜单。"));
-        Item(help, "关于 Grove…", () => ShowShellText("关于 Grove", "Grove · 本地 Git 客户端\n\n当前运行位置\n" + AppContext.BaseDirectory));
+        Item(help, "关于 Grove…", ShowAbout);
         ShowShellPopup(menu, anchor);
     }
 
@@ -250,6 +250,29 @@ public sealed partial class MainWindow
         if (_model.Root is not { } root) return;
         ShowShellText("仓库详情 · " + _model.RepositoryName, _model.RepositoryDetail, root);
     }
+    private void ShowAbout()
+    {
+        var dialog = new Window { Title = "关于 Grove", Width = 520, SizeToContent = SizeToContent.Height,
+            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var body = new StackPanel { Spacing = 12 };
+        var identity = new StackPanel { Spacing = 4 };
+        identity.Children.Add(new TextBlock { Text = "Grove", Classes = { "dialog-title" } });
+        identity.Children.Add(new TextBlock { Text = "本地 Git 客户端", Classes = { "dialog-label" } });
+        body.Children.Add(identity);
+        var location = new StackPanel { Spacing = 4 };
+        location.Children.Add(new TextBlock { Text = "当前运行位置", Classes = { "dialog-section" } });
+        location.Children.Add(new TextBox { Text = AppContext.BaseDirectory, IsReadOnly = true,
+            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontFamily = (FontFamily)Application.Current!.FindResource("CodeFontFamily")!,
+            FontSize = UiTypography.SecondarySize, MinHeight = 0, Padding = new(0), BorderThickness = new(0), Background = Brushes.Transparent });
+        body.Children.Add(location);
+        var close = new Button { Content = "关闭", IsCancel = true, IsDefault = true };
+        close.Click += (_, _) => dialog.Close();
+        dialog.Content = DialogChrome.Layout(body, DialogChrome.Buttons(close));
+        DialogChrome.Apply(dialog);
+        dialog.Opened += (_, _) => close.Focus(NavigationMethod.Tab);
+        _ = dialog.ShowDialog(this);
+    }
+
     private void ShowShellText(string title, string text, string? copyPath = null)
     {
         var dialog = new Window { Title = title, Width = 580, Height = 390, MinWidth = 420, MinHeight = 280, WindowStartupLocation = WindowStartupLocation.CenterOwner };

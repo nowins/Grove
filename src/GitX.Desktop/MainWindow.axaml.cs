@@ -35,6 +35,8 @@ public sealed partial class MainWindow : Window
         InitializeNavigation();
         InitializeHistory();
         InitializeDocking();
+        foreach (var list in new[] { FileList, _projectList })
+            list.SizeChanged += (_, _) => list.Classes.Set("compact-file-list", list.Bounds.Width < 420);
         InitializeGitTasks();
         InitializeShell();
         _blameViewReady = LoadBlameViewAsync();
