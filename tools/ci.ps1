@@ -22,7 +22,7 @@ $results = Join-Path $output 'results'
 $publish = Join-Path $output 'publish'
 New-Item -ItemType Directory -Path $results | Out-Null
 $savedEnvironment = @{}
-foreach ($name in @('GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE', 'GITX_DATA_DIR')) {
+foreach ($name in @('GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE', 'GITX_DATA_DIR', 'TMPDIR')) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 function Invoke-CiCommand([string]$File, [string[]]$Arguments, [string]$Log) {
@@ -32,6 +32,21 @@ function Invoke-CiCommand([string]$File, [string[]]$Arguments, [string]$Log) {
 }
 Push-Location $projectRoot
 try {
+    if ($IsMacOS) {
+        # Hosted macOS exposes /var/... while Git/libgit2 return /private/var/...
+        # for the same directory. Start child processes with one physical temp
+        # root; retain the product's protections against symlinked write paths.
+        Push-Location -LiteralPath ([IO.Path]::GetTempPath())
+        try {
+            $physicalTemp = (& /bin/pwd -P).Trim()
+            if ($LASTEXITCODE -ne 0 -or -not [IO.Path]::IsPathFullyQualified($physicalTemp) -or
+                -not (Test-Path -LiteralPath $physicalTemp -PathType Container)) {
+                throw 'Cannot resolve the physical macOS temporary directory.'
+            }
+            $env:TMPDIR = $physicalTemp.TrimEnd('/') + '/'
+            Write-Host 'Using the physical macOS temporary directory for child processes.'
+        } finally { Pop-Location }
+    }
     # Hosted CI uses a fresh runner. Keep Git's standard source discovery: custom
     # GIT_CONFIG_* overrides intentionally disable the product's blame cache.
     # TestRepository creates disposable repos and sets its own author/config.

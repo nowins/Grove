@@ -14,6 +14,8 @@
 
 Git 测试使用随机专用临时仓库并设置本地作者，CI 使用全新 hosted runner；不提供用户凭据。脚本不覆盖 HOME、不编辑用户 Git 配置，也不设置会改变 Git 标准配置发现的 GIT_CONFIG_*。本地若配置自定义 hooksPath／filter 或 Git 环境覆盖，应先在独立副本审阅其影响；产品的 blame 缓存遇到未知覆盖会有意拒绝复用，不能靠跳过相关测试制造绿灯。
 
+macOS 在启动测试子进程前把 TMPDIR 解析为同一临时目录的物理路径，避免系统的 /var 与 /private/var 别名导致 Git、LibGit2 与测试路径不一致；脚本退出时恢复环境值，不放宽产品的链接写入保护。
+
 ## 运行与产物
 
 准备 PowerShell 7、Git、global.json 允许的 .NET SDK 与 .node-version 的 Node，在项目根目录执行：

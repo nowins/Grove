@@ -49,16 +49,22 @@ public sealed class RemoteWriter
             case RemoteAction.Push:
             case RemoteAction.ForceWithLease:
                 if (context.Head is null) throw new IOException("没有可推送的提交。");
-                args.AddRange(["push", "--porcelain", "--no-follow-tags", "--recurse-submodules=no"]);
+                // A URL can be matched to an existing remote by newer Git and
+                // update its tracking refs before our compare-and-swap below.
+                // A command-only remote with no fetch mapping leaves tracking
+                // updates exclusively to that guarded step. Nothing is saved.
+                var pushRemote = "gitx-push-" + Guid.NewGuid().ToString("N");
+                args.AddRange(["-c", $"remote.{pushRemote}.url={remote.PushUrl}",
+                    "push", "--porcelain", "--no-follow-tags", "--recurse-submodules=no"]);
                 if (action == RemoteAction.ForceWithLease)
                 {
                     if (expectedRemote is null || expectedRemote.Length != 0 && (expectedRemote.Length != 40 || !expectedRemote.All(Uri.IsHexDigit))) throw new IOException("必须先读取并确认远程分支 SHA。");
                     args.Add($"--force-with-lease=refs/heads/{branch}:{expectedRemote}");
                 }
                 // Use the exact approved commit, not a movable local ref. One destination only.
-                args.AddRange(["--", remote.PushUrl, $"{context.Head}:refs/heads/{branch}"]); break;
+                args.AddRange(["--", pushRemote, $"{context.Head}:refs/heads/{branch}"]); break;
         }
-        var output = await Run(context.Root, args, authentication);
+        var output = await Run(context.Root, args, authentication, pushing ? "push" : null);
         if (!pushing || tracking.Count == 0) return output;
         try
         {
@@ -108,7 +114,7 @@ public sealed class RemoteWriter
         // Git supports multiple push URLs; an explicit single endpoint avoids accidental extra destinations.
         if (string.IsNullOrWhiteSpace(remote.Url) || string.IsNullOrWhiteSpace(remote.PushUrl) || remote.PushUrl.StartsWith('-')) throw new IOException("远程 URL 无效。");
     }
-    private static Task<string> Run(string root, IEnumerable<string> arguments, GitAuthentication? authentication)
+    private static Task<string> Run(string root, IEnumerable<string> arguments, GitAuthentication? authentication, string? operationCommand = null)
         => GitWriteProcess.RunAsync(root, arguments, noEditor: true, literalPaths: false, includeErrorOutput: true,
-            environment: authentication?.Environment, sanitize: text => RedactUrl(authentication?.Sanitize(text) ?? text));
+            environment: authentication?.Environment, sanitize: text => RedactUrl(authentication?.Sanitize(text) ?? text), operationCommand: operationCommand);
 }

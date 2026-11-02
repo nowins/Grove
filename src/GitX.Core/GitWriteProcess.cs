@@ -8,7 +8,7 @@ namespace GitX.Core;
 internal static class GitWriteProcess
 {
     public static async Task<string> RunAsync(string root, IEnumerable<string> arguments, byte[]? input = null, bool noEditor = false, bool literalPaths = true, bool includeErrorOutput = false,
-        IReadOnlyDictionary<string, string>? environment = null, Func<string, string>? sanitize = null)
+        IReadOnlyDictionary<string, string>? environment = null, Func<string, string>? sanitize = null, string? operationCommand = null)
     {
         var start = new ProcessStartInfo("git") { WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
@@ -24,7 +24,7 @@ internal static class GitWriteProcess
         var operation = GitWriteOperation.Current;
         operation?.ThrowIfTerminated();
         using var process = GitProcess.Start(start);
-        operation?.Attach(process, args.FirstOrDefault() ?? "");
+        operation?.Attach(process, operationCommand ?? args.FirstOrDefault() ?? "");
         try
         {
             var output = DrainAsync(process.StandardOutput, text => operation?.Append(Clean(text)));

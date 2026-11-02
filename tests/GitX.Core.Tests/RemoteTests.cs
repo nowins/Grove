@@ -64,9 +64,12 @@ public sealed class RemoteTests
         repo.Git("remote", "set-url", "--push", "origin", push);
         repo.Write("a", "next"); repo.Commit("next");
         var writer = new RemoteWriter(); var remote = (await writer.ReadAsync(repo.Root)).Single();
+        var config = repo.Git("config", "--local", "--list");
         await writer.ExecuteAsync(await RepositoryActions.ReadAsync(repo.Root), remote, RemoteAction.Push, "main");
         Assert.Equal(repo.Git("rev-parse", "HEAD"), repo.Git("--git-dir=" + push, "rev-parse", "main"));
         Assert.Equal(tracked, repo.Git("rev-parse", "origin/main"));
+        Assert.Equal(config, repo.Git("config", "--local", "--list"));
+        Assert.Equal("origin", repo.Git("remote").Trim());
     }
 
     [Fact]
