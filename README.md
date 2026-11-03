@@ -1,31 +1,64 @@
 # Grove
 
-面向个人本地 Git 工作流程的桌面代码查看器。提供工作区／历史代码浏览、并排 diff、文件结构导航、分支图、暂存与提交、工作树选择、四模式 Reset、独立三栏冲突合并和本地行评论。
+面向本地仓库的桌面 Git 客户端。在同一个窗口浏览代码、查看差异和历史、整理改动。
 
-支持 Java、C#、Python、JavaScript、TypeScript 的词法高亮与当前文件结构；不提供 LSP、类型检查或跨文件语义定义／引用。Git 输出和工作树列表位于主界面工具页。项目树路径筛选默认收起；Ctrl+F（项目树）展开，Ctrl+Shift+E 或定位图标显示当前文件；活动条件不会隐藏。工作树入口发现并打开已有目录，不执行 checkout、删除或 prune。Reset 保留快照检查、写锁和恢复材料，Hard 明示丢弃风险。
+## 功能
 
-## 开发运行
+- 工作区、索引与历史提交的 Diff，提交图、文件历史和 Blame。
+- 按文件、代码块或行暂存，提交、Stash、合并、Rebase，以及 Soft／Mixed／Hard／Keep Reset。
+- 远端分支一键 Checkout；New Branch 可编辑名称和选择创建后检出，保留跟踪关系并检查 worktree 占用。
+- 文件树、按需筛选、当前文件定位；Git 输出和已有 worktree 列表使用非模态工具页。
+- Java、C#、Python、JavaScript／TypeScript 高亮与文件内结构导航，以及本地代码评论。
+- Markdown 源码与预览切换，支持表格、任务列表、标题锚点及仓库内图片；历史阅读保留同一提交的链接和图片。
 
-安装 global.json 允许的 .NET SDK、.node-version 指定的 Node、Git 和 PowerShell 7。Windows 还需要 Microsoft Edge WebView2 Runtime。
+## 下载与运行
+
+当前提供开发预览构建，[Releases](https://github.com/nowins/Grove/releases) 尚未发布版本。进入[成功的 CI 运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)，从 **Artifacts** 下载对应包：
+
+| 平台 | 架构 | Artifact | 内部应用包 |
+| --- | --- | --- | --- |
+| Windows | x64 | `desktop-win-x64` | `desktop-win-x64.zip` |
+| Windows | ARM64 | `desktop-win-arm64` | `desktop-win-arm64.zip` |
+| macOS | Apple Silicon | `desktop-osx-arm64` | `desktop-osx-arm64.tar.gz` |
+| macOS | Intel | `desktop-osx-x64` | `desktop-osx-x64.tar.gz` |
+
+仓库目前为私有：下载需要登录有读取权限的 GitHub 账号。CI 产物保留 **14 天**；下载的 Artifact 外层压缩包内含应用包和 `SHA256SUMS.txt`，请先核对应用压缩包的 SHA-256，再解压运行。
+
+先安装 Git，并确保命令行能运行 `git`。Windows 还需要 Microsoft Edge WebView2 Runtime。应用包包含 .NET 运行时，无需另装 .NET SDK。
+
+- **Windows：** 解压后运行 `GitX.Desktop.exe`。
+- **macOS：** 解开 `tar.gz`，在该目录的终端运行 `./GitX.Desktop`；当前不是 `.app` 或 DMG 安装包。
+- 启动后选择已有仓库，也可传入路径，例如 Windows 的 `.\GitX.Desktop.exe "C:\path\to\repo"` 或 macOS 的 `./GitX.Desktop ~/projects/repo`。
+
+可执行文件和部分内部目录暂保留 `GitX` 名称以兼容现有配置。构建包未签名；macOS 未公证。四平台构建与自动化测试已通过，原生桌面验收目前覆盖 Windows x64，其他平台的 WebView、输入法与 DPI 仍需实机验证。
+
+## 阅读 Markdown
+
+打开 Markdown 文件后默认显示预览，可在工具栏切换到只读源码；两种视图分别保留滚动位置。Esc 返回源码，Ctrl+F 切到源码搜索。支持 `.md`、`.markdown`、`.mdown` 和 `.mkd`。
+
+相对链接在当前文件目录解析；网页链接点击后交给系统浏览器。原始 HTML 按文本显示，远程图片不会自动加载；暂不支持渲染 Diff、SVG、数学图表或代码块语法着色。
+
+## 从源码运行
+
+准备 Git、PowerShell 7、`global.json` 指定的 .NET SDK 和 `.node-version` 指定的 Node.js：
 
 ```powershell
-./tools/start.ps1 -Repository ../sample-repository
+pwsh ./tools/start.ps1 -Repository ../sample-repository
 ```
 
-省略 Repository 从欢迎界面开始。脚本按锁文件恢复依赖、构建离线编辑器和 Release 应用。内部程序集与 src/GitX.* 路径保持兼容；程序入口为 GitX.Desktop.exe（Windows）或 GitX.Desktop（macOS）。GitX 数据目录和 GITX_DATA_DIR 标识继续沿用，已有配置不因品牌名变化而换目录。
-
-界面精修的现状、证据边界与分批实施状态见[视觉与交互规范](docs/VISUAL-SPEC.md)，逐项区分已有实现和待校准建议。
-
-远端分支提供 Checkout 与 New Branch：Checkout 自动创建本地短名称并跟踪选定远端，或使用现有跟踪分支且保留其本地提交；同名冲突不会覆盖或改绑。New Branch 可编辑名称并选择创建后检出，有未提交改动时只允许创建。其他 worktree 占用会提示具体路径，Git 仍执行最终占用检查。
-
-## 构建与测试
+省略 `-Repository` 从欢迎页开始。完整恢复、构建、测试与打包：
 
 ```powershell
-./tools/ci.ps1
+pwsh ./tools/ci.ps1
 ```
 
-[CI 说明](docs/CI.md)涵盖 Windows x64／ARM64、macOS arm64 和 macOS x64 的锁定恢复、自动化测试及未签名 self-contained 产物。CI 不启动桌面 GUI，也不执行签名、公证或发布。
+脚本按本机架构执行，输出位于 `artifacts/ci/`。详情见 [开发约定](docs/DEVELOPMENT.md)、[CI](docs/CI.md) 和 [验证范围](docs/STATUS.md)。
 
-当前 Windows 本机完整流程为 480/480 Core、73/73 Editor 测试，构建零警告零错误，打包资源检查通过。macOS runner 及真实桌面验收须分别以实际结果为准，详见 [验证范围](docs/STATUS.md)。
+## 当前边界
 
-本仓库由当前已核查代码的独立快照开始，不包含原项目 Git 历史、验证截图、原始日志、个人配置或构建产物。
+- 固定深色主题；文件内结构导航不包含 LSP 或跨文件语义分析。
+- Worktree 支持发现和打开已有目录，尚无创建、删除或 prune 管理界面。
+- 文件历史工具页仍是单会话；`.gitignore` 遵循 Git 规则，尚无忽略项管理界面。
+- 评论和界面设置保存在本机，不是团队云端评审服务。`GITX_DATA_DIR` 可用于指定独立数据目录。
+
+版本发布准备与平台打包限制见 [Release 方案](docs/RELEASING.md)。

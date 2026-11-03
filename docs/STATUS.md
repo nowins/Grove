@@ -40,3 +40,19 @@ macOS 桌面、WebView、Cmd 快捷键、输入法、Keychain／askpass、混合
 Windows Core 480/480、零跳过，Release 零警告；新增测试覆盖自动命名／跟踪、已有本地进度、不同远端同名、多个跟踪分支、嵌套 remote 名称、字面无效名称、脏工作树仅创建、旧快照及其他 worktree 占用。Editor 代码未变，沿用上一批 73/73 结果。
 
 Windows 原生 1382×899 与 884×640：真实临时仓库完成无输入框 Checkout、自定义中文名且不检出、无效名称原位提示、Enter 不提交、Cancel／Esc 取消、worktree 占用及同名远端拒绝。已核对真实分支、跟踪配置、索引和文件；不是 Headless 截图。中文通过文本输入工具上屏，不代表真实 IME 组合验收。浅色、高 DPI、屏幕阅读器与 macOS GUI 仍未验证；本批 hosted 结果以[当前提交的工作流记录](https://github.com/nowins/Grove/actions/workflows/ci.yml)为准。
+
+## Markdown 预览 Windows 验证
+
+单文件 Markdown 默认预览，支持 GFM 表格、任务列表、代码块、中文标题及重复标题锚点。源码与预览可切换并各自保留阅读位置；Esc 返回源码，预览中 Ctrl+F 会切回源码并聚焦搜索。相对文件链接在新源码标签中打开，历史链接与图片保留原提交；远程图片和原始 HTML 执行被阻止。Diff 仍为文本对比。
+
+Windows x64：Core 499/499、Editor 78/78，均无跳过；Release 零警告构建、锁定还原、self-contained 发布及原生依赖探针通过。Marked 与 DOMPurify 许可证随包验证。完整 CI 入口先通过 Core 498/498；增加 worktree 图片用例后再次完整 Core 回归为 499/499，最后搜索焦点修正后重跑 Editor 与独立 self-contained 发布通过。
+
+专用隔离仓库的 1382×899 与 884×641 原生截图已保留本机：表格/图片排版、中文相对路径、跨文件深层标题定位、缺失目标保留原文件、两个视图独立滚动、源码链接、Esc、Ctrl+F 焦点及输入均实测。验收前后临时仓库 HEAD 与 Git 状态一致，原工作区及 Typora 未被此验收操作改变。
+
+限制：仅支持单文件预览，不提供渲染 Diff、原始 HTML、远程图片、SVG、数学/图表插件或代码块语法着色。历史及 worktree 资源隔离有自动化 Git 测试，但本轮未做 macOS 原生界面、浅色主题、真实 IME 或屏幕阅读器验收；Windows 实测不替代其他平台验收。
+
+## Markdown 发布前复核
+
+补齐常见 Markdown 扩展识别，网页链接拒绝空白、控制字符、不完整协议或反斜线歧义；源码搜索和笔记入口在退出预览时同步恢复布局与焦点。README 已加入预览使用方式、四平台 CI 下载和校验步骤及真实分发限制。
+
+本地 Windows 完整 CI：Core 509/509、Editor 78/78，零跳过、零警告构建、自包含打包和架构探针通过。Marked/DOMPurify 许可证列入 MSBuild 输出与 CI 必需资源，Editor/Diff 样式也列为必需资源；发布文件清单包含隐藏文件。四平台结论以本次提交的 Actions 运行结果为准，macOS GUI 仍未实测，未创建版本标签或 Release。

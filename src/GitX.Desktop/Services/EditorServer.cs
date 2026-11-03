@@ -10,6 +10,8 @@ namespace GitX.Desktop.Services;
 public sealed record EditorToolbarState(string Path, bool CanBlame, string BlameLabel, IReadOnlyList<ChangeLine>? IncludedLines = null, bool? Included = false,
     BlameViewSettings? BlameView = null, IReadOnlyList<SourceTabInfo>? SourceTabs = null, string? ActiveSourceTabId = null, bool SourceMode = false, bool FileHistory = false);
 
+public sealed record MarkdownResourceContext(long Version, string Root, string Path, string? Revision);
+
 // Per-window loopback origin. Only bundled assets and the current document are exposed.
 // A random URL capability prevents other local web pages from guessing the document URL.
 public sealed class EditorServer : IDisposable
@@ -21,6 +23,7 @@ public sealed class EditorServer : IDisposable
     private byte[] _document = "{}"u8.ToArray();
     private byte[] _layout = "{}"u8.ToArray();
     private byte[] _comments = "{}"u8.ToArray();
+    private MarkdownResourceContext? _markdown;
     public Uri Address { get; }
 
     public EditorServer(string page = "index.html") : this(page, ReservePort) { }
@@ -61,7 +64,8 @@ public sealed class EditorServer : IDisposable
         JsonSerializer.SerializeToUtf8Bytes(new { version, document, toolbar },
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-    public void Publish(byte[] document) => Volatile.Write(ref _document, document);
+    public void Publish(byte[] document, MarkdownResourceContext? markdown = null)
+    { Volatile.Write(ref _markdown, markdown); Volatile.Write(ref _document, document); }
     public void PublishLayout(byte[] layout) => Volatile.Write(ref _layout, layout);
     public void PublishComments(byte[] comments) => Volatile.Write(ref _comments, comments);
 
@@ -91,6 +95,22 @@ public sealed class EditorServer : IDisposable
             response.Headers["X-Content-Type-Options"] = "nosniff";
             if (request.HttpMethod != "GET" || !Owns(request.Url)) { response.StatusCode = 404; return; }
             var name = Uri.UnescapeDataString(request.Url!.AbsolutePath[_prefix.Length..]);
+            if (name == "markdown-image")
+            {
+                var owner = Volatile.Read(ref _markdown);
+                if (owner is null || !long.TryParse(request.QueryString["version"], out var version) || version != owner.Version
+                    || request.QueryString["href"] is not { } href) { response.StatusCode = 404; return; }
+                try
+                {
+                    var asset = await MarkdownResources.ReadImageAsync(owner.Root, owner.Path, owner.Revision, href, _lifetime.Token);
+                    if (!ReferenceEquals(owner, Volatile.Read(ref _markdown))) { response.StatusCode = 404; return; }
+                    response.ContentType = asset.ContentType;
+                    await response.OutputStream.WriteAsync(asset.Bytes, _lifetime.Token);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or LibGit2Sharp.LibGit2SharpException or ArgumentException)
+                { response.StatusCode = 404; }
+                return;
+            }
             if (name is "document" or "layout" or "comments")
             {
                 response.ContentType = "application/json; charset=utf-8";

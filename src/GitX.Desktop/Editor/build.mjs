@@ -21,4 +21,6 @@ await copyFile('node_modules/monaco-editor/LICENSE', 'dist/MONACO-LICENSE.txt');
 await copyFile('node_modules/monaco-editor/ThirdPartyNotices.txt', 'dist/ThirdPartyNotices.txt');
 await copyFile('fonts/OFL.txt', 'dist/JETBRAINS-MONO-OFL.txt');
 await copyFile('../Assets/Fonts/Inter/OFL.txt', 'dist/INTER-OFL.txt');
+await copyFile('node_modules/marked/LICENSE', 'dist/MARKED-LICENSE.txt');
+await copyFile('node_modules/dompurify/LICENSE', 'dist/DOMPURIFY-LICENSE.txt');
 await writeFile('dist/.buildstamp', new Date().toISOString());

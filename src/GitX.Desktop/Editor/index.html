@@ -69,6 +69,7 @@ input[type=checkbox]:indeterminate{background:linear-gradient(#aeb5bd,#aeb5bd) c
 <div id="editor-header">
  <div id="editor-tab"><div id="source-tabs" role="tablist" aria-label="代码标签页" hidden></div><div id="file-path"><span id="tab-caption">提交:</span><span id="file-parent"></span><span id="file-name">选择文件</span><button id="close-file" title="关闭文件" aria-label="关闭文件">×</button></div></div>
  <div id="editor-tools">
+  <span id="markdown-mode" role="group" aria-label="Markdown 阅读方式" hidden><button id="markdown-source" aria-pressed="false" title="查看只读源码；Ctrl+F 在源码中搜索">源码</button><button id="markdown-rendered" aria-pressed="true" title="预览；HTML 按文本显示，远程图片不自动加载">预览</button></span>
   <button class="diff-only" id="previous-change" title="上一处差异 · Shift+F7" aria-label="上一处差异"></button><button class="diff-only" id="next-change" title="下一处差异 · F7" aria-label="下一处差异"></button>
   <span class="tool-separator diff-only"></span><span class="viewer-mode diff-only" title="当前为并排只读视图">并排 · 只读</span>
   <select class="diff-only" id="whitespace-mode" aria-label="空白比较方式"><option value="0">不忽略空白</option><option value="1" selected>修剪首尾空白</option><option value="2">忽略空白</option></select>
@@ -79,6 +80,7 @@ input[type=checkbox]:indeterminate{background:linear-gradient(#aeb5bd,#aeb5bd) c
   <details id="diff-more"><summary title="更多选项" aria-label="更多选项"></summary><div id="fold-controls"><button class="diff-only" id="expand-all">展开未变化片段</button><button class="diff-only" id="collapse-all">折叠未变化片段</button><button class="diff-only" id="toggle-minimap" aria-pressed="true">显示代码缩略图</button><button id="stage-block" hidden>暂存当前块</button><button id="stage-lines" hidden>暂存选中行</button></div></details>
  </div><div id="editor-messages"></div>
 </div>
+<section id="markdown-preview" tabindex="0" aria-label="Markdown 预览，只读；Esc 返回源码" hidden><article id="markdown-content"></article></section>
 <div id="headers">
  <div class="side-header"><span id="old-label"></span><span class="side-path" id="old-label-path"></span><span class="side-format" id="old-format"></span></div><div></div>
  <div class="side-header"><label class="include-file-label"><input type="checkbox" id="include-file" aria-label="包含当前文件到提交"><span>当前版本 · 只读</span></label><span id="new-label"></span><span id="new-label-path"></span><span class="side-format" id="new-format"></span></div>

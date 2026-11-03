@@ -174,7 +174,8 @@ public sealed partial class MainWindow : Window
                 _model.SelectedEntry is { } selected ? _model.InclusionState(selected.Path) : false, _blameView, _model.SourceTabs, _model.ActiveSourceTabId, _model.Mode == 0);
             var payload = await Task.Run(() => EditorServer.Serialize(version, document, toolbar));
             if (_closed || sequence != _publicationSequence) return;
-            _server.Publish(payload);
+            _server.Publish(payload, !document.IsDiff && !document.IsNotice && document.Language == "markdown" && _model.Root is { } markdownRoot
+                ? new(version, markdownRoot, document.Path, document.SourceRevision) : null);
             _publishedDocument = document;
             _publishedVersion = version;
             if (_ready) await InvokeEditorAsync(tabsOnly
@@ -210,6 +211,13 @@ public sealed partial class MainWindow : Window
             case "view": SwitchView(root.GetProperty("index").GetInt32(), focusNavigation: true); break;
             case "code-search": await OpenCodeSearchAsync(root.GetProperty("filesOnly").GetBoolean(), root.TryGetProperty("quick", out var quick) && quick.GetBoolean()); break;
             case "source-history": await OpenSourceHistoryAsync(version); break;
+            case "markdown-open":
+                if (_publishedDocument is not { IsDiff: false, IsNotice: false, Language: "markdown" }) break;
+                var href = root.GetProperty("href").GetString()!;
+                if (MarkdownResources.ExternalLink(href) is { } external)
+                    await Launcher.LaunchUriAsync(external);
+                else await _model.OpenMarkdownLinkAsync(href, version);
+                break;
             case "project-reveal": RevealProjectFile(); break;
             case "history-back": if (_model.IsHistory) NavigateHistoryBack(); break;
             case "blame": await _model.ToggleBlameAsync(); break;

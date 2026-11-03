@@ -6,7 +6,7 @@
   { "language": "typescript", "fileType": "TS", "grammar": "tsx", "extensions": [".tsx"] },
   { "language": "python", "fileType": "PY", "grammar": "python", "extensions": [".py", ".pyw", ".pyi"] },
   { "language": "json", "fileType": "{}", "extensions": [".json"] },
-  { "language": "markdown", "fileType": "MD", "extensions": [".md"] },
+  { "language": "markdown", "fileType": "MD", "extensions": [".md", ".markdown", ".mdown", ".mkd"] },
   { "language": "html", "fileType": "≡", "extensions": [".html"] },
   { "language": "css", "fileType": "≡", "extensions": [".css"] },
   { "language": "xml", "fileType": "<>", "extensions": [".xml", ".axaml", ".csproj", ".props"] },

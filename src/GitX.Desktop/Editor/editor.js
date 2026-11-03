@@ -4,6 +4,8 @@ import './node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/cod
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import 'monaco-editor/editor/contrib/folding/browser/folding.js';
 import { prepareLanguage } from './language-definitions.js';
+import { MarkdownPreview } from './markdown-preview.js';
+import './markdown-preview.css';
 
 import { buildAlignment, nextChange } from './diff-layout.js';
 import { registerDiffFolding, DiffFolding } from './diff-folding.js';
@@ -82,6 +84,7 @@ let scrollMap = null, expectedScrollTop = [null, null];
 let sourceMode = false, sourcePath = '';
 const send = value => window.invokeCSharpAction?.(JSON.stringify(value));
 const sourceTabs = new SourceTabs({ getVersion: () => generation, send });
+const markdown = new MarkdownPreview({ send, getVersion: () => generation, onSource: () => { panes.forEach(pane => pane.layout()); right.focus(); } });
 const sourceSymbols = new SourceSymbols({ getState: () => ({ available: !loading && sourceMode && !plan && !!models[1],
   identity: `${generation}:${models[1]?.id}`, language: models[1]?.getLanguageId(), path: sourcePath, text: () => models[1]?.getValue() }),
   focus: () => panes[activePane].focus(), reveal: symbol => {
@@ -636,6 +639,7 @@ async function load(version) {
   if (version !== generation) pendingDirection = null;
   generation = version;
   loading = true;
+  markdown.setLoading(true);
   sourceSymbols.invalidate(); sourceSymbols.update();
   blameMenu.close(); more.open = false;
   scheduleConnectors();
@@ -666,6 +670,7 @@ async function load(version) {
     }
     await display(payload.document, payload.toolbar);
     if (request !== loadSequence || version !== generation) return;
+    markdown.update(payload.document, version, payload.toolbar?.activeSourceTabId); markdown.setLoading(false);
     if (!plan && models[1] && !payload.document.preserveView && payload.document.revealLine) {
       const line = Math.max(1, Math.min(models[1].getLineCount(), payload.document.revealLine));
       const column = payload.document.revealColumn ?? 1;
@@ -699,6 +704,7 @@ async function load(version) {
       loading = false; pendingDirection = null;
       toolFeedback.end(request, '读取失败 · 按 F5 重试'); updateCounter();
       sourceMode = false; sourceSymbols.update();
+      markdown.update({ isNotice: true }, version); markdown.setLoading(false);
       const workspace = document.getElementById('workspace'), notice = document.getElementById('document-notice');
       workspace.hidden = true; workspace.classList.remove('document-preparing'); workspace.setAttribute('aria-busy', 'false');
       notice.textContent = `编辑器文档加载失败：${String(error)}`; notice.hidden = false;
@@ -746,16 +752,17 @@ function navigate(direction) {
   queueNavigation(() => selectChange(changeFromCursor(direction)));
 }
 window.gitx = { load, navigate, openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => sourceTabs.update(toolbar),
-  captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane }),
+  captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane, markdown: markdown.capture() }),
   restoreDockView: value => {
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch { return; } }
     if (!value || value.version !== generation || value.path !== sourcePath || !Array.isArray(value.views)) return;
     value.views.forEach((view, side) => { if (view && panes[side]?.getModel()) panes[side].restoreViewState(view); });
     if (value.side === 0 || value.side === 1) activePane = value.side;
+    markdown.restore(value.markdown);
   },
-  openNotes: () => { sourceSymbols.close(false); comments.openDrawer(); },
+  openNotes: () => { if (markdown.active) markdown.activate(false, true); sourceSymbols.close(false); comments.openDrawer(); },
   setInclusion: state => { if (state.version !== generation) return; included = new Set(state.lines.map(line => `${line.side}:${line.line}`)); fileIncluded = state.included; inclusionBusy = !!state.busy; updateCounter(); scheduleConnectors(); },
-  refreshComments: () => comments.refresh(), openCommentDraft: id => comments.focusDraft(id), focus: () => panes[activePane].focus() };
+  refreshComments: () => comments.refresh(), openCommentDraft: id => { if (markdown.active) markdown.activate(false, true); comments.focusDraft(id); }, focus: () => markdown.active ? markdown.host.focus() : panes[activePane].focus() };
 const doubleShift = new DoubleShiftGesture();
 let composingSearch = false;
 const shiftAllowed = event => !composingSearch && !event.isComposing && event.keyCode !== 229 && !event.ctrlKey && !event.altKey && !event.metaKey
@@ -773,6 +780,9 @@ window.addEventListener('keyup', event => {
 window.addEventListener('keydown', event => {
   doubleShift.press(event.key === 'Shift', shiftAllowed(event), performance.now());
   if (event.isComposing) return;
+  if (markdown.active && event.key === 'Escape' && !event.shiftKey) {
+    event.preventDefault(); event.stopImmediatePropagation(); markdown.activate(false, true); return;
+  }
   if (event.key === 'F12' && event.shiftKey && !event.ctrlKey && !event.altKey) {
     event.preventDefault(); event.stopImmediatePropagation(); send({ type: 'reset-layout', version: generation }); return;
   }
@@ -812,6 +822,7 @@ window.addEventListener('keydown', event => {
   else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'r') { event.preventDefault(); event.stopImmediatePropagation(); revertCurrentBlock(); }
   else if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
     event.preventDefault(); event.stopImmediatePropagation();
+    if (markdown.active) markdown.activate(false, true);
     panes[activePane].focus(); panes[activePane].trigger('keyboard', 'actions.find', null);
   }
   else if (event.key === 'F5') { event.preventDefault(); send({ type: 'refresh' }); }

@@ -4,6 +4,28 @@ namespace GitX.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
 {
+    public async Task OpenMarkdownLinkAsync(string href, long version)
+    {
+        if (_closed || version != _documentVersion || _snapshot is not { } snapshot ||
+            _document is not { IsDiff: false, IsNotice: false, Language: "markdown" } source) return;
+        var link = MarkdownResources.Resolve(source.Path, href);
+        var repository = _repositoryVersion;
+        var kind = source.SourceRevision is null ? ComparisonKind.WorkingFile : ComparisonKind.RevisionFile;
+        // Resolve/read before changing selection. A missing or unsafe target
+        // leaves the current file and its preview intact.
+        var document = await _reader.DocumentAsync(new(snapshot.Root, link.Path, kind, source.SourceRevision), _documentRead.Token);
+        if (_closed || repository != _repositoryVersion || version != _documentVersion) return;
+        if (document.IsNotice) throw new IOException(document.Text);
+        if (source.SourceRevision is { } revision) await OpenRevisionSourceAsync(link.Path, revision);
+        else
+        {
+            SetEditorContext(0);
+            var entry = NavigationEntries(0).FirstOrDefault(entry => entry.Path == link.Path) ?? new(link.Path, link.Path, ComparisonKind.WorkingFile);
+            OpenWorkingTab(entry); _selectedEntry = entry; Changed(nameof(SelectedEntry));
+            await SelectEntryAsync(entry);
+        }
+    }
+
     private CancellationTokenSource _noteRead = new();
     public void CancelNoteSource() { if (!_closed) Replace(ref _noteRead); }
     public bool RepositoryFilesTruncated => _snapshot?.FilesTruncated == true;

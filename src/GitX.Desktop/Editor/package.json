@@ -5,15 +5,18 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test diff-layout.test.js diff-folding.test.js diff-scroll.test.js merge-layout.test.js merge-choices.test.js comment-layout.test.js merge-save-state.test.js source-symbols.test.js source-languages.test.js note-list.test.js double-shift.test.js source-update.test.js tool-feedback.test.js"
+    "test": "node --test diff-layout.test.js diff-folding.test.js diff-scroll.test.js merge-layout.test.js merge-choices.test.js comment-layout.test.js merge-save-state.test.js source-symbols.test.js source-languages.test.js note-list.test.js double-shift.test.js source-update.test.js tool-feedback.test.js markdown-preview.test.js"
   },
   "dependencies": {
     "@vscode/tree-sitter-wasm": "0.3.1",
+    "dompurify": "3.4.17",
+    "marked": "18.1.3",
     "monaco-editor": "0.57.0",
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "jsdom": "30.1.3"
   },
   "overrides": {
     "dompurify": "3.4.17"

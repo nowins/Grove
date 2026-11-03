@@ -77,7 +77,7 @@ try {
     if ([int]$counts.total -lt 1 -or [int]$counts.failed -ne 0 -or [int]$counts.error -ne 0 -or [int]$counts.executed -lt 1) { throw 'Core test results are empty or unsuccessful.' }
     Invoke-CiCommand dotnet @('publish', 'src/GitX.Desktop/GitX.Desktop.csproj', '-c', 'Release', '-r', $RuntimeIdentifier, '--self-contained', 'true', '-p:RestoreLockedMode=true', '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:CopyOutputSymbolsToPublishDirectory=false', '-p:ContinuousIntegrationBuild=true', '--output', $publish, '--warnaserror') 'publish.txt'
     $appHost = if ($IsWindows) { 'GitX.Desktop.exe' } else { 'GitX.Desktop' }
-    $required = @($appHost, 'GitX.Desktop.dll', 'GitX.Core.dll', 'Avalonia.Controls.WebView.dll', 'GitX.Desktop.deps.json', 'GitX.Desktop.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
+    $required = @($appHost, 'GitX.Desktop.dll', 'GitX.Core.dll', 'Avalonia.Controls.WebView.dll', 'GitX.Desktop.deps.json', 'GitX.Desktop.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/editor.css', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/merge.css', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/MARKED-LICENSE.txt', 'Editor/dist/DOMPURIFY-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
     foreach ($grammar in @('java', 'c-sharp', 'python', 'javascript', 'typescript', 'tsx')) { $required += "Editor/dist/tree-sitter-$grammar.wasm" }
     foreach ($relative in $required) { if (-not (Test-Path -LiteralPath (Join-Path $publish $relative) -PathType Leaf)) { throw "Missing published resource: $relative" } }
     $nativePattern = if ($IsWindows) { '*git2*.dll' } else { '*git2*.dylib' }
@@ -85,7 +85,7 @@ try {
     $platformResult = Join-Path $results 'platform.json'
     Invoke-CiCommand dotnet @('run', '--project', 'tools/PlatformProbe/PlatformProbe.csproj', '-c', 'Release', '--no-build', '--no-restore', '--', $hostArchitecture, $publish, $platformResult) 'platform-probe.txt'
     $platform = Get-Content -LiteralPath $platformResult -Raw | ConvertFrom-Json
-    $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File | Sort-Object FullName | ForEach-Object {
+    $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
         @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
     @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
