@@ -237,7 +237,7 @@ public sealed partial class MergeWindow : Window
     private async Task InvokeAsync(string script)
     {
         if (_closed || _webView is null || !_ready) return;
-        try { await _webView.InvokeScript(script); } catch (Exception e) { if (!_closed) Error(e.Message); }
+        try { await _webView.InvokeCommandAsync(script); } catch (Exception e) { if (!_closed) Error(e.Message); }
     }
     private Task CommandAsync(string command) => InvokeAsync($"window.gitxMerge.command({JsonSerializer.Serialize(command)})");
     private async void EditorCommandClicked(object? sender, RoutedEventArgs e)

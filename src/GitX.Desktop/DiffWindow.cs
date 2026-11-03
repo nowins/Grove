@@ -39,7 +39,7 @@ internal sealed class DiffWindow : Window
                         using var parsed = JsonDocument.Parse(e.Body!); var message = parsed.RootElement;
                         switch (message.GetProperty("type").GetString())
                         {
-                            case "ready": _ready = true; await _view.InvokeScript($"window.gitx.load({_version})"); break;
+                            case "ready": _ready = true; await _view.InvokeCommandAsync($"window.gitx.load({_version})"); break;
                             case "focus-navigation": case "close-document": Close(); break;
                             case "whitespace": await PublishAsync((DiffWhitespace)message.GetProperty("value").GetInt32()); break;
                             case "focus-out": NativeKeyboardFocus.LeaveEmbedded(this, _view, message.GetProperty("direction").GetInt32()); break;
@@ -64,12 +64,12 @@ internal sealed class DiffWindow : Window
             var document = new RepositoryDocument(path, compared.Patch, language, left.Label + " → " + right.Label, $"{compared.Diff.Blocks.Count} 处差异", IsDiff: true, Diff: compared.Diff);
             var payload = await Task.Run(() => EditorServer.Serialize(version, document, new(path, false, "注解")), _lifetime.Token);
             if (_lifetime.IsCancellationRequested || version != _version) return;
-            _server!.Publish(payload); if (_ready) await _view!.InvokeScript($"window.gitx.load({version})");
+            _server!.Publish(payload); if (_ready) await _view!.InvokeCommandAsync($"window.gitx.load({version})");
         }
         AddHandler(KeyDownEvent, (_, e) =>
         {
             if (e.Key == Key.Escape) { e.Handled = true; Close(); }
-            else if (e.Key == Key.F7 && _ready) { e.Handled = true; _view?.Focus(); _ = _view?.InvokeScript($"window.gitx.navigate({(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1)})"); }
+            else if (e.Key == Key.F7 && _ready) { e.Handled = true; _view?.Focus(); _ = _view?.InvokeCommandAsync($"window.gitx.navigate({(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1)})"); }
         }, RoutingStrategies.Tunnel);
         Closed += (_, _) => { _lifetime.Cancel(); _host.Content = null; _view = null; _server?.Dispose(); _lifetime.Dispose(); };
     }

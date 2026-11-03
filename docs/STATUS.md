@@ -70,3 +70,9 @@ Windows x64：Core 499/499、Editor 78/78，均无跳过；Release 零警告构�
 本机 Windows x64：零警告构建、Core 509/509、Editor 78/78、258 个安装载荷文件哈希、安装/重装/卸载、开始菜单及卸载注册项、额外用户文件和配置哨兵保留均通过。原生向导取消未创建目标目录；实际安装后的 Grove.exe 正常打开临时仓库，显示中文 Markdown、表格和相对图片，并正常退出后卸载。原始截图和日志只保留本机，不进入源码或 Release。
 
 SourceLanguage 已改为源生成 JSON；独立 Windows x64 AOT 探针恢复 TypeScript 识别及 LibGit2 读取。其余 JSON 和反射绑定仍未达到 AOT 发布条件。macOS/ARM64 实际包的构建与自动检查以本次准确提交的 CI 结果为准；本机无法代替这些原生平台验证。Mac .app 仅 ad-hoc 签名，无 Developer ID、公证或 GUI 验收。最终发布范围、准确来源和资产校验以 Release 的 BUILD-INFO/SHA256SUMS 记录为准。
+
+## macOS WebView 原生返回类型修复
+
+原生调用的异步 document load 会将 Promise 直接返回 WKWebView，匹配用户报告的 unsupported type 错误。命令与状态查询已统一为字符串边界，覆盖主编辑器、独立 Diff、文件历史和合并窗口，并保留版本化异步错误回报。
+
+本次回归覆盖命令返回类型、同步与异步错误，以及 WebView2/WebKit 的 JSON 状态交换。此提交不包含在线更新功能。

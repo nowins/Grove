@@ -1,5 +1,6 @@
 import './node_modules/monaco-editor/esm/vs/nls/lang/zh-cn.js';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
+import { installNativeBridge } from './native-bridge.js';
 import './node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css';
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import { prepareLanguage } from './language-definitions.js';
@@ -28,6 +29,10 @@ installTooltips('.gutter-actions button');
 let session='',doc,model,models=[],blocks=[],selected=-1,revision=0,saveState,busy=false,composing=false,restoring=false,transaction=false;
 let rows=[],zoneIds=[[],[],[]],syncing=false,layoutTimer,currentState,undo=[],redo=[],active=1,disposed=false;
 const send=value=>window.invokeCSharpAction?.(JSON.stringify({...value,session}));
+installNativeBridge(window, () => {
+  const owner = session, version = revision;
+  return error => { if (!disposed && owner === session && version === revision) send({ type: 'error', message: String(error) }); };
+});
 const currentStates=()=>JSON.stringify(blocks.map(b=>b.choice));
 const dirty=()=>!!model && saveState.dirty(model.getValue(),currentStates());
 const range=block=>model.getDecorationRange(block.track);

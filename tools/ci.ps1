@@ -85,6 +85,15 @@ try {
     $platformResult = Join-Path $results 'platform.json'
     Invoke-CiCommand dotnet @('run', '--project', 'tools/PlatformProbe/PlatformProbe.csproj', '-c', 'Release', '--no-build', '--no-restore', '--', $hostArchitecture, $publish, $platformResult) 'platform-probe.txt'
     $platform = Get-Content -LiteralPath $platformResult -Raw | ConvertFrom-Json
+    if ($IsMacOS) {
+        # Exercise the actual OS WKWebView API, including the Promise baseline.
+        # This is an offscreen native engine check, not desktop visual acceptance.
+        $nativeTools = Join-Path $output 'validation-tools'
+        New-Item -ItemType Directory -Path $nativeTools | Out-Null
+        $webkitProbe = Join-Path $nativeTools 'webkit-probe'
+        Invoke-CiCommand /usr/bin/swiftc @('-parse-as-library', 'tools/WebKitProbe/main.swift', '-o', $webkitProbe) 'webkit-build.txt'
+        Invoke-CiCommand $webkitProbe @((Join-Path $projectRoot 'src/GitX.Desktop/Editor/native-bridge.js'), (Join-Path $results 'webkit-native.json')) 'webkit-native.txt'
+    }
     $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
         @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })

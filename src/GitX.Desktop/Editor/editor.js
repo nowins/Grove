@@ -4,6 +4,7 @@ import './node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/cod
 import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import 'monaco-editor/editor/contrib/folding/browser/folding.js';
 import { prepareLanguage } from './language-definitions.js';
+import { installNativeBridge } from './native-bridge.js';
 import { MarkdownPreview } from './markdown-preview.js';
 import './markdown-preview.css';
 
@@ -83,6 +84,10 @@ let showMinimap = true;
 let scrollMap = null, expectedScrollTop = [null, null];
 let sourceMode = false, sourcePath = '';
 const send = value => window.invokeCSharpAction?.(JSON.stringify(value));
+installNativeBridge(window, () => {
+  const version = generation;
+  return error => { if (version === generation) send({ type: 'error', version, message: String(error) }); };
+});
 const sourceTabs = new SourceTabs({ getVersion: () => generation, send });
 const markdown = new MarkdownPreview({ send, getVersion: () => generation, onSource: () => { panes.forEach(pane => pane.layout()); right.focus(); } });
 const sourceSymbols = new SourceSymbols({ getState: () => ({ available: !loading && sourceMode && !plan && !!models[1],

@@ -126,7 +126,7 @@ internal sealed class FileHistoryPanel : Border, IDisposable
         var version = _model.DocumentVersion;
         try
         {
-            var view = await _view.InvokeScript("window.gitx.captureDockView()").WaitAsync(TimeSpan.FromSeconds(2));
+            var view = await _view.InvokeJsonQueryAsync("window.gitx.captureDockView()").WaitAsync(TimeSpan.FromSeconds(2));
             if (!_closed && version == _model.DocumentVersion && !string.IsNullOrWhiteSpace(view) && view != "null")
             { _dockView = view; _dockViewVersion = version; }
         }
@@ -136,12 +136,12 @@ internal sealed class FileHistoryPanel : Border, IDisposable
     {
         if (!_closed && _ready && _view is not null && _dockView is { } view && _dockViewVersion == _model.DocumentVersion)
         {
-            try { await _view.InvokeScript("window.gitx.restoreDockView(" + view + ")").WaitAsync(TimeSpan.FromSeconds(2)); }
+            try { await _view.InvokeCommandAsync("window.gitx.restoreDockView(" + view + ")").WaitAsync(TimeSpan.FromSeconds(2)); }
             catch (Exception) { /* The ready/loaded handshake retries after a native reparent. */ }
         }
     }
     public void FocusDiff()
-    { if (!_closed && _ready) { _view?.Focus(); _ = _view?.InvokeScript("window.gitx.focus()"); } }
+    { if (!_closed && _ready) { _view?.Focus(); _ = _view?.InvokeCommandAsync("window.gitx.focus()"); } }
     private void RevealCurrentFile() => RevealRequested?.Invoke(_model.Document is { IsNotice: false, Path.Length: > 0 } document ? new(Target.Root, document.Path) : null);
     public bool HandleKey(KeyEventArgs e)
     {
@@ -150,7 +150,7 @@ internal sealed class FileHistoryPanel : Border, IDisposable
         else if (e.Key == Key.Escape) CloseRequested?.Invoke();
         else if (e.Key == Key.F5) _ = _model.RefreshAsync();
         else if (e.Key == Key.F7 && _ready)
-        { _view?.Focus(); _ = _view?.InvokeScript($"window.gitx.navigate({(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1)})"); }
+        { _view?.Focus(); _ = _view?.InvokeCommandAsync($"window.gitx.navigate({(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1)})"); }
         else return false;
         e.Handled = true; return true;
     }
@@ -232,7 +232,7 @@ internal sealed class FileHistoryPanel : Border, IDisposable
         catch (Exception ex) { if (!_closed && publication == _publication) ShowError(ex.Message); }
     }
     private async Task LoadPublishedAsync()
-    { if (!_closed && _view is not null) await _view.InvokeScript($"window.gitx.load({_publishedVersion})"); }
+    { if (!_closed && _view is not null) await _view.InvokeCommandAsync($"window.gitx.load({_publishedVersion})"); }
     private void ShowError(string text) { if (_closed) return; _status.Text = text; ToolTip.SetTip(_status, text); }
     public void Dispose()
     {

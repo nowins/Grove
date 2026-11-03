@@ -268,7 +268,7 @@ public sealed partial class MainWindow : Window
     private async Task InvokeEditorAsync(string script)
     {
         if (_closed || _webView is null) return;
-        try { await _webView.InvokeScript(script); }
+        try { await _webView.InvokeCommandAsync(script); }
         catch (Exception e) { if (!_closed) _model.ReportError($"编辑器通信失败：{e.Message}"); }
     }
 
