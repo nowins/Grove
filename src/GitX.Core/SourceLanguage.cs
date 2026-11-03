@@ -1,12 +1,16 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GitX.Core;
 
 // Shared metadata is embedded for native callers and bundled for both Web views.
 // Grammar selection is path-sensitive for TSX while Monaco uses "typescript".
-public static class SourceLanguage
+public static partial class SourceLanguage
 {
     private sealed record Definition(string Language, string FileType, string? Grammar, string[] Extensions);
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    [JsonSerializable(typeof(Definition[]))]
+    private partial class LanguageJsonContext : JsonSerializerContext { }
     private static readonly IReadOnlyDictionary<string, Definition> Extensions = Read();
     private static readonly HashSet<string> StructureLanguages = Extensions.Values.Where(d => d.Grammar is not null)
         .Select(d => d.Language).ToHashSet(StringComparer.Ordinal);
@@ -15,7 +19,7 @@ public static class SourceLanguage
     {
         using var stream = typeof(SourceLanguage).Assembly.GetManifestResourceStream("GitX.Core.SourceLanguages.json")
             ?? throw new InvalidOperationException("缺少内置语言定义。");
-        var definitions = JsonSerializer.Deserialize<Definition[]>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+        var definitions = JsonSerializer.Deserialize(stream, LanguageJsonContext.Default.DefinitionArray)
             ?? throw new InvalidOperationException("内置语言定义无效。");
         return definitions.SelectMany(d => d.Extensions.Select(extension => (extension, d)))
             .ToDictionary(pair => pair.extension, pair => pair.d, StringComparer.OrdinalIgnoreCase);
