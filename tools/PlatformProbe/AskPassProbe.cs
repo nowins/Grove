@@ -40,8 +40,11 @@ internal static class AskPassProbe
                 Check(await RequestAsync(session, "wrong", "untrusted") is null && prompts == 0, "Nonce rejection failed.");
                 var response = await RequestAsync(session, Nonce(session), "https://user:url-secret@example.invalid");
                 Check(JsonSerializer.Deserialize<string>(response!) == value && prompts == 1, "Credential round trip failed.");
-                var client = await ClientAsync(session, "fixture credential");
-                Check(client.Code == 0 && client.Output.TrimEnd('\r', '\n') == value, "Production client Unicode round trip failed.");
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    var client = await ClientAsync(session, "fixture credential");
+                    Check(client.Code == 0 && client.Output.TrimEnd('\r', '\n') == value, "Production client Unicode round trip failed.");
+                }
                 Check(!session.Authentication.Sanitize(value + Uri.EscapeDataString(value)).Contains(value, StringComparison.Ordinal), "Secret redaction failed.");
                 await using var other = new GitAskPassSession(Helper(), _ => throw new Exception("Isolated session was accessed."));
                 Check(other.Authentication.Environment[GitAskPassSession.PipeVariable] != address, "Sessions reused an endpoint.");
@@ -90,8 +93,7 @@ internal static class AskPassProbe
         await using var pipe = new NamedPipeClientStream(".", session.Authentication.Environment[GitAskPassSession.PipeVariable], PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await pipe.ConnectAsync(timeout.Token);
         using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, true);
-        using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, true) { AutoFlush = true };
-        await writer.WriteLineAsync(nonce); await writer.WriteLineAsync(JsonSerializer.Serialize(prompt));
+        await pipe.WriteAsync(Encoding.UTF8.GetBytes(nonce + "\n" + JsonSerializer.Serialize(prompt) + "\n"), timeout.Token);
         return await reader.ReadLineAsync(timeout.Token);
     }
     private static async Task<(int Code, string Output)> ClientAsync(GitAskPassSession session, string prompt)

@@ -74,7 +74,6 @@ public sealed class GitAskPassSession : IAsyncDisposable
                 try
                 {
                     using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, true);
-                    using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, true) { AutoFlush = true };
                     var nonce = await reader.ReadLineAsync(_stop.Token);
                     var request = await reader.ReadLineAsync(_stop.Token);
                     if (nonce != _nonce || request is null || request.Length > 16384) continue;
@@ -82,7 +81,9 @@ public sealed class GitAskPassSession : IAsyncDisposable
                     var answer = _cancelled ? null : await _prompt(RemoteWriter.RedactUrl(text)).WaitAsync(_stop.Token);
                     if (answer is null) _cancelled = true;
                     else { lock (_secrets) if (answer.Length > 0) _secrets.Add(answer); }
-                    await writer.WriteLineAsync(JsonSerializer.Serialize(answer));
+                    // NamedPipeStream is unbuffered. Avoid a second StreamWriter
+                    // flush during disposal after the peer has already closed.
+                    await pipe.WriteAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(answer) + "\n"), _stop.Token);
                 }
                 catch (IOException) when (!_stop.IsCancellationRequested) { /* A disconnected helper must not break the next request. */ }
                 catch (JsonException) { /* Ignore malformed requests from other local clients. */ }
@@ -100,8 +101,7 @@ public sealed class GitAskPassSession : IAsyncDisposable
             await using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             await pipe.ConnectAsync(10000);
             using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, true);
-            using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, true) { AutoFlush = true };
-            await writer.WriteLineAsync(nonce); await writer.WriteLineAsync(JsonSerializer.Serialize(prompt));
+            await pipe.WriteAsync(Encoding.UTF8.GetBytes(nonce + "\n" + JsonSerializer.Serialize(prompt) + "\n"));
             var answer = JsonSerializer.Deserialize<string>(await reader.ReadLineAsync() ?? "null");
             if (answer is null || answer.Contains('\n') || answer.Contains('\r')) return 1;
             using var output = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
