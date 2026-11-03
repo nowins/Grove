@@ -13,24 +13,26 @@
 
 ## 下载与运行
 
-当前提供开发预览构建，[Releases](https://github.com/nowins/Grove/releases) 尚未发布版本。进入[成功的 CI 运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)，从 **Artifacts** 下载对应包：
+从 [Grove 0.1.0 Preview 1](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.1) 的 **Assets** 下载对应应用包；GitHub 自动生成的 **Source code** 是源码，不是应用包。
 
-| 平台 | 架构 | Artifact | 内部应用包 |
-| --- | --- | --- | --- |
-| Windows | x64 | `desktop-win-x64` | `desktop-win-x64.zip` |
-| Windows | ARM64 | `desktop-win-arm64` | `desktop-win-arm64.zip` |
-| macOS | Apple Silicon | `desktop-osx-arm64` | `desktop-osx-arm64.tar.gz` |
-| macOS | Intel | `desktop-osx-x64` | `desktop-osx-x64.tar.gz` |
+| 构建目标 | 下载 |
+| --- | --- |
+| Windows x64 | [ZIP](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-win-x64.zip) |
+| Windows ARM64 | [ZIP](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-win-arm64.zip) |
+| macOS Apple Silicon | [tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-osx-arm64.tar.gz) |
+| macOS Intel | [tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-osx-x64.tar.gz) |
 
-仓库目前为私有：下载需要登录有读取权限的 GitHub 账号。CI 产物保留 **14 天**；下载的 Artifact 外层压缩包内含应用包和 `SHA256SUMS.txt`，请先核对应用压缩包的 SHA-256，再解压运行。
+同时下载 [`SHA256SUMS.txt`](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/SHA256SUMS.txt)，先核对对应压缩包的 SHA-256，再解压。仓库目前为私有，下载需要登录有仓库读取权限的 GitHub 账号。Release 包不受 Actions 的 14 天产物保留期限制。
 
-先安装 Git，并确保命令行能运行 `git`。Windows 还需要 Microsoft Edge WebView2 Runtime。应用包包含 .NET 运行时，无需另装 .NET SDK。
+先安装 Git，并确保命令行能找到 `git`。Windows 还需要 Microsoft Edge WebView2 Runtime。应用包自带 .NET 运行时，无需安装 .NET SDK。
 
 - **Windows：** 解压后运行 `GitX.Desktop.exe`。
-- **macOS：** 解开 `tar.gz`，在该目录的终端运行 `./GitX.Desktop`；当前不是 `.app` 或 DMG 安装包。
-- 启动后选择已有仓库，也可传入路径，例如 Windows 的 `.\GitX.Desktop.exe "C:\path\to\repo"` 或 macOS 的 `./GitX.Desktop ~/projects/repo`。
+- **macOS：** 解开 `tar.gz`，在解压目录终端运行 `./GitX.Desktop`。当前没有 `.app` 或 DMG；Mac GUI 尚未实机验收。
+- 启动后选择已有仓库，也可传入路径参数：Windows 如 `.\GitX.Desktop.exe "C:\path\to\repo"`，macOS 如 `./GitX.Desktop ~/projects/repo`。
 
-可执行文件和部分内部目录暂保留 `GitX` 名称以兼容现有配置。构建包未签名；macOS 未公证。四平台构建与自动化测试已通过，原生桌面验收目前覆盖 Windows x64，其他平台的 WebView、输入法与 DPI 仍需实机验证。
+这是开发预览版，未做发行签名或 macOS 公证。四平台原生构建与自动化测试通过，GUI 目前仅 Windows x64 实测，其他架构的 WebView、输入法与 DPI 仍待验收。可执行文件和部分内部目录保留 `GitX` 名称以兼容现有配置。
+
+最新开发构建仍可从[成功的 CI 运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)下载 **Artifacts**；这些开发产物保留 14 天，下载的外层 ZIP 内还有应用包与校验文件。
 
 ## 阅读 Markdown
 

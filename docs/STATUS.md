@@ -56,3 +56,9 @@ Windows x64：Core 499/499、Editor 78/78，均无跳过；Release 零警告构�
 补齐常见 Markdown 扩展识别，网页链接拒绝空白、控制字符、不完整协议或反斜线歧义；源码搜索和笔记入口在退出预览时同步恢复布局与焦点。README 已加入预览使用方式、四平台 CI 下载和校验步骤及真实分发限制。
 
 本地 Windows 完整 CI：Core 509/509、Editor 78/78，零跳过、零警告构建、自包含打包和架构探针通过。Marked/DOMPurify 许可证列入 MSBuild 输出与 CI 必需资源，Editor/Diff 样式也列为必需资源；发布文件清单包含隐藏文件。四平台结论以本次提交的 Actions 运行结果为准，macOS GUI 仍未实测，未创建版本标签或 Release。
+
+## 首个可下载预发布版
+
+`v0.1.0-preview.1` 已发布：[发布页](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.1)。代码与四个平台的应用包来自 a48e6cb / CI 41587178858；四平台 Core 509/509、Editor 78/78 全部通过。Release 资产包括四个版本/架构应用包、SHA256SUMS.txt 和 BUILD-INFO.json，发布后另行下载核验；main 后续下载说明的文档提交不改变本版本的代码来源。
+
+仍未做发行签名或 macOS 公证，Mac 为原始 tar.gz，没有 .app / DMG。GUI 仅 Windows x64 实测，其他架构 GUI 未验收；保留私有仓库权限，预发布不标作稳定 Latest。
