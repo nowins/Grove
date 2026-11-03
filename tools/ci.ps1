@@ -93,18 +93,24 @@ try {
         $webkitProbe = Join-Path $nativeTools 'webkit-probe'
         Invoke-CiCommand /usr/bin/swiftc @('-parse-as-library', 'tools/WebKitProbe/main.swift', '-o', $webkitProbe) 'webkit-build.txt'
         Invoke-CiCommand $webkitProbe @((Join-Path $projectRoot 'src/GitX.Desktop/Editor/native-bridge.js'), (Join-Path $results 'webkit-native.json')) 'webkit-native.txt'
+        $chromeHelper = Join-Path $nativeTools 'libgrove-chrome-probe.dylib'
+        Invoke-CiCommand /usr/bin/clang @('-fobjc-arc', '-dynamiclib', '-framework', 'AppKit', 'tools/ChromeProbe/NativeChrome.m', '-o', $chromeHelper) 'chrome-native-build.txt'
+        Invoke-CiCommand /usr/bin/codesign @('--force', '--sign', '-', $chromeHelper) 'chrome-native-sign.txt'
+        Invoke-CiCommand dotnet @('run', '--project', 'tools/ChromeProbe/ChromeProbe.csproj', '-c', 'Release', '--no-build', '--no-restore', '--', (Join-Path $results 'chrome-native.json'), $chromeHelper) 'chrome-native.txt'
+        $chrome = Get-Content -LiteralPath (Join-Path $results 'chrome-native.json') -Raw | ConvertFrom-Json
+        if (-not $chrome.passed) { throw 'Native Grove titlebar regression failed.' }
     }
     $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
         @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
-    @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
+    @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; nativeChromeTested = $IsMacOS; physicalInputTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
     & (Join-Path $PSScriptRoot 'package.ps1') -PublishDirectory $publish -OutputDirectory $output -RuntimeIdentifier $RuntimeIdentifier
     if ($IsWindows) {
         & (Join-Path $PSScriptRoot 'test-windows-package.ps1') -PackageDirectory $output -TestShellIntegration:($env:GITHUB_ACTIONS -eq 'true')
     } else {
         & (Join-Path $PSScriptRoot 'test-macos-package.ps1') -PackageDirectory $output
     }
-    Write-Host "Validated Grove application packages (no GUI launched)."
+    Write-Host "Validated Grove packages; native engine and chrome probe coverage is recorded separately."
 } finally {
     Pop-Location
     foreach ($name in $savedEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process') }
