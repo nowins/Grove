@@ -74,6 +74,9 @@ try {
     Invoke-CiCommand dotnet @('test', 'tests/GitX.Core.Tests/GitX.Core.Tests.csproj', '-c', 'Release', '--no-build', '--no-restore', '--logger', 'trx;LogFileName=core.trx', '--results-directory', $results, '--blame-hang', '--blame-hang-timeout', '3m', '--blame-hang-dump-type', 'none') 'core-tests.txt'
     [xml]$trx = Get-Content -LiteralPath (Join-Path $results 'core.trx') -Raw
     $counts = $trx.TestRun.ResultSummary.Counters
+    Invoke-CiCommand dotnet @('run', '--project', 'tools/PlatformProbe/PlatformProbe.csproj', '-c', 'Release', '--no-build', '--no-restore', '--', '--askpass-probe', (Join-Path $results 'askpass-native.json')) 'askpass-native.txt'
+    $askpass = Get-Content -LiteralPath (Join-Path $results 'askpass-native.json') -Raw | ConvertFrom-Json
+    if (-not $askpass.passed -or -not $askpass.actualGitHttpAuthentication) { throw 'Native askpass regression failed.' }
     if ([int]$counts.total -lt 1 -or [int]$counts.failed -ne 0 -or [int]$counts.error -ne 0 -or [int]$counts.executed -lt 1) { throw 'Core test results are empty or unsuccessful.' }
     Invoke-CiCommand dotnet @('publish', 'src/GitX.Desktop/GitX.Desktop.csproj', '-c', 'Release', '-r', $RuntimeIdentifier, '--self-contained', 'true', '-p:RestoreLockedMode=true', '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:CopyOutputSymbolsToPublishDirectory=false', '-p:ContinuousIntegrationBuild=true', '--output', $publish, '--warnaserror') 'publish.txt'
     $appHost = if ($IsWindows) { 'Grove.exe' } else { 'Grove' }

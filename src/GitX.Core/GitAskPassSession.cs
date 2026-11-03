@@ -8,7 +8,8 @@ namespace GitX.Core;
 public sealed class GitAskPassSession : IAsyncDisposable
 {
     public const string PipeVariable = "GITX_ASKPASS_PIPE";
-    private readonly string _pipe = "gitx-askpass-" + Guid.NewGuid().ToString("N");
+    private readonly string _pipe;
+    private readonly string? _pipeDirectory;
     private readonly string _nonce = Guid.NewGuid().ToString("N");
     private readonly CancellationTokenSource _stop = new();
     private readonly Func<string, Task<string?>> _prompt;
@@ -19,7 +20,17 @@ public sealed class GitAskPassSession : IAsyncDisposable
 
     public GitAskPassSession(string executable, Func<string, Task<string?>> prompt, bool sessionOnly = false)
     {
+        ArgumentException.ThrowIfNullOrEmpty(executable);
+        ArgumentNullException.ThrowIfNull(prompt);
         _prompt = prompt;
+        if (OperatingSystem.IsWindows()) _pipe = "gitx-askpass-" + Guid.NewGuid().ToString("N");
+        else
+        {
+            // Absolute Unix pipe paths bypass .NET's TMPDIR/CoreFxPipe_ prefix.
+            // Keep the complete UTF-8 endpoint well below macOS's 104-byte limit.
+            _pipeDirectory = CreatePrivatePipeDirectory();
+            _pipe = Path.Combine(_pipeDirectory, "p");
+        }
         var helper = executable.Replace('\\', '/');
         var environment = new Dictionary<string, string> {
             ["GIT_ASKPASS"] = helper, ["SSH_ASKPASS"] = executable,
@@ -30,6 +41,21 @@ public sealed class GitAskPassSession : IAsyncDisposable
             environment["GIT_CONFIG_COUNT"] = "1"; environment["GIT_CONFIG_KEY_0"] = "credential.helper"; environment["GIT_CONFIG_VALUE_0"] = "";
         }
         Authentication = new(environment, Sanitize); _server = ServeAsync();
+    }
+    private static string CreatePrivatePipeDirectory()
+    {
+        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+        const UnixFileMode mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var path = "/tmp/.grove-ap-" + Guid.NewGuid().ToString("N");
+            if (Directory.Exists(path) || File.Exists(path)) continue;
+            var directory = Directory.CreateDirectory(path, mode);
+            if (directory.LinkTarget is not null || (File.GetUnixFileMode(path) & ~mode) != 0)
+                throw new IOException("Cannot create a private askpass endpoint directory.");
+            return directory.FullName;
+        }
+        throw new IOException("Cannot allocate an isolated askpass endpoint.");
     }
     private string Sanitize(string value)
     {
@@ -53,7 +79,7 @@ public sealed class GitAskPassSession : IAsyncDisposable
                     var request = await reader.ReadLineAsync(_stop.Token);
                     if (nonce != _nonce || request is null || request.Length > 16384) continue;
                     var text = JsonSerializer.Deserialize<string>(request) ?? "Git 凭据";
-                    var answer = _cancelled ? null : await _prompt(RemoteWriter.RedactUrl(text));
+                    var answer = _cancelled ? null : await _prompt(RemoteWriter.RedactUrl(text)).WaitAsync(_stop.Token);
                     if (answer is null) _cancelled = true;
                     else { lock (_secrets) if (answer.Length > 0) _secrets.Add(answer); }
                     await writer.WriteLineAsync(JsonSerializer.Serialize(answer));
@@ -87,6 +113,19 @@ public sealed class GitAskPassSession : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        _stop.Cancel(); await _server; _stop.Dispose(); lock (_secrets) _secrets.Clear();
+        _stop.Cancel();
+        try { await _server; }
+        finally
+        {
+            _stop.Dispose(); lock (_secrets) _secrets.Clear();
+            if (_pipeDirectory is not null)
+            {
+                // Never recursively delete an unexpected file or another session.
+                try { Directory.Delete(_pipeDirectory, false); }
+                catch (DirectoryNotFoundException) { }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
     }
 }
