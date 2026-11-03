@@ -68,9 +68,6 @@ export class BlameMenu {
     this.menu.setAttribute('aria-label', 'Git 注解操作');
     this.beforeOpen(); this.closeView(); this.version = state.version; this.menu.replaceChildren();
     const committed = /^[a-f0-9]{40}$/i.test(info.sha) && !/^0+$/.test(info.sha);
-    const caption = document.createElement('div'); caption.className = 'blame-menu-caption';
-    caption.textContent = committed ? `${info.sha.slice(0, 8)} · ${info.author}` : '未提交改动';
-    caption.title = `${info.summary}\n${info.when}`; this.menu.append(caption);
     for (const [action, label, icon, enabled] of [
       ['close', '关闭注解', 'close', true], ['diff', '显示此提交差异', 'chevrons-right', committed],
       ['view', '查看', 'blank', true], ['copy', '复制修订号', 'copy', committed],
