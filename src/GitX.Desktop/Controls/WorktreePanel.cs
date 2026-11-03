@@ -29,10 +29,12 @@ internal sealed class WorktreePanel : Grid
     public WorktreePanel()
     {
         RowDefinitions = new("Auto,*,Auto"); RowSpacing = 8; Margin = new(12, 8);
-        var header = new Grid { ColumnDefinitions = new("*,Auto,Auto,Auto"), ColumnSpacing = 8 };
-        header.Children.Add(_location); header.Children.Add(_refresh); Grid.SetColumn(_refresh, 1);
-        header.Children.Add(_open); Grid.SetColumn(_open, 2); Children.Add(header);
-        header.Children.Add(_remove); Grid.SetColumn(_remove, 3);
+        var header = new StackPanel { Spacing = 6 };
+        header.Children.Add(_location);
+        var actions = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var button in new[] { _refresh, _open, _remove })
+        { button.Margin = new(0, 0, 8, 4); actions.Children.Add(button); }
+        header.Children.Add(actions); Children.Add(header);
         _refresh.Click += (_, _) => RefreshRequested?.Invoke();
         _open.Click += (_, _) => OpenSelected();
         _remove.Click += (_, _) => { if (_remove.IsEnabled && Snapshot is { } snapshot && _list.SelectedItem is WorktreeEntry entry) RemoveRequested?.Invoke(snapshot, entry); };
