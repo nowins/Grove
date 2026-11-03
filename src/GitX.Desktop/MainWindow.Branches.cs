@@ -23,6 +23,7 @@ public sealed partial class MainWindow
         try
         {
             var context = await RepositoryActions.ReadAsync(root);
+            var worktrees = await WorktreeCatalog.ReadAsync(root);
             if (_closed || _model.Root != root || generation != _shellGeneration || _model.IsWriting) return;
             var filter = new TextBox { PlaceholderText = "搜索分支名称…", Classes = { "search" } };
             AutomationProperties.SetName(filter, "搜索分支");
@@ -85,13 +86,15 @@ public sealed partial class MainWindow
                 panel.Children.Add(new TextBlock { Text = target.Sha[..12] + (target.Upstream is null ? "" : "  · " + target.Upstream), Classes = { "muted" }, Margin = new(8,0,8,6), TextTrimming = TextTrimming.CharacterEllipsis });
                 void Action(string label, string icon, BranchAction action)
                 {
-                    var reason = BranchActionAvailability.DisabledReason(context, action, target);
+                    var reason = BranchActionAvailability.DisabledReason(context, action, target, worktrees.Entries);
                     panel.Children.Add(ShellAction(label, icon, () => _ = ExecuteBranchActionAsync(context, action, target), reason));
                     if (reason is not null && action == BranchAction.Switch) panel.Children.Add(new TextBlock { Text = reason, Classes = { "muted" }, TextWrapping = TextWrapping.Wrap, Margin = new(8,0,8,4) });
                 }
                 var checkout = BranchActionAvailability.CheckoutTarget(context, target)!;
-                Action(target.Current || checkout.Current ? "当前分支" : checkout != target ? "切换到本地分支 " + checkout.Name : target.Remote ? "跟踪并切换到 " + target.Name : "切换到 " + target.Name, "BranchIcon", BranchAction.Switch);
-                Action("从此处新建分支…", "PlusIcon", BranchAction.Create);
+                Action(target.Current || checkout.Current ? "当前分支" : target.Remote ? "Checkout" : "切换到 " + target.Name, "BranchIcon", BranchAction.Switch);
+                if (target.Remote && BranchCheckout.Resolve(context, target) is { Error: null } plan)
+                    panel.Children.Add(new TextBlock { Text = plan.CreateTracking ? $"创建本地 {plan.LocalName}，跟踪 {target.Name}。" : $"使用本地 {plan.LocalName}，保留其提交与跟踪关系。", Classes = { "muted" }, TextWrapping = TextWrapping.Wrap, Margin = new(8,0,8,4) });
+                Action(target.Remote ? "New Branch…" : "从此处新建分支…", "PlusIcon", BranchAction.Create);
                 panel.Children.Add(new Separator());
                 if (context.Head is not null && target.Sha != context.Head) panel.Children.Add(ShellAction("与当前分支比较", "HistoryIcon", () => _ = CompareBranchAsync(context, target, false)));
                 panel.Children.Add(ShellAction("与工作区比较", "ChangesIcon", () => _ = CompareBranchAsync(context, target, true)));
@@ -144,12 +147,12 @@ public sealed partial class MainWindow
         CloseShellPopup();
         var reason = BranchActionAvailability.DisabledReason(context, action, target);
         if (reason is not null) { _model.ReportError(reason); return; }
-        if (action == BranchAction.Switch && target is not null) target = BranchActionAvailability.CheckoutTarget(context, target);
         var name = "";
         if (action == BranchAction.Create)
         {
-            var value = await InputDialog.ShowAsync(this, "新建分支", $"从 {target?.Name ?? context.Branch} 创建分支。创建后仍保留在当前分支。", required: true, inputLabel: "分支名称", acceptText: "创建");
-            if (value is null) return; name = value;
+            var choice = await BranchCreateDialog.ShowAsync(this, context, target);
+            if (choice is null) return;
+            name = choice.Name; action = choice.Checkout ? BranchAction.CreateAndSwitch : BranchAction.Create;
         }
         else if (target is null) return;
         else if (action is BranchAction.Delete or BranchAction.Merge or BranchAction.Rebase)

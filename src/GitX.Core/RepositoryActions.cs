@@ -4,7 +4,7 @@ using LibGit2Sharp;
 
 namespace GitX.Core;
 
-public sealed record BranchEntry(string Name, string CanonicalName, string Sha, bool Remote, bool Current, string? Upstream)
+public sealed record BranchEntry(string Name, string CanonicalName, string Sha, bool Remote, bool Current, string? Upstream, string? RemoteName = null, string? UpstreamCanonicalName = null)
 {
     public override string ToString() => $"{(Current ? "● " : "  ")}{Name}{(Current ? " · 当前" : "")}";
 }
@@ -23,7 +23,8 @@ public static class RepositoryActions
         using var repo = new Repository(root);
         var changes = repo.RetrieveStatus().Where(s => s.State != FileStatus.Unaltered && s.State != FileStatus.Ignored).ToArray();
         var token = Token(repo, changes.Select(s => s.FilePath), cancellation);
-        var branches = repo.Branches.Where(b => b.Tip is not null).Select(b => new BranchEntry(b.FriendlyName, b.CanonicalName, b.Tip.Sha, b.IsRemote, b.IsCurrentRepositoryHead, b.TrackedBranch?.FriendlyName)).OrderBy(b => b.Remote).ThenBy(b => b.Name).ToArray();
+        var remoteNames = repo.Network.Remotes.Select(r => r.Name).OrderByDescending(name => name.Length).ToArray();
+        var branches = repo.Branches.Where(b => b.Tip is not null).Select(b => new BranchEntry(b.FriendlyName, b.CanonicalName, b.Tip.Sha, b.IsRemote, b.IsCurrentRepositoryHead, b.TrackedBranch?.FriendlyName, b.IsRemote ? remoteNames.FirstOrDefault(name => b.CanonicalName.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)) : null, b.TrackedBranch?.CanonicalName)).OrderBy(b => b.Remote).ThenBy(b => b.Name).ToArray();
         var stashes = repo.Stashes.Select((s, i) => new StashEntry(i, s.WorkTree.Sha, s.Message)).ToArray();
         return new(root, token, repo.Head.Tip?.Sha, repo.Head.FriendlyName, repo.Head.Tip?.Message ?? "", changes.Length > 0,
             RepositoryOperation.Read(repo) is not null || repo.Index.Conflicts.Any(), branches, stashes, repo.Info.IsHeadDetached);
@@ -61,24 +62,34 @@ public static class RepositoryActions
     }
 }
 
-public enum BranchAction { Create, Switch, Delete, Merge, Rebase }
+public enum BranchAction { Create, Switch, Delete, Merge, Rebase, CreateAndSwitch }
 public sealed class BranchWriter
 {
     public Task<string> ExecuteAsync(ActionContext context, BranchAction action, BranchEntry? target = null, string name = "") => RepositoryWriter.Locked(context.Root, async () =>
     {
-        RepositoryActions.Check(context, action is BranchAction.Switch or BranchAction.Merge or BranchAction.Rebase);
+        RepositoryActions.Check(context, action is BranchAction.Switch or BranchAction.Merge or BranchAction.Rebase or BranchAction.CreateAndSwitch);
         if (target is not null && !context.Branches.Contains(target)) throw new IOException("分支不属于当前快照。");
-        if (action != BranchAction.Create && target is null) throw new IOException("请选择分支。");
+        if (action is not (BranchAction.Create or BranchAction.CreateAndSwitch) && target is null) throw new IOException("请选择分支。");
         switch (action)
         {
             case BranchAction.Create:
-                if (string.IsNullOrWhiteSpace(name) || name.StartsWith('-')) throw new IOException("请输入有效的新分支名称。");
-                await GitReadProcess.RunAsync(context.Root, ["check-ref-format", "--branch", name], default);
+            case BranchAction.CreateAndSwitch:
+                await BranchCheckout.ValidateNameAsync(context.Root, name);
                 var from = target?.Sha ?? context.Head ?? throw new IOException("请先创建初始提交。");
-                return await GitWriteProcess.RepositoryAsync(context.Root, ["branch", "--", name, from]);
+                if (context.Branches.Any(b => !b.Remote && b.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) throw new IOException("本地分支已存在，未覆盖或改绑。");
+                var track = target is { Remote: true, RemoteName: not null };
+                if (action == BranchAction.CreateAndSwitch)
+                    return await GitWriteProcess.RepositoryAsync(context.Root, track ? ["switch", "--track", "-c", name, target!.CanonicalName] : ["switch", "--no-track", "-c", name, from]);
+                return await GitWriteProcess.RepositoryAsync(context.Root, track ? ["branch", "--track", "--", name, target!.CanonicalName] : ["branch", "--no-track", "--", name, from]);
             case BranchAction.Switch:
-                if (target!.Remote) return await GitWriteProcess.RepositoryAsync(context.Root, ["switch", "--track", target.CanonicalName]);
-                return await GitWriteProcess.RepositoryAsync(context.Root, ["switch", "--", target!.Name]);
+                var checkout = BranchCheckout.Resolve(context, target!);
+                if (checkout.Error is { } reason) throw new IOException(reason);
+                if (checkout.CreateTracking)
+                {
+                    await BranchCheckout.ValidateNameAsync(context.Root, checkout.LocalName);
+                    return await GitWriteProcess.RepositoryAsync(context.Root, ["switch", "--track", "-c", checkout.LocalName, checkout.Target.CanonicalName]);
+                }
+                return await GitWriteProcess.RepositoryAsync(context.Root, ["switch", "--", checkout.Target.Name]);
             case BranchAction.Delete:
                 if (target!.Remote || target.Current) throw new IOException("只能删除非当前的本地分支；未合并分支由 Git 拒绝删除。");
                 return await GitWriteProcess.RepositoryAsync(context.Root, ["branch", "-d", "--", target.Name]);
