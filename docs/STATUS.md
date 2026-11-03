@@ -76,3 +76,11 @@ SourceLanguage 已改为源生成 JSON；独立 Windows x64 AOT 探针恢复 Typ
 原生调用的异步 document load 会将 Promise 直接返回 WKWebView，匹配用户报告的 unsupported type 错误。命令与状态查询已统一为字符串边界，覆盖主编辑器、独立 Diff、文件历史和合并窗口，并保留版本化异步错误回报。
 
 本次回归覆盖命令返回类型、同步与异步错误，以及 WebView2/WebKit 的 JSON 状态交换。此提交不包含在线更新功能。
+
+## Preview 3：macOS WebView 兼容修复
+
+修复原生端接收 Promise 时 WKWebView 返回“JavaScript execution returned a result of an unsupported type”的错误。主编辑器、独立 Diff、文件历史与合并窗口统一使用字符串结果边界，JSON 状态查询保留 WebView2/WebKit 兼容解码；异步结果仍通过原有版本消息处理。另修复慢速 runner 上本地批注并发保存的锁等待。
+
+四平台原生构建与自动化回归通过：Core 524/524、Editor 83/83。WKWebView 探针覆盖异步命令和 JSON 状态交换；完整测试结果以 CI 为准。
+
+版本标识更新为 0.1.0-preview.3；正式安装包以该提交的 CI 和 Release 资产为准。此版本不包含尚在开发的在线更新或工作树删除功能，签名、公证及用户数据兼容边界不变。

@@ -1,8 +1,8 @@
 # Release 分发
 
-## 0.1.0 Preview 2
+## 0.1.0 Preview 3
 
-发布目标为 `v0.1.0-preview.2`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。前一版本 `v0.1.0-preview.1` 保留，不覆盖其标签或资产。
+发布目标为 `v0.1.0-preview.3`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1` 和 `v0.1.0-preview.2` 保留，不覆盖其标签或资产。
 
 | 平台 | 分发内容 | 自动验证 |
 | --- | --- | --- |
@@ -23,6 +23,8 @@ macOS 包标识为 `io.github.nowins.grove`，CFBundleExecutable 为 Grove，内
 
 调试符号留在诊断构建目录，不进入最终应用包。`metadata.json` 描述原始 publish，`package-metadata.json` 描述实际分发文件；macOS bundleFiles 记录 ad-hoc 签名后的完整 app 内容。每个 CI 产物含应用包和 SHA256SUMS；发布合并为一个 SHA256SUMS.txt，并附 BUILD-INFO.json，明确代码 SHA、CI run、架构、测试与签名/GUI 边界。
 
-发布前核查四平台结果、全部许可证、哈希、可执行位及安装包安全性。只能纳入必要应用包和分发元数据，不上传验证截图、个人路径、应用数据、本地归档或旧 Git 历史。准确标签指向已验证提交，预览发布不设置为稳定 Latest。发布后用有仓库读取权限的账号重新下载全部资产并核对 SHA-256；私有仓库下载仍受权限控制。
+发布前核查四平台结果、全部许可证、哈希、可执行位及安装包安全性。只能纳入必要应用包和分发元数据，不上传验证截图、个人路径、应用数据、本地归档或旧 Git 历史。准确标签指向已验证提交，预览发布不设置为稳定 Latest。仓库公开后以匿名方式重新下载全部资产并核对 SHA-256，确认可直接获取安装包。
 
 相关：[CI](CI.md)、[状态](STATUS.md)、[Native AOT](NATIVE-AOT.md)、[Avalonia macOS 分发](https://docs.avaloniaui.net/docs/deployment/macos)。
+
+Grove 项目代码采用 MIT 许可证，应用分发包含根目录 LICENSE.txt；第三方字体、编辑器及语法资源的原始许可和通知继续保留。

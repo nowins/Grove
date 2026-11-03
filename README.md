@@ -13,16 +13,16 @@
 
 ## 下载与安装
 
-从 [Grove 0.1.0 Preview 2](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.2) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
+从 [Grove 0.1.0 Preview 3](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.3) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
 
 | 平台 | 推荐下载 |
 | --- | --- |
-| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-win-x64-setup.exe) |
-| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-win-arm64-setup.exe) |
-| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-osx-arm64.dmg) |
-| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-osx-x64.dmg) |
+| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-win-x64-setup.exe) |
+| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-win-arm64-setup.exe) |
+| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-osx-arm64.dmg) |
+| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-osx-x64.dmg) |
 
-Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。仓库目前为私有，需要登录有读取权限的 GitHub 账号；Release 包不受 Actions 的 14 天产物保留期限制。
+Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。公开 Release 可直接下载，无需 GitHub 登录；Release 包不受 Actions 的 14 天产物保留期限制。
 
 - **Windows：** 安装到当前用户的程序目录，开始菜单入口为 Grove，不要求管理员权限。便携版解压后运行 `Grove.exe`。安装程序外壳为 NSIS x86，应用本体匹配所选 x64/ARM64 架构；选错架构会拒绝安装。
 - **macOS 14+：** 打开 DMG，将 `Grove.app` 拖入 Applications。也可解压 app.tar.gz。当前只有 ad-hoc 完整性签名，没有 Apple Developer ID 签名或公证，Gatekeeper 可能阻止打开；不建议在要求受信任签名的设备部署。Mac GUI 仍待实机验收。
@@ -63,3 +63,7 @@ pwsh ./tools/ci.ps1
 - 评论和界面设置保存在本机，不是团队云端评审服务。`GITX_DATA_DIR` 可用于指定独立数据目录。
 
 版本发布准备与平台打包限制见 [Release 方案](docs/RELEASING.md)。
+
+## 许可证
+
+Grove 自身代码采用 [MIT](LICENSE)。第三方依赖、字体及语法资源继续保留各自许可证；应用包保留相应许可与通知文件。
