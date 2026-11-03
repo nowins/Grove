@@ -25,7 +25,9 @@ __attribute__((visibility("default"))) int grove_read_chrome(void* w, void* v, G
                 button && !button.isHiddenOrHasHiddenAncestor,
                 hits(window, view, NSMakePoint(NSMidX(frame), NSMidY(frame)), button)};
         }
-        NSString* title = NSApp.mainMenu.itemArray.firstObject.title ?: @"";
+        // App-menu holder items intentionally have an empty title in Avalonia.
+        // Its native SetApplicationTitle sets the Cocoa process/display name.
+        NSString* title = NSProcessInfo.processInfo.processName ?: @"";
         strlcpy(menu, title.UTF8String, capacity); *scale = window.backingScaleFactor;
         return 0;
     }
