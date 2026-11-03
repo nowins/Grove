@@ -1,6 +1,7 @@
 using GitX.Core;
 using GitX.Desktop.Controls;
 using GitX.Desktop.ViewModels;
+using GitX.Desktop.Services;
 
 namespace GitX.Desktop;
 
@@ -14,6 +15,7 @@ public sealed partial class MainWindow
     {
         _worktreesPanel.RefreshRequested += () => _ = RefreshWorktreePanelAsync();
         _worktreesPanel.OpenRequested += (snapshot, selected) => _ = OpenWorktreeAsync(snapshot, selected);
+        _worktreesPanel.RemoveRequested += (snapshot, selected) => _ = RemoveWorktreeAsync(snapshot, selected);
         _model.PropertyChanged += (_, _) => _worktreesPanel.SetCanOpen(!_model.Busy && !_model.IsWriting && _model.Root == _worktreesPanel.Snapshot?.Root);
         _model.RepositoryOpened += root =>
         {
@@ -66,5 +68,30 @@ public sealed partial class MainWindow
         }
         finally
         { if (!_closed && generation == _worktreeChoiceGeneration) _worktreesPanel.SetBusy(false); }
+    }
+
+    private async Task RemoveWorktreeAsync(WorktreeSnapshot snapshot, WorktreeEntry selected)
+    {
+        if (snapshot.Root != _model.Root || !CanChangeRepository()) return;
+        var generation = ++_worktreeChoiceGeneration; _worktreesPanel.SetBusy(true);
+        try
+        {
+            var plan = await WorktreeRemoval.PrepareAsync(snapshot, selected);
+            if (_closed || snapshot.Root != _model.Root || generation != _worktreeChoiceGeneration || !CanChangeRepository()) return;
+            var confirmed = await ConfirmDialog.ShowAsync(this, "删除关联工作树",
+                $"仓库：{snapshot.Root}\n\n删除目录：{plan.Target.Root}\n分支：{plan.Target.BranchLabel}\n提交：{plan.Target.Head ?? "暂无提交"}\n\n将由 Git 删除此关联工作树目录及登记，保留分支与提交。目录删除无法在 Grove 中撤销。\n已检查未提交、未跟踪、被忽略文件和锁定状态；执行前还会再次检查。请先关闭使用该目录的其他程序。", "删除工作树");
+            if (!confirmed || _closed || snapshot.Root != _model.Root || generation != _worktreeChoiceGeneration || !CanChangeRepository()) return;
+            await _model.ExecuteActionAsync(snapshot.Root, () => WorktreeRemoval.RemoveAsync(plan), "删除关联工作树");
+            if (!_closed && snapshot.Root == _model.Root) await RefreshWorktreePanelAsync();
+        }
+        catch (Exception ex)
+        {
+            if (!_closed && snapshot.Root == _model.Root && generation == _worktreeChoiceGeneration)
+                _worktreesPanel.ShowError("未删除工作树：" + ex.Message);
+        }
+        finally
+        {
+            if (!_closed && generation == _worktreeChoiceGeneration) _worktreesPanel.SetBusy(false);
+        }
     }
 }

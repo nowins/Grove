@@ -20,18 +20,24 @@ internal sealed class WorktreePanel : Grid
     private readonly Button _refresh = new() { Content = IconContent.Label("RefreshIcon", "刷新"), Classes = { "toolbar" } };
     private readonly Button _open = new() { Content = "打开工作树", Classes = { "dialog-action", "primary" }, IsEnabled = false };
     private bool _busy, _canOpen;
+    private readonly Button _remove = new() { Content = "删除…", Classes = { "dialog-action" }, IsEnabled = false };
     public WorktreeSnapshot? Snapshot { get; private set; }
     public event Action? RefreshRequested;
     public event Action<WorktreeSnapshot, WorktreeEntry>? OpenRequested;
+    public event Action<WorktreeSnapshot, WorktreeEntry>? RemoveRequested;
 
     public WorktreePanel()
     {
         RowDefinitions = new("Auto,*,Auto"); RowSpacing = 8; Margin = new(12, 8);
-        var header = new Grid { ColumnDefinitions = new("*,Auto,Auto"), ColumnSpacing = 8 };
+        var header = new Grid { ColumnDefinitions = new("*,Auto,Auto,Auto"), ColumnSpacing = 8 };
         header.Children.Add(_location); header.Children.Add(_refresh); Grid.SetColumn(_refresh, 1);
         header.Children.Add(_open); Grid.SetColumn(_open, 2); Children.Add(header);
+        header.Children.Add(_remove); Grid.SetColumn(_remove, 3);
         _refresh.Click += (_, _) => RefreshRequested?.Invoke();
         _open.Click += (_, _) => OpenSelected();
+        _remove.Click += (_, _) => { if (_remove.IsEnabled && Snapshot is { } snapshot && _list.SelectedItem is WorktreeEntry entry) RemoveRequested?.Invoke(snapshot, entry); };
+        AutomationProperties.SetName(_remove, "检查并确认删除所选关联工作树");
+        ToolTip.SetTip(_remove, "先检查本地文件与锁定状态，再确认删除；不支持强制删除。");
         _list.SelectionChanged += (_, _) => UpdateButtons();
         _list.KeyDown += (_, e) => { if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None && _open.IsEnabled) { e.Handled = true; OpenSelected(); } };
         AutomationProperties.SetName(_list, "仓库工作树");
@@ -88,5 +94,6 @@ internal sealed class WorktreePanel : Grid
     {
         _refresh.IsEnabled = !_busy;
         _open.IsEnabled = !_busy && _canOpen && Snapshot is not null && _list.SelectedItem is WorktreeEntry { Current: false, UnavailableReason: null };
+        _remove.IsEnabled = !_busy && _canOpen && Snapshot is not null && _list.SelectedItem is WorktreeEntry { Current: false, Bare: false, UnavailableReason: null, LockedReason: null };
     }
 }
