@@ -46,6 +46,11 @@ internal static class Program
                 finally { stop.Cancel(); desktop.Shutdown(_exit); }
             }, DispatcherPriority.ApplicationIdle)).StartWithClassicDesktopLifetime([repository], ShutdownMode.OnExplicitShutdown);
         }
+        catch (Exception error)
+        {
+            _exit = 1;
+            Save(result, new { passed = false, error = error.ToString(), samples = Samples });
+        }
         finally
         {
             stop.Cancel();
