@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(string? initialRepository)
     {
         InitializeComponent();
+        InitializeTitlebar();
         DataContext = _model;
         FilesPane.DataContext = _model;
         InitializeNavigation();
