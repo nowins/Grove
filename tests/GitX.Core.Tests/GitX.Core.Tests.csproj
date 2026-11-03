@@ -4,6 +4,7 @@
     <ProjectReference Include="../../src/GitX.Core/GitX.Core.csproj" />
     <Compile Include="../../src/GitX.Desktop/Services/WebViewScript.cs" Link="WebViewScript.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/TitlebarMetrics.cs" Link="TitlebarMetrics.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/WindowCommandPolicy.cs" Link="WindowCommandPolicy.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/MainViewModel.cs" Link="MainViewModel.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/WorkspaceNavigation.cs" Link="WorkspaceNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/ToolDockLayout.cs" Link="ToolDockLayout.cs" />

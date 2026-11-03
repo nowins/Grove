@@ -31,6 +31,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         InitializeTitlebar();
+        WindowsWindowCommands.Attach(this);
         DataContext = _model;
         FilesPane.DataContext = _model;
         InitializeNavigation();

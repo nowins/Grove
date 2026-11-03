@@ -256,6 +256,7 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
         var window = tool.Window = new Window { Title = tool.Title + " — Grove", Width = state.Width, Height = state.Height, MinWidth = 280, MinHeight = 200,
             ShowInTaskbar = state.Independent, ShowActivated = activate, WindowStartupLocation = WindowStartupLocation.Manual,
             ExtendClientAreaToDecorationsHint = true, ExtendClientAreaTitleBarHeightHint = 32, WindowDecorationsTheme = _owner.WindowDecorationsTheme };
+        WindowsWindowCommands.Attach(window);
         var grid = new Grid { RowDefinitions = new("32,28,*") };
         // Native caption moves/resizes the floating frame; the inner header also docks it.
         var header = new DockPanel { Background = Brush("PanelBrush") };

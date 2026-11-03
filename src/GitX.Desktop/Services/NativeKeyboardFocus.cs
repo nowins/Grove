@@ -9,7 +9,7 @@ internal static class NativeKeyboardFocus
 {
     public static void LeaveEmbedded(Window window, Control embedded, int direction)
     {
-        if (!window.IsActive || (!embedded.IsFocused && !HasEmbeddedFocus(window))) return;
+        if (!window.IsActive || !WindowsWindowCommands.CanFocus(window) || (!embedded.IsFocused && !HasEmbeddedFocus(window))) return;
         var visited = new HashSet<Control> { embedded };
         var current = embedded;
         // FindNextElement can return a disabled button (e.g. Save after saving).
@@ -27,7 +27,7 @@ internal static class NativeKeyboardFocus
     // on the previous control. Check ownership, never enumerate WebView internals.
     public static bool HasEmbeddedFocus(Window window)
     {
-        if (!OperatingSystem.IsWindows() || !window.IsActive) return false;
+        if (!OperatingSystem.IsWindows() || !window.IsActive || !WindowsWindowCommands.CanFocus(window)) return false;
         var handle = window.TryGetPlatformHandle();
         var focused = GetFocus();
         return handle is { HandleDescriptor: "HWND" } && handle.Handle != IntPtr.Zero &&
@@ -40,7 +40,7 @@ internal static class NativeKeyboardFocus
     {
         Dispatcher.UIThread.VerifyAccess();
         window = TopLevel.GetTopLevel(target) as Window ?? window;
-        if (!window.IsActive) return false;
+        if (!window.IsActive || !WindowsWindowCommands.CanFocus(window)) return false;
         if (!OperatingSystem.IsWindows()) return target.Focus(NavigationMethod.Directional);
 
         var handle = window.TryGetPlatformHandle();
