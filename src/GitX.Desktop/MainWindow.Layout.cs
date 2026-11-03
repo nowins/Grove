@@ -27,6 +27,7 @@ public sealed partial class MainWindow
     {
         InitializeProjectTool();
         InitializeWorktreeTool();
+        InitializeUpdateTool();
         _dock = new(this, EditorPane, Path.Combine(LocalDataDirectory, "tool-layout.json"));
         foreach (var control in new Control[] { _projectPanel, LocalNavigation, GitLogWorkspace, FileHistoryHost }) control.DataContext = _model;
         _dock.Register(ToolId.Project, "项目", "FolderIcon", _projectPanel);
@@ -35,6 +36,7 @@ public sealed partial class MainWindow
         _dock.Register(ToolId.FileHistory, "文件历史", "FileIcon", FileHistoryHost);
         _dock.Register(ToolId.Output, "Git 输出", "OutputIcon", _gitOutputPanel);
         _dock.Register(ToolId.Worktrees, "工作树", "BranchIcon", _worktreesPanel);
+        _dock.Register(ToolId.Updates, "更新", "RefreshIcon", _updatesPanel);
         _dock.Error += _model.ReportError;
         _dock.BeforeReparentAsync = id => id is null or ToolId.FileHistory ? _fileHistoryPanel?.CaptureDockViewAsync() ?? Task.CompletedTask : Task.CompletedTask;
         _dock.AfterReparentAsync = id => id is null or ToolId.FileHistory ? _fileHistoryPanel?.RestoreDockViewAsync() ?? Task.CompletedTask : Task.CompletedTask;
@@ -49,6 +51,7 @@ public sealed partial class MainWindow
                 case ToolId.FileHistory: _fileHistoryPanel?.FocusCommits(); break;
                 case ToolId.Output: UpdateGitOutput(); NativeKeyboardFocus.TryFocusControl(this, _gitOutputText); break;
                 case ToolId.Worktrees: _ = RefreshWorktreePanelAsync(); _worktreesPanel.FocusList(); break;
+                case ToolId.Updates: _updatesPanel.FocusCheck(); break;
             }
         };
         _dock.FloatingCreated += window =>

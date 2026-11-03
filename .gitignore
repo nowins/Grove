@@ -41,3 +41,7 @@ Thumbs.db
 
 # Local visual QA evidence stays outside source commits
 /validation/
+
+# Per-user update preferences and root-level download cache
+**/update-settings.json
+/updates/
