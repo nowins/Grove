@@ -84,6 +84,31 @@ public sealed class LocalCommentTests
         await stores[0].DeleteAsync(edited); Assert.Equal(11, (await stores[0].ReadAsync(anchor.Context.RepositoryId)).Count);
     }
     [Fact]
+    public async Task Contended_save_waits_asynchronously_for_an_external_lock_without_losing_notes()
+    {
+        using var repo = new TestRepository(); repo.Write("a", "line");
+        var anchor = CommentAnchor.Capture(await _reader.DocumentAsync(new(repo.Root, "a", ComparisonKind.WorkingFile)), 1, 1, 1);
+        var directory = Path.Combine(repo.Container, "comments");
+        var store = new LocalCommentStore(directory);
+        var first = await store.SaveAsync(anchor, "existing note");
+        Task<LocalComment> pending;
+        using (var lease = new FileStream(Path.Combine(directory, anchor.Context.RepositoryId + ".json.lock"),
+                   FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            pending = store.SaveAsync(anchor, "waited note");
+            // Exceed the previous two-second retry budget while a separate
+            // writer holds the same operating-system lock.
+            await Task.Delay(TimeSpan.FromMilliseconds(2200));
+            Assert.False(pending.IsCompleted);
+            Assert.Equal(first, Assert.Single(await store.ReadAsync(anchor.Context.RepositoryId)));
+        }
+        var saved = await pending.WaitAsync(TimeSpan.FromSeconds(10));
+        var all = await new LocalCommentStore(directory).ReadAsync(anchor.Context.RepositoryId);
+        Assert.Equal(2, all.Count);
+        Assert.Contains(first, all);
+        Assert.Contains(saved, all);
+    }
+    [Fact]
     public async Task Corrupt_or_unknown_storage_is_not_overwritten_and_limits_are_explicit()
     {
         using var repo = new TestRepository(); repo.Write("a", "line");

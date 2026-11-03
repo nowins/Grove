@@ -78,10 +78,10 @@ public sealed class LocalCommentStore(string directory)
         }
         catch (JsonException e) { throw new IOException("评论文件损坏，未覆盖原数据。请备份后检查 JSON。", e); }
     }
-    public Task<LocalComment> SaveAsync(CommentAnchor anchor, string body, LocalComment? original = null) => Task.Run(() =>
+    public Task<LocalComment> SaveAsync(CommentAnchor anchor, string body, LocalComment? original = null) => Task.Run(async () =>
     {
         if (string.IsNullOrWhiteSpace(body) || body.Length > 16000) throw new IOException("评论不能为空，且最多 16,000 字符。");
-        using var lease = Lock(anchor.Context.RepositoryId);
+        using var lease = await LockAsync(anchor.Context.RepositoryId).ConfigureAwait(false);
         var items = Read(anchor.Context.RepositoryId).ToList();
         var now = DateTimeOffset.UtcNow;
         var saved = new LocalComment(original?.Id ?? Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"), anchor, body, original?.Created ?? now, now);
@@ -99,23 +99,27 @@ public sealed class LocalCommentStore(string directory)
         Write(anchor.Context.RepositoryId, items);
         return saved;
     });
-    public Task DeleteAsync(LocalComment original) => Task.Run(() =>
+    public Task DeleteAsync(LocalComment original) => Task.Run(async () =>
     {
-        using var lease = Lock(original.Anchor.Context.RepositoryId);
+        using var lease = await LockAsync(original.Anchor.Context.RepositoryId).ConfigureAwait(false);
         var items = Read(original.Anchor.Context.RepositoryId).ToList();
         if (items.RemoveAll(c => c.Id == original.Id && c.Revision == original.Revision) != 1)
             throw new IOException("此评论已被其他窗口修改或删除，请刷新评论列表后重试。");
         Write(original.Anchor.Context.RepositoryId, items);
     });
-    private FileStream Lock(string id)
+    private async Task<FileStream> LockAsync(string id)
     {
         Directory.CreateDirectory(directory);
         var path = FilePath(id) + ".lock";
-        // Bounded wait runs on the worker thread, never the UI thread.
-        for (var i = 0; ; i++)
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        // Contended saves must yield the worker instead of starving the thread
+        // pool that the lock owner needs to finish. Keep cross-process exclusion
+        // and a bounded monotonic wait; never remove another writer's lock file.
+        while (true)
         {
             try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
-            catch (IOException) when (i < 40) { Thread.Sleep(50); }
+            catch (IOException) when (System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(30))
+            { await Task.Delay(50).ConfigureAwait(false); }
         }
     }
     private void Write(string id, IReadOnlyList<LocalComment> comments)
