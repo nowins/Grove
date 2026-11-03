@@ -18,11 +18,27 @@ if (OperatingSystem.IsWindows())
     var expectedMachine = expected switch { "arm64" => 0xaa64, "x64" => 0x8664, _ => throw new InvalidOperationException("Unsupported Windows architecture.") };
     var gitAssets = Directory.GetFiles(publish, "git2-*.dll");
     if (gitAssets.Length == 0) throw new FileNotFoundException("Published libgit2 DLL missing.");
-    foreach (var file in new[] { "GitX.Desktop.exe", "libSkiaSharp.dll", "libHarfBuzzSharp.dll" }.Select(name => Path.Combine(publish, name)).Concat(gitAssets))
+    foreach (var file in new[] { "Grove.exe", "libSkiaSharp.dll", "libHarfBuzzSharp.dll" }.Select(name => Path.Combine(publish, name)).Concat(gitAssets))
     {
         var machine = Machine(file);
         if (machine != expectedMachine) throw new BadImageFormatException($"Wrong native architecture for {Path.GetFileName(file)}: 0x{machine:x4}, expected 0x{expectedMachine:x4}.");
         nativeAssets.Add(new { file = Path.GetFileName(file), machine = $"0x{machine:x4}", architecture = expected });
+    }
+}
+
+if (OperatingSystem.IsMacOS())
+{
+    var required = expected == "arm64" ? "arm64" : "x86_64";
+    var files = new[] { Path.Combine(publish, "Grove") }.Concat(Directory.GetFiles(publish, "*.dylib"));
+    foreach (var file in files)
+    {
+        var start = new ProcessStartInfo("/usr/bin/lipo") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        start.ArgumentList.Add("-archs"); start.ArgumentList.Add(file);
+        using var process = Process.Start(start) ?? throw new IOException("Cannot start Mach-O architecture probe.");
+        var architectures = process.StandardOutput.ReadToEnd().Trim(); var error = process.StandardError.ReadToEnd(); process.WaitForExit();
+        if (process.ExitCode != 0 || !architectures.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Contains(required))
+            throw new BadImageFormatException($"Wrong Mach-O architecture for {Path.GetFileName(file)}: {architectures} {error}");
+        nativeAssets.Add(new { file = Path.GetFileName(file), architecture = architectures });
     }
 }
 

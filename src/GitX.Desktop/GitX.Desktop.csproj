@@ -3,6 +3,10 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <Title>Grove</Title>
+    <AssemblyName>Grove</AssemblyName>
+    <RootNamespace>GitX.Desktop</RootNamespace>
+    <AssemblyTitle>Grove</AssemblyTitle>
+    <Company>Grove</Company>
     <Product>Grove</Product>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationManifest>app.manifest</ApplicationManifest>

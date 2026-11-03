@@ -96,7 +96,7 @@ public sealed class StashWriter
         if (action == StashAction.Save)
         {
             if (!context.Dirty || context.Head is null) throw new IOException("需要已有提交和本地改动才能 Stash。");
-            return await GitWriteProcess.RepositoryAsync(context.Root, ["stash", "push", "--include-untracked", "-m", string.IsNullOrWhiteSpace(message) ? "GitX stash" : message]);
+            return await GitWriteProcess.RepositoryAsync(context.Root, ["stash", "push", "--include-untracked", "-m", string.IsNullOrWhiteSpace(message) ? "Grove stash" : message]);
         }
         if (stash is null || !context.Stashes.Contains(stash)) throw new IOException("Stash 不属于当前快照，请重新选择。");
         var selector = $"stash@{{{stash.Index}}}";

@@ -38,8 +38,8 @@
     <SolidColorBrush x:Key="ErrorSurfaceBrush">#492B2E</SolidColorBrush>
     <SolidColorBrush x:Key="ErrorTextBrush">#F4B5B8</SolidColorBrush>
     <!-- Native and Web UI share bundled Inter; CJK keeps the platform UI face. -->
-    <FontFamily x:Key="UiFontFamily">avares://GitX.Desktop/Assets/Fonts/Inter#Inter, Microsoft YaHei UI, Segoe UI, Noto Sans CJK SC</FontFamily>
-    <FontFamily x:Key="CodeFontFamily">avares://GitX.Desktop/Editor/fonts#JetBrains Mono, Cascadia Mono, Consolas, Microsoft YaHei UI, Noto Sans Mono CJK SC</FontFamily>
+    <FontFamily x:Key="UiFontFamily">avares://Grove/Assets/Fonts/Inter#Inter, Microsoft YaHei UI, Segoe UI, Noto Sans CJK SC</FontFamily>
+    <FontFamily x:Key="CodeFontFamily">avares://Grove/Editor/fonts#JetBrains Mono, Cascadia Mono, Consolas, Microsoft YaHei UI, Noto Sans Mono CJK SC</FontFamily>
     <x:Double x:Key="UiFontSize">12.5</x:Double>
     <x:Double x:Key="UiSecondaryFontSize">12</x:Double>
     <x:Double x:Key="UiDialogTitleFontSize">14</x:Double>

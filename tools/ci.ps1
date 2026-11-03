@@ -76,8 +76,8 @@ try {
     $counts = $trx.TestRun.ResultSummary.Counters
     if ([int]$counts.total -lt 1 -or [int]$counts.failed -ne 0 -or [int]$counts.error -ne 0 -or [int]$counts.executed -lt 1) { throw 'Core test results are empty or unsuccessful.' }
     Invoke-CiCommand dotnet @('publish', 'src/GitX.Desktop/GitX.Desktop.csproj', '-c', 'Release', '-r', $RuntimeIdentifier, '--self-contained', 'true', '-p:RestoreLockedMode=true', '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:CopyOutputSymbolsToPublishDirectory=false', '-p:ContinuousIntegrationBuild=true', '--output', $publish, '--warnaserror') 'publish.txt'
-    $appHost = if ($IsWindows) { 'GitX.Desktop.exe' } else { 'GitX.Desktop' }
-    $required = @($appHost, 'GitX.Desktop.dll', 'GitX.Core.dll', 'Avalonia.Controls.WebView.dll', 'GitX.Desktop.deps.json', 'GitX.Desktop.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/editor.css', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/merge.css', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/MARKED-LICENSE.txt', 'Editor/dist/DOMPURIFY-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
+    $appHost = if ($IsWindows) { 'Grove.exe' } else { 'Grove' }
+    $required = @($appHost, 'Grove.dll', 'GitX.Core.dll', 'Avalonia.Controls.WebView.dll', 'Grove.deps.json', 'Grove.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/editor.css', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/merge.css', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/MARKED-LICENSE.txt', 'Editor/dist/DOMPURIFY-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
     foreach ($grammar in @('java', 'c-sharp', 'python', 'javascript', 'typescript', 'tsx')) { $required += "Editor/dist/tree-sitter-$grammar.wasm" }
     foreach ($relative in $required) { if (-not (Test-Path -LiteralPath (Join-Path $publish $relative) -PathType Leaf)) { throw "Missing published resource: $relative" } }
     $nativePattern = if ($IsWindows) { '*git2*.dll' } else { '*git2*.dylib' }
@@ -89,16 +89,13 @@ try {
         @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
     @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
+    & (Join-Path $PSScriptRoot 'package.ps1') -PublishDirectory $publish -OutputDirectory $output -RuntimeIdentifier $RuntimeIdentifier
     if ($IsWindows) {
-        $archive = Join-Path $output "desktop-$RuntimeIdentifier.zip"
-        Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $archive
+        & (Join-Path $PSScriptRoot 'test-windows-package.ps1') -PackageDirectory $output -TestShellIntegration:($env:GITHUB_ACTIONS -eq 'true')
     } else {
-        # tar retains the macOS apphost executable bit; uploading a loose folder does not.
-        $archive = Join-Path $output "desktop-$RuntimeIdentifier.tar.gz"
-        Invoke-CiCommand tar @('-czf', $archive, '-C', $publish, '.') 'archive.txt'
+        & (Join-Path $PSScriptRoot 'test-macos-package.ps1') -PackageDirectory $output
     }
-    "$((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt') -Encoding utf8
-    Write-Host "Validated unsigned CI archive: $archive (no GUI launched)."
+    Write-Host "Validated Grove application packages (no GUI launched)."
 } finally {
     Pop-Location
     foreach ($name in $savedEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process') }

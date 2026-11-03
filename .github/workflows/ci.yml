@@ -69,16 +69,19 @@ jobs:
           path: |
             artifacts/ci/${{ matrix.rid }}/results/
             artifacts/ci/${{ matrix.rid }}/metadata.json
+            artifacts/ci/${{ matrix.rid }}/package-metadata.json
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload unsigned application archive
+      - name: Upload preview application packages
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: desktop-${{ matrix.rid }}
           path: |
             artifacts/ci/${{ matrix.rid }}/desktop-*.zip
             artifacts/ci/${{ matrix.rid }}/desktop-*.tar.gz
+            artifacts/ci/${{ matrix.rid }}/Grove-*-setup.exe
+            artifacts/ci/${{ matrix.rid }}/Grove-*.dmg
             artifacts/ci/${{ matrix.rid }}/SHA256SUMS.txt
           if-no-files-found: error
           compression-level: 0

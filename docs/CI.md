@@ -1,6 +1,6 @@
 # Windows 与 macOS CI
 
-工作流位于 [.github/workflows/ci.yml](../.github/workflows/ci.yml)，本地与 Actions 共用 [tools/ci.ps1](../tools/ci.ps1)。它不依赖 GitHub 仓库名称；当前解决方案为 Grove.slnx；内部 src/GitX.*、命名空间及程序集保持兼容。
+工作流位于 [.github/workflows/ci.yml](../.github/workflows/ci.yml)，本地与 Actions 共用 [tools/ci.ps1](../tools/ci.ps1)。它不依赖 GitHub 仓库名称；当前解决方案为 Grove.slnx；内部 src/GitX.*、命名空间及 Core 程序集保持兼容；桌面程序集和启动文件为 Grove。
 
 ## 原生主机矩阵
 
@@ -23,19 +23,17 @@ macOS 在启动测试子进程前把 TMPDIR 解析为同一临时目录的物理
 
 WebView 包采用托管 WebView2 loader；探针检查发布的托管程序集是否可用于目标位数，并记录已发现的 Windows WebView2 Runtime 版本和架构。系统 WebView2 Runtime 仍是用户机器的先决条件，不由 self-contained .NET 包提供；没有发现 Runtime 不等于浏览器可用。探针不创建 WebView，不构成 ARM64 或其他平台 GUI 验收。参见 [Avalonia 平台依赖](https://docs.avaloniaui.net/docs/app-development/embedding-web-content)。
 
-## 运行与产物
+## 产物与本地运行
 
-准备 PowerShell 7、Git、global.json 允许的 .NET SDK 与 .node-version 的 Node，在项目根目录执行：
+执行 `pwsh ./tools/ci.ps1`，或显式传入与本机完全匹配的 `-RuntimeIdentifier`；默认输出 `artifacts/ci/<rid>`，目录已存在则拒绝覆盖，可用 `-OutputDirectory artifacts/ci/<新目录>`。
 
-```powershell
-./tools/ci.ps1
-# 默认识别当前主机；也可显式选择与主机完全匹配的 RID。
-./tools/ci.ps1 -RuntimeIdentifier win-x64 -OutputDirectory artifacts/ci/local-run-2
-```
+锁定还原、构建、Editor/Core 测试和架构探针后，`tools/package.ps1` 生成当前用户 Windows 安装程序/便携 ZIP，或 macOS Grove.app、DMG/app tar.gz。构建时下载并校验官方便携 NSIS，macOS 使用系统 sips/iconutil/codesign/hdiutil。脚本不使用发行证书和公证密钥，也不自动发布 Release。
 
-脚本拒绝跨主机 RID、artifacts 以外的输出目录或已存在的输出，绝不自动递归清理。结果位于 artifacts/ci/<rid>/：results 日志与 TRX、metadata.json 的文件哈希及平台状态、publish 目录、desktop-<rid>.zip（Windows）或 .tar.gz（macOS）和 SHA256SUMS.txt。tar 保留 Unix 执行权限。Actions 只上传明确的测试结果／metadata 和打包文件，保留 14 天；不上传整个工作区、用户目录或应用数据。
+`test-windows-package.ps1` 在独立的含空格路径内安装、逐文件验哈希、重装、卸载，并检查额外用户文件和配置哨兵仍存在。显式 /NOINTEGRATION 防止本机测试改动用户开始菜单/卸载注册项，CI 另在全新用户中自动检查开始菜单和卸载注册项，再确认卸载移除它们；GUI 验收仍单独记录。
 
-产物为 self-contained、未裁剪、非单文件的原生 apphost 与依赖，不要求目标机器另装 .NET；仍需 Git 和对应平台的原生 WebView 条件。Windows 解压后运行 GitX.Desktop.exe；macOS 解包后从终端运行 ./GitX.Desktop。它不是安装程序、签名发布或可在 Finder 分发的 .app。本轮没有加入证书、Apple 账号、签名、公证、自动发布或 GitHub Release。
+`test-macos-package.ps1` 只读挂载 DMG、复制 Grove.app 到含空格路径、核对签名后文件清单和 Info.plist，并卸载磁盘映像；不启动 GUI。metadata 标注 nativeGuiTested=false、signedRelease=false；package-metadata 另标 macAdHocSigned 和 notarized=false。
+
+上传的 desktop-<rid> artifact 含安装程序或 DMG、便携包和 SHA256SUMS；results-<rid> 含测试/平台/安装包检查结果及 publish/package 文件清单。Artifacts 保留 14 天，Release 分发不受该期限限制。调试符号不进入应用包。
 
 ## 触发与权限
 

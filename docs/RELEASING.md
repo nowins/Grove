@@ -1,33 +1,28 @@
 # Release 分发
 
-## 当前预发布版
+## 0.1.0 Preview 2
 
-[Grove 0.1.0 Preview 1](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.1) 已在私有仓库发布。版本标签 `v0.1.0-preview.1` 精确指向 `a48e6cb041922838364e9ebd7b84fdc0c3dd0539`；应用包来自[四平台成功 CI 41587178858](https://github.com/nowins/Grove/actions/runs/41587178858)，每个平台 Core 509/509、Editor 78/78，无跳过。随后 main 的文档更新不改变此版本的二进制来源。
+发布目标为 `v0.1.0-preview.2`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。前一版本 `v0.1.0-preview.1` 保留，不覆盖其标签或资产。
 
-Release 提供四个包含版本与架构的 `Grove-...` 应用压缩包、汇总 `SHA256SUMS.txt` 和 `BUILD-INFO.json`。四个包与 CI 产物字节相同，逐文件清单、隐藏构建标记、许可证、样式、CPU 架构与 macOS 可执行权限已核对。GitHub 自动生成的 Source code ZIP / tar.gz 是源码，不是应用包。
+| 平台 | 分发内容 | 自动验证 |
+| --- | --- | --- |
+| Windows x64 / ARM64 | 当前用户 NSIS 安装程序、便携 ZIP | 原生架构、全部安装文件哈希、安装/重装/卸载、额外用户文件保留 |
+| macOS Intel / Apple Silicon | DMG、含 Grove.app 的 tar.gz | 原生构建、Info.plist、图标、执行位、ad-hoc 签名、DMG 只读挂载、复制到含空格路径、包内文件哈希 |
 
-Release 资产不受 Actions 的 14 天保留期限制，但仍受仓库权限与资产删除影响。私有仓库下载需要 GitHub 登录及读取权限。预发布版不作为稳定 Latest；使用具体版本的发布页链接。
+Windows 安装程序外壳是 NSIS x86 Unicode，可在受支持的原生 x64 / ARM64 系统运行；载荷按对应架构原生发布。默认安装到 `%LocalAppData%/Programs/Grove`，只为当前用户创建开始菜单和卸载入口，不改全局 PATH、文件关联或系统 Git 设置。`/NOINTEGRATION` 供隔离验证和不需要系统入口的安装使用；没有此参数时正常创建入口。
 
-## 运行与验收边界
+卸载按构建时清单删除应用文件并尝试移除空目录，不递归删除所选安装目录，不删除 GitX/Grove 用户配置、评论、WebView 数据或仓库。重装会覆盖同名应用文件；安装时应先关闭 Grove，文件占用交给安装程序提示，不强杀应用。
 
-- Windows x64 / ARM64：self-contained ZIP，运行 `GitX.Desktop.exe`，需要系统 Git 与 WebView2 Runtime。
-- macOS Apple Silicon / Intel：保留执行位的 self-contained tar.gz，在解压目录终端运行 `./GitX.Desktop`。当前没有 `.app`、Info.plist、应用图标封装或 DMG。
-- 未做发行签名或 macOS 公证。CI 原生运行 .NET、Node、LibGit2 与架构探针，不能代替 GUI 验收；GUI 目前仅 Windows x64 在本机实测，其他架构 GUI 尚未实机验收。
-- 不提供安装器或自动更新。部分内部标识与数据目录保留 GitX 以兼容配置。
+macOS 包标识为 `io.github.nowins.grove`，CFBundleExecutable 为 Grove，内容位于 `Contents/MacOS`，图标位于 `Contents/Resources`。DMG 提供 Applications 入口。Developer ID 证书和公证凭据尚未配置，只有 ad-hoc 完整性签名；Gatekeeper 可能拒绝来自网络的应用。不要把签名完整性检查等同于 Apple 信任、公证或 GUI 验收，也不要为运行关闭系统安全保护。
 
-## 后续发布检查
+外部依赖仍为 Git，Windows 另需 WebView2 Runtime；安装包不静默安装这些依赖。macOS Finder 的 PATH 可能与终端不同。未提供自动更新、受信任发行证书签名或四平台 GUI 验收。
 
-1. 确定具体版本、准确代码提交和发布范围，避免隐式把未经验证的最新 main 当作二进制来源。
-2. 对代码变更使用该准确提交的四平台成功 CI。仅文档更新时，可以继续引用既有代码产物，但必须明确原始提交，不能把文档提交标成二进制构建来源。
-3. 逐项检查测试、运行资源、字体与 grammar 许可证、架构、可执行权限和哈希。仅上传必要应用包与分发元数据，不包含本机路径、验证截图、用户配置、归档或旧 Git 历史。
-4. 使用不冲突的版本/架构文件名、汇总校验值和构建来源说明；检查同名标签和 Release，不能覆盖无关内容。具备用户授权后再创建准确标签并发布，保持预发布与稳定版标记准确。
-5. 发布后用有读取权限的账号实际下载资产并重新核对哈希、数量、私有属性与发布状态；保留本机核验记录。
+## 构建与来源
 
-## macOS 正式分发前的缺口
+`Directory.Build.props` 的 VersionPrefix/VersionSuffix 定义发布版本，MacBundleVersion 定义递增的 macOS 构建号。`tools/ci.ps1` 执行锁定还原、构建、Editor/Core 测试和平台探针，然后调用 `tools/package.ps1` 及对应安装包验证脚本。Windows 编译器由 `tools/ensure-nsis.ps1` 下载 NSIS 官方便携 3.13，并以固定 SHA-256 校验，不安装系统软件。
 
-- 在 macOS runner 生成 `Grove.app/Contents/{MacOS,Resources}`，补全 Info.plist、图标与版本信息，保留运行资源和可执行权限。
-- 在 Apple Silicon 与 Intel 实机验收启动、WebView、Editor、Git 凭据、焦点、Cmd 快捷键、输入法与 DPI。
-- 确定应用标识和 Developer ID 后再处理 hardened runtime、发行签名、公证、staple 以及 DMG 分发。
-- Windows 若要安装体验，另行确定安装器、应用标识和签名方案；当前 ZIP 不代表安装器验收。
+调试符号留在诊断构建目录，不进入最终应用包。`metadata.json` 描述原始 publish，`package-metadata.json` 描述实际分发文件；macOS bundleFiles 记录 ad-hoc 签名后的完整 app 内容。每个 CI 产物含应用包和 SHA256SUMS；发布合并为一个 SHA256SUMS.txt，并附 BUILD-INFO.json，明确代码 SHA、CI run、架构、测试与签名/GUI 边界。
 
-参考：[GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)、[Actions 产物下载](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)、[Avalonia macOS 分发](https://docs.avaloniaui.net/docs/deployment/macos)。
+发布前核查四平台结果、全部许可证、哈希、可执行位及安装包安全性。只能纳入必要应用包和分发元数据，不上传验证截图、个人路径、应用数据、本地归档或旧 Git 历史。准确标签指向已验证提交，预览发布不设置为稳定 Latest。发布后用有仓库读取权限的账号重新下载全部资产并核对 SHA-256；私有仓库下载仍受权限控制。
+
+相关：[CI](CI.md)、[状态](STATUS.md)、[Native AOT](NATIVE-AOT.md)、[Avalonia macOS 分发](https://docs.avaloniaui.net/docs/deployment/macos)。

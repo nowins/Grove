@@ -62,3 +62,11 @@ Windows x64：Core 499/499、Editor 78/78，均无跳过；Release 零警告构�
 `v0.1.0-preview.1` 已发布：[发布页](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.1)。代码与四个平台的应用包来自 a48e6cb / CI 41587178858；四平台 Core 509/509、Editor 78/78 全部通过。Release 资产包括四个版本/架构应用包、SHA256SUMS.txt 和 BUILD-INFO.json，发布后另行下载核验；main 后续下载说明的文档提交不改变本版本的代码来源。
 
 仍未做发行签名或 macOS 公证，Mac 为原始 tar.gz，没有 .app / DMG。GUI 仅 Windows x64 实测，其他架构 GUI 未验收；保留私有仓库权限，预发布不标作稳定 Latest。
+
+## Grove 安装包与名称修正（本地验证）
+
+桌面 apphost/程序集、Windows 元数据、资源 URI 和运行脚本统一为 Grove，版本为 0.1.0-preview.2。内部命名空间、Core 程序集和 GitX 用户数据路径保持兼容。Windows NSIS 当前用户安装程序、macOS .app/DMG 打包与对应验证脚本已接入 CI；发行仍为普通未裁剪 self-contained 构建。
+
+本机 Windows x64：零警告构建、Core 509/509、Editor 78/78、258 个安装载荷文件哈希、安装/重装/卸载、开始菜单及卸载注册项、额外用户文件和配置哨兵保留均通过。原生向导取消未创建目标目录；实际安装后的 Grove.exe 正常打开临时仓库，显示中文 Markdown、表格和相对图片，并正常退出后卸载。原始截图和日志只保留本机，不进入源码或 Release。
+
+SourceLanguage 已改为源生成 JSON；独立 Windows x64 AOT 探针恢复 TypeScript 识别及 LibGit2 读取。其余 JSON 和反射绑定仍未达到 AOT 发布条件。macOS/ARM64 实际包的构建与自动检查以本次准确提交的 CI 结果为准；本机无法代替这些原生平台验证。Mac .app 仅 ad-hoc 签名，无 Developer ID、公证或 GUI 验收。最终发布范围、准确来源和资产校验以 Release 的 BUILD-INFO/SHA256SUMS 记录为准。

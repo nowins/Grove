@@ -5,5 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <Deterministic>true</Deterministic>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionSuffix>preview.2</VersionSuffix>
+    <MacBundleVersion>2</MacBundleVersion>
   </PropertyGroup>
 </Project>

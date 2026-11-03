@@ -13,7 +13,7 @@ try {
         & dotnet build Grove.slnx -c Release --no-restore
         if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
     }
-    $appHost = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { 'GitX.Desktop.exe' } else { 'GitX.Desktop' }
+    $appHost = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { 'Grove.exe' } else { 'Grove' }
     $executable = Join-Path $projectRoot ('src/GitX.Desktop/bin/Release/net10.0/' + $appHost)
     if ($Repository) { & $executable $Repository } else { & $executable }
 } finally { Pop-Location }

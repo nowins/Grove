@@ -11,28 +11,27 @@
 - Java、C#、Python、JavaScript／TypeScript 高亮与文件内结构导航，以及本地代码评论。
 - Markdown 源码与预览切换，支持表格、任务列表、标题锚点及仓库内图片；历史阅读保留同一提交的链接和图片。
 
-## 下载与运行
+## 下载与安装
 
-从 [Grove 0.1.0 Preview 1](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.1) 的 **Assets** 下载对应应用包；GitHub 自动生成的 **Source code** 是源码，不是应用包。
+从 [Grove 0.1.0 Preview 2](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.2) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
 
-| 构建目标 | 下载 |
+| 平台 | 推荐下载 |
 | --- | --- |
-| Windows x64 | [ZIP](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-win-x64.zip) |
-| Windows ARM64 | [ZIP](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-win-arm64.zip) |
-| macOS Apple Silicon | [tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-osx-arm64.tar.gz) |
-| macOS Intel | [tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/Grove-v0.1.0-preview.1-osx-x64.tar.gz) |
+| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-win-x64-setup.exe) |
+| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-win-arm64-setup.exe) |
+| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-osx-arm64.dmg) |
+| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.2/Grove-0.1.0-preview.2-osx-x64.dmg) |
 
-同时下载 [`SHA256SUMS.txt`](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.1/SHA256SUMS.txt)，先核对对应压缩包的 SHA-256，再解压。仓库目前为私有，下载需要登录有仓库读取权限的 GitHub 账号。Release 包不受 Actions 的 14 天产物保留期限制。
+Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。仓库目前为私有，需要登录有读取权限的 GitHub 账号；Release 包不受 Actions 的 14 天产物保留期限制。
 
-先安装 Git，并确保命令行能找到 `git`。Windows 还需要 Microsoft Edge WebView2 Runtime。应用包自带 .NET 运行时，无需安装 .NET SDK。
+- **Windows：** 安装到当前用户的程序目录，开始菜单入口为 Grove，不要求管理员权限。便携版解压后运行 `Grove.exe`。安装程序外壳为 NSIS x86，应用本体匹配所选 x64/ARM64 架构；选错架构会拒绝安装。
+- **macOS 14+：** 打开 DMG，将 `Grove.app` 拖入 Applications。也可解压 app.tar.gz。当前只有 ad-hoc 完整性签名，没有 Apple Developer ID 签名或公证，Gatekeeper 可能阻止打开；不建议在要求受信任签名的设备部署。Mac GUI 仍待实机验收。
+- **依赖：** 安装 Git 并确保 Grove 的进程能在 PATH 中找到它；Windows 另需 Microsoft Edge WebView2 Runtime。macOS 从 Finder 启动时的 PATH 与终端可能不同。应用已包含 .NET 运行时，不需要 .NET SDK。安装包不会静默下载这些外部依赖。
+- **现有数据：** 应用名称和可执行文件已改为 Grove；配置、评论和 WebView 数据仍使用原有 GitX 目录及 `GITX_DATA_DIR`，避免迁移丢失。卸载保留这些用户数据和安装目录内额外创建的文件。
 
-- **Windows：** 解压后运行 `GitX.Desktop.exe`。
-- **macOS：** 解开 `tar.gz`，在解压目录终端运行 `./GitX.Desktop`。当前没有 `.app` 或 DMG；Mac GUI 尚未实机验收。
-- 启动后选择已有仓库，也可传入路径参数：Windows 如 `.\GitX.Desktop.exe "C:\path\to\repo"`，macOS 如 `./GitX.Desktop ~/projects/repo`。
+启动后选择已有仓库；也可从命令行传入路径，例如 `.\Grove.exe "C:\path\to\repo"`，或 `open -a Grove --args ~/projects/repo`。这是未做发行证书签名的预览版。四平台原生自动化检查与 Windows x64 GUI 验证范围见[状态记录](docs/STATUS.md)；CI 通过不代表四平台 GUI 已验收。发布使用普通自包含构建，Native AOT 尚未达到发布条件。
 
-这是开发预览版，未做发行签名或 macOS 公证。四平台原生构建与自动化测试通过，GUI 目前仅 Windows x64 实测，其他架构的 WebView、输入法与 DPI 仍待验收。可执行文件和部分内部目录保留 `GitX` 名称以兼容现有配置。
-
-最新开发构建仍可从[成功的 CI 运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)下载 **Artifacts**；这些开发产物保留 14 天，下载的外层 ZIP 内还有应用包与校验文件。
+最新开发构建可从 [CI](https://github.com/nowins/Grove/actions/workflows/ci.yml) 的 **Artifacts** 下载，保留 14 天；外层 ZIP 内是应用包与校验文件。
 
 ## 阅读 Markdown
 
