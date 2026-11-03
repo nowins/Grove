@@ -1,7 +1,7 @@
 # Requires PowerShell 7, Git, Node from .node-version, and the SDK in global.json.
 [CmdletBinding()]
 param(
-    [ValidateSet('win-x64', 'osx-arm64', 'osx-x64')]
+    [ValidateSet('win-x64', 'win-arm64', 'osx-arm64', 'osx-x64')]
     [string]$RuntimeIdentifier,
     [string]$OutputDirectory
 )
@@ -9,6 +9,8 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+$osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+if ($hostArchitecture -ne $osArchitecture) { throw "Native runner process required; process $hostArchitecture, OS $osArchitecture." }
 $hostRid = if ($IsWindows) { "win-$hostArchitecture" } elseif ($IsMacOS) { "osx-$hostArchitecture" } else { throw 'This CI entry supports Windows and macOS hosts.' }
 if (-not $RuntimeIdentifier) { $RuntimeIdentifier = $hostRid }
 if ($RuntimeIdentifier -ne $hostRid) { throw "Run $RuntimeIdentifier on its native host; this process is $hostRid." }
@@ -54,11 +56,14 @@ try {
     $env:GCM_INTERACTIVE = 'never'
     $env:GITX_DATA_DIR = Join-Path $output 'application-data'
     Invoke-CiCommand dotnet @('--version') 'dotnet-version.txt'
+    Invoke-CiCommand dotnet @('--info') 'dotnet-info.txt'
     Invoke-CiCommand dotnet @('--list-sdks') 'dotnet-sdks.txt'
     Invoke-CiCommand dotnet @('--list-runtimes') 'dotnet-runtimes.txt'
     Invoke-CiCommand node @('--version') 'node-version.txt'
     Invoke-CiCommand git @('--version') 'git-version.txt'
     $nodeVersion = (node --version).TrimStart('v').Trim()
+    $nodeArchitecture = (node -p 'process.arch').Trim()
+    if ($LASTEXITCODE -ne 0 -or $nodeArchitecture -ne $hostArchitecture) { throw "Native Node $hostArchitecture required, found $nodeArchitecture." }
     $expectedNode = (Get-Content -LiteralPath '.node-version' -Raw).Trim()
     if ($nodeVersion -ne $expectedNode) { throw "Expected Node $expectedNode, found $nodeVersion." }
     Invoke-CiCommand npm @('ci', '--prefix', 'src/GitX.Desktop/Editor', '--no-audit', '--no-fund') 'npm-ci.txt'
@@ -72,15 +77,18 @@ try {
     if ([int]$counts.total -lt 1 -or [int]$counts.failed -ne 0 -or [int]$counts.error -ne 0 -or [int]$counts.executed -lt 1) { throw 'Core test results are empty or unsuccessful.' }
     Invoke-CiCommand dotnet @('publish', 'src/GitX.Desktop/GitX.Desktop.csproj', '-c', 'Release', '-r', $RuntimeIdentifier, '--self-contained', 'true', '-p:RestoreLockedMode=true', '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:CopyOutputSymbolsToPublishDirectory=false', '-p:ContinuousIntegrationBuild=true', '--output', $publish, '--warnaserror') 'publish.txt'
     $appHost = if ($IsWindows) { 'GitX.Desktop.exe' } else { 'GitX.Desktop' }
-    $required = @($appHost, 'GitX.Desktop.dll', 'GitX.Core.dll', 'GitX.Desktop.deps.json', 'GitX.Desktop.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
+    $required = @($appHost, 'GitX.Desktop.dll', 'GitX.Core.dll', 'Avalonia.Controls.WebView.dll', 'GitX.Desktop.deps.json', 'GitX.Desktop.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
     foreach ($grammar in @('java', 'c-sharp', 'python', 'javascript', 'typescript', 'tsx')) { $required += "Editor/dist/tree-sitter-$grammar.wasm" }
     foreach ($relative in $required) { if (-not (Test-Path -LiteralPath (Join-Path $publish $relative) -PathType Leaf)) { throw "Missing published resource: $relative" } }
     $nativePattern = if ($IsWindows) { '*git2*.dll' } else { '*git2*.dylib' }
     if (-not (Get-ChildItem -LiteralPath $publish -Recurse -File -Filter $nativePattern)) { throw 'Published LibGit2 native library is missing.' }
+    $platformResult = Join-Path $results 'platform.json'
+    Invoke-CiCommand dotnet @('run', '--project', 'tools/PlatformProbe/PlatformProbe.csproj', '-c', 'Release', '--no-build', '--no-restore', '--', $hostArchitecture, $publish, $platformResult) 'platform-probe.txt'
+    $platform = Get-Content -LiteralPath $platformResult -Raw | ConvertFrom-Json
     $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File | Sort-Object FullName | ForEach-Object {
         @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
-    @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
+    @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
     if ($IsWindows) {
         $archive = Join-Path $output "desktop-$RuntimeIdentifier.zip"
         Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $archive

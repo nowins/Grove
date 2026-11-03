@@ -24,6 +24,8 @@ jobs:
         include:
           - os: windows-2025
             rid: win-x64
+          - os: windows-11-arm
+            rid: win-arm64
           - os: macos-15
             rid: osx-arm64
           - os: macos-15-intel
@@ -48,6 +50,7 @@ jobs:
           cache-dependency-path: |
             src/**/packages.lock.json
             tests/**/packages.lock.json
+            tools/**/packages.lock.json
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:

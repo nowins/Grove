@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><RuntimeIdentifiers>win-x64;osx-arm64;osx-x64</RuntimeIdentifiers></PropertyGroup>
+  <PropertyGroup><RuntimeIdentifiers>win-x64;win-arm64;osx-arm64;osx-x64</RuntimeIdentifiers></PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="SourceLanguages.json" LogicalName="GitX.Core.SourceLanguages.json" />
     <InternalsVisibleTo Include="GitX.Core.Tests" />

@@ -22,7 +22,7 @@
 ./tools/ci.ps1
 ```
 
-[CI 说明](docs/CI.md)涵盖 Windows x64、macOS arm64 和 macOS x64 的锁定恢复、自动化测试及未签名 self-contained 产物。CI 不启动桌面 GUI，也不执行签名、公证或发布。
+[CI 说明](docs/CI.md)涵盖 Windows x64／ARM64、macOS arm64 和 macOS x64 的锁定恢复、自动化测试及未签名 self-contained 产物。CI 不启动桌面 GUI，也不执行签名、公证或发布。
 
 当前 Windows 本机完整流程为 456/456 Core、73/73 Editor 测试，构建零警告零错误，打包资源检查通过。macOS runner 及真实桌面验收须分别以实际结果为准，详见 [验证范围](docs/STATUS.md)。
 

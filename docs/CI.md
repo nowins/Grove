@@ -7,14 +7,21 @@
 | Runner | RID | 自动化范围 |
 | --- | --- | --- |
 | windows-2025 | win-x64 | 锁定恢复、Editor build／Node tests、完整 Core tests、Desktop build／publish、资源及 LibGit2 检查 |
+| windows-11-arm | win-arm64 | 同上，在原生 Windows ARM64 runner 运行测试与 publish |
 | macos-15 | osx-arm64 | 同上，在 Apple Silicon runner 运行测试与本机架构 publish |
 | macos-15-intel | osx-x64 | 同上，在 Intel runner 运行测试与本机架构 publish |
 
-以 global.json 安装 SDK，.node-version 安装固定 Node，NuGet 使用 --locked-mode、npm 使用 npm ci。三个 job 独立完成，失败不取消其他平台；每个 job 上限 25 分钟。Core 测试必须真实执行且 TRX 不能为空，挂起测试 3 分钟后终止且不生成内存转储。没有按平台整体跳过测试。
+以 global.json 安装 SDK，.node-version 安装固定 Node，NuGet 使用 --locked-mode、npm 使用 npm ci。四个 job 独立完成，失败不取消其他平台；每个 job 上限 25 分钟。Core 测试必须真实执行且 TRX 不能为空，挂起测试 3 分钟后终止且不生成内存转储。没有按平台整体跳过测试。
 
 Git 测试使用随机专用临时仓库并设置本地作者，CI 使用全新 hosted runner；不提供用户凭据。脚本不覆盖 HOME、不编辑用户 Git 配置，也不设置会改变 Git 标准配置发现的 GIT_CONFIG_*。本地若配置自定义 hooksPath／filter 或 Git 环境覆盖，应先在独立副本审阅其影响；产品的 blame 缓存遇到未知覆盖会有意拒绝复用，不能靠跳过相关测试制造绿灯。
 
 macOS 在启动测试子进程前把 TMPDIR 解析为同一临时目录的物理路径，避免系统的 /var 与 /private/var 别名导致 Git、LibGit2 与测试路径不一致；脚本退出时恢复环境值，不放宽产品的链接写入保护。
+
+## 架构与本机依赖检查
+
+四个 job 都要求 PowerShell、.NET 与 Node 的进程架构和操作系统一致；不把 x64 仿真或交叉发布计为 ARM64 原生测试。PlatformProbe 实际加载 LibGit2，Windows 还核对 apphost、LibGit2、Skia 和 HarfBuzz 的 PE 架构。结果写入 results/platform.json 和 metadata.json。
+
+WebView 包采用托管 WebView2 loader；探针检查发布的托管程序集是否可用于目标位数，并记录已发现的 Windows WebView2 Runtime 版本和架构。系统 WebView2 Runtime 仍是用户机器的先决条件，不由 self-contained .NET 包提供；没有发现 Runtime 不等于浏览器可用。探针不创建 WebView，不构成 ARM64 或其他平台 GUI 验收。参见 [Avalonia 平台依赖](https://docs.avaloniaui.net/docs/app-development/embedding-web-content)。
 
 ## 运行与产物
 
