@@ -78,8 +78,10 @@ internal static partial class Program
                 await Task.Delay(100);
             }
         }
-        await VerifyNativeMenusAsync(main, model, window);
+        // Run this batch's native navigation checks independently of the
+        // existing menu/quit/minimize regression, preserving diagnostics for both.
         await VerifyNativeNavigationAsync(main, model, window, view);
+        await VerifyNativeMenusAsync(main, model, window);
         Check(Click(window, 1) == 0, "Native minimize button could not be invoked.");
         await UntilAsync(() => main.WindowState == WindowState.Minimized);
         Samples.Add(new { phase = "native-minimize", state = main.WindowState.ToString() });

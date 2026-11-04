@@ -26,7 +26,7 @@ internal static partial class Program
         Check(InvokeMenu("视图", "Git 输出") == 0, "Native output command unavailable."); await Task.Delay(200);
         Check(((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Windows.Count <= 1, "Output unexpectedly opens a separate window.");
         await model.OpenEditorEntryAsync(new("sample.cs", "sample.cs", GitX.Core.ComparisonKind.WorkingFile));
-        await UntilAsync(() => model.CurrentDocument is { IsNotice: false });
+        await NavigationReady(main, model);
         var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
         // A real native menu command and a Cocoa Command+E equivalent both open
         // exactly one picker. Merely selecting/cancelling cannot change tabs.
@@ -142,13 +142,39 @@ internal static partial class Program
             }
         }
         finally { release.TrySetResult(); await task; }
-        Check(ActivateTestWindow(window) == 0, "Could not activate owned window for menu shortcut regression.");
-        await UntilAsync(() => main.IsActive);
-        Check(FocusTestWebView(window) == 0, "Could not focus the owned WKWebView for Command+M.");
-        await UntilAsync(() => ReadFocus(window).GetProperty("firstResponder").GetString() == "ManagedWKWebView");
+        // The held operation refreshes repository/editor state on completion.
+        // Wait for that exact document before queuing a native keyboard event.
+        await NavigationReady(main, model);
+        await FocusSource(main, web!, window);
         var minimizeFocus = ReadFocus(window);
-        Check(MenuKey(window, "m", 46) == 0, "Could not queue Command+M.");
-        await UntilAsync(() => main.WindowState == WindowState.Minimized);
+        var minimizeKeys = new List<object>(); var minimizeStates = new List<object>();
+        void ObserveMinimizeKey(object? sender, KeyEventArgs args)
+        {
+            if (args.Key == Key.M) minimizeKeys.Add(new { key = args.Key.ToString(), modifiers = args.KeyModifiers.ToString(), args.Handled, source = args.Source?.GetType().Name });
+        }
+        void ObserveMinimizeState(object? sender, AvaloniaPropertyChangedEventArgs args)
+        {
+            if (args.Property == Window.WindowStateProperty || args.Property == Window.IsActiveProperty)
+                minimizeStates.Add(new { property = args.Property.Name, state = main.WindowState.ToString(), main.IsActive });
+        }
+        main.AddHandler(InputElement.KeyDownEvent, ObserveMinimizeKey, RoutingStrategies.Tunnel, handledEventsToo: true);
+        main.PropertyChanged += ObserveMinimizeState;
+        Samples.Add(new { phase = "before-cocoa-command-m", focus = minimizeFocus, main.CanMinimize, state = main.WindowState.ToString(), version = model.DocumentVersion, loaded = Private<long>(main, "_loadedEditorVersion"), menu = ReadMenus() });
+        try
+        {
+            Check(MenuKey(window, "m", 46) == 0, "Could not queue Command+M.");
+            await UntilAsync(() => main.WindowState == WindowState.Minimized);
+        }
+        catch
+        {
+            Samples.Add(new { phase = "failed-cocoa-command-m", focus = ReadFocus(window), main.CanMinimize, state = main.WindowState.ToString(), minimizeKeys, minimizeStates, allMenuClicks = allMenuClicks.ToArray(), model.Error, menu = ReadMenus() });
+            throw;
+        }
+        finally
+        {
+            main.RemoveHandler(InputElement.KeyDownEvent, ObserveMinimizeKey);
+            main.PropertyChanged -= ObserveMinimizeState;
+        }
         main.WindowState = WindowState.Normal;
         await UntilAsync(() => main.WindowState == WindowState.Normal);
         Check(ActivateTestWindow(window) == 0, "Could not restore owned window after Command+M.");

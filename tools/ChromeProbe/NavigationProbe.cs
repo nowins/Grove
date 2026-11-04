@@ -121,7 +121,8 @@ internal static partial class Program
             Check(model.HistoryReferenceKey == "refs/remotes/origin/main", "Escape changed the history scope.");
             Samples.Add(new { phase = "native-history-favorite-recent", canonicalLocalRemoteTag = true, singleMatchDownSpace = true, persisted = true, cancelledWithoutScopeChange = true });
 
-            await model.OpenAsync(_linkedRepository); await UntilAsync(() => !model.Busy && model.Root == _linkedRepository);
+            var linkedRoot = await RepositoryReader.ResolveWorkingDirectoryAsync(_linkedRepository);
+            await model.OpenAsync(_linkedRepository); await UntilAsync(() => !model.Busy && model.Root == linkedRoot);
             RunProbeCommand(main, "GitTool"); await Task.Delay(150); main.UpdateLayout();
             popup = await OpenHistoryPicker(main, window, view);
             Check(!HasHistoryGroup(popup.List, "收藏") && !HasHistoryGroup(popup.List, "最近使用"), "Worktree preferences leaked across working directories.");
