@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         _projectPanel.Children.Add(header);
         _projectPanel.Children.Add(_projectNotice); Grid.SetRow(_projectNotice, 1);
         var body = new Grid(); body.Children.Add(_projectList); body.Children.Add(_projectEmpty); _projectPanel.Children.Add(body); Grid.SetRow(body, 2);
-        var shortcuts = new TextBlock { Text = "Ctrl+1 项目 · Ctrl+2 提交 · Ctrl+3 Git", Classes = { "muted" }, FontSize = UiTypography.SecondarySize, Margin = new(8, 4) };
+        var shortcuts = new TextBlock { Text = OperatingSystem.IsMacOS() ? "⌘1 项目 · ⌘2 提交 · ⌘3 Git" : "Ctrl+1 项目 · Ctrl+2 提交 · Ctrl+3 Git", Classes = { "muted" }, FontSize = UiTypography.SecondarySize, Margin = new(8, 4) };
         _projectPanel.Children.Add(shortcuts); Grid.SetRow(shortcuts, 3);
         _projectList.ItemTemplate = FileList.ItemTemplate; _projectList.ItemsSource = _projectNavigation.Rows;
         _projectFilter.TextChanged += (_, _) => { _projectNotice.IsVisible = false; if (!string.IsNullOrEmpty(_projectFilter.Text)) _projectFilterVisible = true; UpdateProjectFilter(); RefreshProjectTool(false); };

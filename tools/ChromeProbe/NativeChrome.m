@@ -68,3 +68,51 @@ __attribute__((visibility("default"))) int grove_click_header(void* w, void* v, 
         return 0;
     }
 }
+
+static NSMenu* grove_submenu(const char* title) {
+    [NSApp.mainMenu update];
+    if (!title || !*title) return NSApp.mainMenu.itemArray.firstObject.submenu;
+    NSString* name = [NSString stringWithUTF8String:title];
+    for (NSMenuItem* item in NSApp.mainMenu.itemArray) if ([item.title isEqualToString:name]) return item.submenu;
+    return nil;
+}
+__attribute__((visibility("default"))) int grove_menu_snapshot(char* output, int capacity) {
+    @autoreleasepool {
+        if (![NSThread isMainThread] || !output || capacity < 1) return -1;
+        [NSApp.mainMenu update]; NSMutableArray* groups = [NSMutableArray array];
+        for (NSMenuItem* group in NSApp.mainMenu.itemArray) {
+            if (!group.submenu) continue; [group.submenu update]; NSMutableArray* entries = [NSMutableArray array];
+            for (NSMenuItem* item in group.submenu.itemArray) {
+                [entries addObject:@{ @"title": item.title ?: @"", @"enabled": @(item.enabled), @"separator": @(item.separatorItem),
+                    @"key": item.keyEquivalent ?: @"", @"modifiers": @(item.keyEquivalentModifierMask) }];
+            }
+            [groups addObject:@{ @"title": group.title ?: @"", @"items": entries }];
+        }
+        NSData* data = [NSJSONSerialization dataWithJSONObject:groups options:0 error:nil];
+        if (!data || data.length + 1 > capacity) return -2;
+        memcpy(output, data.bytes, data.length); output[data.length] = 0; return 0;
+    }
+}
+__attribute__((visibility("default"))) int grove_invoke_menu(const char* group, const char* title) {
+    @autoreleasepool {
+        if (![NSThread isMainThread] || !title) return -1;
+        NSMenu* menu = grove_submenu(group); if (!menu) return -2; [menu update];
+        NSString* name = [NSString stringWithUTF8String:title];
+        NSInteger index = [menu indexOfItemWithTitle:name]; if (index < 0) return -3;
+        NSMenuItem* item = [menu itemAtIndex:index]; if (!item.enabled || item.separatorItem) return -4;
+        [menu performActionForItemAtIndex:index]; return 0;
+    }
+}
+__attribute__((visibility("default"))) int grove_menu_key(void* w, const char* characters, unsigned short code) {
+    @autoreleasepool {
+        NSWindow* window = (__bridge NSWindow*)w;
+        if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !characters) return -1;
+        [window makeKeyAndOrderFront:nil];
+        NSString* text = [NSString stringWithUTF8String:characters];
+        NSEvent* event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
+            timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil characters:text
+            charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
+        // Exercise Cocoa key-equivalent dispatch, not managed command invocation.
+        return [NSApp.mainMenu performKeyEquivalent:event] ? 0 : -2;
+    }
+}

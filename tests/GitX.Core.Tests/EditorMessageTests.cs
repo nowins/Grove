@@ -37,6 +37,7 @@ public sealed class EditorMessageTests
     [InlineData("""{"type":"code-search","version":7,"filesOnly":"true"}""")]
     [InlineData("""{"type":"code-search","version":7}""")]
     [InlineData("""{"type":"code-search","version":7,"filesOnly":true,"quick":"true"}""")]
+    [InlineData("""{"type":"recent-files"}""")]
     [InlineData("""{"type":"source-history"}""")]
     [InlineData("""{"type":"hide-tool"}""")]
     [InlineData("""{"type":"reset-layout"}""")]

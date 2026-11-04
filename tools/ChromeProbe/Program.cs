@@ -12,7 +12,7 @@ using Avalonia.VisualTree;
 using GitX.Desktop;
 using GitX.Desktop.ViewModels;
 
-internal static class Program
+internal static partial class Program
 {
     private static readonly List<object> Samples = [];
     private static int _exit;
@@ -69,7 +69,7 @@ internal static class Program
         foreach (var width in new[] { 1380d, 1100d, 880d })
         {
             main.Width = width; await Task.Delay(250); main.UpdateLayout(); Snapshot(main, window, view, "width-" + width);
-            foreach (var name in new[] { "MainMenuButton", "RepositoryButton", "BranchButton" })
+            foreach (var name in new[] { "RepositoryButton", "BranchButton" })
             {
                 var button = main.FindControl<Button>(name)!; var origin = button.TranslatePoint(default, main)!.Value;
                 Check(ClickHeader(window, view, origin.X + button.Bounds.Width / 2, origin.Y + button.Bounds.Height / 2) == 0, "Native header event failed: " + name);
@@ -79,6 +79,7 @@ internal static class Program
                 await Task.Delay(100);
             }
         }
+        await VerifyNativeMenusAsync(main, model, window);
         Check(Click(window, 1) == 0, "Native minimize button could not be invoked.");
         await UntilAsync(() => main.WindowState == WindowState.Minimized);
         Samples.Add(new { phase = "native-minimize", state = main.WindowState.ToString() });
@@ -99,13 +100,14 @@ internal static class Program
     }
     private static void Snapshot(MainWindow main, nint window, nint view, string phase)
     {
+        Check(!main.FindControl<Button>("MainMenuButton")!.IsVisible, "Mac hamburger duplicates the native menu.");
         var system = new NativeRect[3]; var menuName = new byte[256];
         Check(Read(window, view, system, menuName, menuName.Length, out var scale) == 0, "Could not read native caption frames.");
         var appMenu = Encoding.UTF8.GetString(menuName).TrimEnd('\0');
         Samples.Add(new { phase = phase + "-native", width = main.Bounds.Width, scale, appMenu, nativeHeight = main.WindowDecorationMargin.Top, trafficLights = system });
         Check(appMenu == "Grove", "Native application menu is not Grove: " + appMenu);
         var managed = new Dictionary<string, Rect>();
-        foreach (var name in new[] { "MainMenuButton", "RepositoryButton", "BranchButton", "RemoteButton", "WorkspaceRefreshButton" })
+        foreach (var name in new[] { "RepositoryButton", "BranchButton", "RemoteButton", "WorkspaceRefreshButton" })
         {
             var button = main.FindControl<Button>(name)!; var origin = button.TranslatePoint(default, main) ?? throw new IOException("Button outside window.");
             var box = new Rect(origin, button.Bounds.Size); managed.Add(name, box);

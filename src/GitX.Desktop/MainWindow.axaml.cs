@@ -74,7 +74,7 @@ public sealed partial class MainWindow : Window
             if (_commentDraft is not null) { e.Cancel = true; await ConfirmCommentCloseAsync(); return; }
             if (_updateBusy) { e.Cancel = true; await CancelUpdateForCloseAsync(); if (!_closed) Close(); return; }
             if (!_dockCloseReady && _dock is not null)
-            { e.Cancel = true; await _dock.FlushAsync(); _dockCloseReady = true; Close(); return; }
+            { e.Cancel = true; await _dock.FlushAsync(); await _recentFileWrite; _dockCloseReady = true; Close(); return; }
             _dock?.PrepareOwnerClose();
         };
         Closed += (_, _) =>
@@ -212,6 +212,7 @@ public sealed partial class MainWindow : Window
             case "comment": await HandleCommentAsync(root); break;
             case "open": await PickRepositoryAsync(); break;
             case "view": SwitchView(root.GetProperty("index").GetInt32(), focusNavigation: true); break;
+            case "recent-files": await OpenRecentFilesAsync(); break;
             case "code-search": await OpenCodeSearchAsync(root.GetProperty("filesOnly").GetBoolean(), root.TryGetProperty("quick", out var quick) && quick.GetBoolean()); break;
             case "source-history": await OpenSourceHistoryAsync(version); break;
             case "markdown-open":
@@ -318,13 +319,16 @@ public sealed partial class MainWindow : Window
 
     private void WindowKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Handled) return;
         if (e.Key == Key.Escape && _dock?.CancelDrag() == true) { e.Handled = true; return; }
         if (e.Key == Key.F12 && e.KeyModifiers == KeyModifiers.Shift) { e.Handled = true; if (_dock is not null) _ = _dock.ResetAsync(); return; }
         if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.Shift)
         { e.Handled = true; _dock?.HideFocused(); FocusEditor(); return; }
+        if (e.Key == Key.E && e.KeyModifiers == (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control))
+        { e.Handled = true; _ = OpenRecentFilesAsync(); return; }
         if (_fileHistoryPanel?.HandleKey(e) == true) return;
         if (HistoryFileShortcut(e)) return;
-        if (e.KeyModifiers == KeyModifiers.Alt && e.Key == Key.M) { e.Handled = true; MainMenuClicked(MainMenuButton, new RoutedEventArgs()); }
+        if (!OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Alt && e.Key == Key.M) { e.Handled = true; MainMenuClicked(MainMenuButton, new RoutedEventArgs()); }
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.E) { e.Handled = true; RevealProjectFile(); }
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.F && _projectPanel.IsKeyboardFocusWithin) { e.Handled = true; _projectFilterVisible = true; UpdateProjectFilter(); NativeKeyboardFocus.TryFocusControl(this, _projectFilter); }
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key is Key.F or Key.N)

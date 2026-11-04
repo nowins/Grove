@@ -254,6 +254,19 @@ public sealed class NavigationRaceTests
         Assert.Null(model.SelectedCommit); Assert.Empty(model.Entries);
     }
 
+    [Fact]
+    public async Task Recent_file_finishing_after_repository_switch_cannot_publish_or_create_tabs()
+    {
+        var reader = new DelayedReader(); using var model = new MainViewModel(reader);
+        var open = model.OpenAsync("first"); reader.Opens["first"].SetResult(Snapshot("first")); await open;
+        var recent = model.OpenRecentFileAsync("first", "old.py", null);
+        var switched = model.OpenAsync("second"); reader.Opens["second"].SetResult(Snapshot("second")); await switched;
+        var document = model.CurrentDocument; var version = model.DocumentVersion;
+        reader.Documents["old.py"].SetResult(Document("old.py", "stale"));
+        Assert.False(await recent); Assert.Equal("second", model.Root); Assert.Empty(model.SourceTabs);
+        Assert.Same(document, model.CurrentDocument); Assert.Equal(version, model.DocumentVersion);
+    }
+
     private static RepositorySnapshot Snapshot(string root) => new(root, root, null, [new(root + ".txt")], [], false);
     private static RepositoryDocument Document(string path, string text) => new(path, text, "plaintext", "working", "");
     private static async Task UntilAsync(Func<bool> completed)

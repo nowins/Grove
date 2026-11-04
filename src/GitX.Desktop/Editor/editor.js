@@ -1,3 +1,4 @@
+import { recentFilesShortcut } from './recent-files-shortcut.js';
 import './node_modules/monaco-editor/esm/vs/nls/lang/zh-cn.js';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import './node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css';
@@ -795,6 +796,9 @@ window.addEventListener('keydown', event => {
     event.preventDefault(); event.stopImmediatePropagation(); send({ type: 'hide-tool', version: generation }); return;
   }
   if (sourceSymbols.handleKey(event)) return;
+  if (recentFilesShortcut(event, /Mac|iPhone|iPad/.test(navigator.platform))) {
+    event.preventDefault(); event.stopImmediatePropagation(); send({ type: 'recent-files', version: generation }); return;
+  }
   if (comments.handleKey(event)) return;
   if (navigateMore(event)) return;
   if (event.ctrlKey && !event.altKey && event.key === 'F4' && sourceTabs.closeActive()) { event.preventDefault(); event.stopImmediatePropagation(); return; }

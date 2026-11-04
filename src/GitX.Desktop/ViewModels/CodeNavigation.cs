@@ -26,6 +26,28 @@ public sealed partial class MainViewModel
         }
     }
 
+    public async Task<bool> OpenRecentFileAsync(string root, string path, string? revision)
+    {
+        if (_closed || Root != root || !Services.RecentFileStore.SafePath(path) || !Services.RecentFileStore.SafeRevision(revision)) return false;
+        var repository = _repositoryVersion; var version = _documentVersion;
+        try
+        {
+            // Prove the target can be read before changing the active tab.
+            var document = await _reader.DocumentAsync(new(root, path, revision is null ? ComparisonKind.WorkingFile : ComparisonKind.RevisionFile, revision), _documentRead.Token);
+            if (_closed || repository != _repositoryVersion || version != _documentVersion || document.IsNotice) return false;
+            var existing = _sourceTabs.FirstOrDefault(tab => revision is null
+                ? tab.Target is null && tab.Entry.Kind == ComparisonKind.WorkingFile && tab.Entry.Path == path
+                : tab.Target?.Sha == revision && tab.Target.Path == path);
+            if (existing is not null) await SelectSourceTabAsync(existing.Id, version);
+            else if (revision is not null) await OpenRevisionSourceAsync(path, revision);
+            else await OpenEditorEntryAsync(new(path, path, ComparisonKind.WorkingFile));
+            return !_closed && Root == root && _document is { IsNotice: false } opened && opened.Path == path;
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (IOException) { return false; }
+        catch (LibGit2Sharp.LibGit2SharpException) { return false; }
+    }
+
     private CancellationTokenSource _noteRead = new();
     public void CancelNoteSource() { if (!_closed) Replace(ref _noteRead); }
     public bool RepositoryFilesTruncated => _snapshot?.FilesTruncated == true;
