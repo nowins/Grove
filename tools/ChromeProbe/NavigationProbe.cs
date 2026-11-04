@@ -99,7 +99,7 @@ internal static partial class Program
             Check(!(await LineState(web)).GetProperty("open").GetBoolean(), "A changed document retained the old line request.");
             Samples.Add(new { phase = "native-line-history-and-document-guard", historicalLines = 7, currentLines = 36, staleRequestClosed = true });
 
-            RunProbeCommand(main, "GitTool"); await Task.Delay(150); main.UpdateLayout();
+            ShowHistoryTool(main); await Task.Delay(150); main.UpdateLayout();
             var popup = await OpenHistoryPicker(main, window, view);
             Check(HasHistoryGroup(popup.List, "本地分支") && HasHistoryGroup(popup.List, "远端分支") && HasHistoryGroup(popup.List, "标签"), "History kinds are not separated.");
             foreach (var key in new[] { "all", "HEAD", "refs/heads/main", "refs/remotes/origin/main", "refs/tags/main" })
@@ -123,7 +123,7 @@ internal static partial class Program
 
             var linkedRoot = await RepositoryReader.ResolveWorkingDirectoryAsync(_linkedRepository);
             await model.OpenAsync(_linkedRepository); await UntilAsync(() => !model.Busy && model.Root == linkedRoot);
-            RunProbeCommand(main, "GitTool"); await Task.Delay(150); main.UpdateLayout();
+            ShowHistoryTool(main); await Task.Delay(150); main.UpdateLayout();
             popup = await OpenHistoryPicker(main, window, view);
             Check(!HasHistoryGroup(popup.List, "收藏") && !HasHistoryGroup(popup.List, "最近使用"), "Worktree preferences leaked across working directories.");
             var stale = popup.List.Items.Cast<object>().First(r => RowProperty<string>(r, "Key") == "refs/remotes/origin/main");
@@ -171,6 +171,7 @@ internal static partial class Program
     {
         Check(ActivateTestWindow(window) == 0, "Cannot activate history fixture."); await UntilAsync(() => main.IsActive);
         var anchor = main.GetVisualDescendants().OfType<Button>().Single(b => AutomationProperties.GetName(b) == "历史分支筛选");
+        Check(anchor.IsEffectivelyVisible && anchor.IsEnabled, "History fixture panel is not visible before native input.");
         var origin = anchor.TranslatePoint(default, main)!.Value;
         Check(ClickHeader(window, view, origin.X + anchor.Bounds.Width / 2, origin.Y + anchor.Bounds.Height / 2) == 0, "Native history filter pointer failed.");
         await UntilAsync(() => Popup(main) is { IsOpen: true });
@@ -183,10 +184,11 @@ internal static partial class Program
     private static bool HasHistoryGroup(ListBox list, string group) => list.Items.Cast<object>().Any(r => RowProperty<bool>(r, "IsHeading") && RowProperty<string>(r, "Name") == group);
     private static T RowProperty<T>(object row, string name) => (T)row.GetType().GetProperty(name)!.GetValue(row)!;
     private static T Private<T>(object row, string name) => (T)row.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(row)!;
-    private static void RunProbeCommand(MainWindow main, string name)
+    private static void ShowHistoryTool(MainWindow main)
     {
-        var method = typeof(MainWindow).GetMethod("RunShellCommand", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        method.Invoke(main, [Enum.Parse(method.GetParameters()[0].ParameterType, name), main]);
+        // Fixture setup is idempotent. A toggle would close an already visible
+        // Git panel after repository switching and click the WebView beneath it.
+        typeof(MainWindow).GetMethod("OpenTool", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(main, [2, false, true]);
     }
     private static bool SavedHistoryRecent(string key)
     {
