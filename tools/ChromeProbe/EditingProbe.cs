@@ -30,7 +30,13 @@ internal static partial class Program
     }
     private static async Task VerifyNativeTextEditingAsync(MainWindow main,MainViewModel model,nint window)
     {
-        var web=Private<NativeWebView>(main,"_webView");var path=Path.Combine(_fixtureRepository,"sample.cs");
+        var web=Private<NativeWebView>(main,"_webView");
+        // Navigation deliberately finishes in the linked worktree. Establish
+        // this test's owner before reading or observing the main fixture file.
+        var expectedRoot=await RepositoryReader.ResolveWorkingDirectoryAsync(_fixtureRepository);
+        await model.OpenAsync(_fixtureRepository);await UntilAsync(()=>!model.Busy&&model.Root==expectedRoot);
+        Check(model.Root==expectedRoot,"Editing probe owns the wrong working directory.");
+        var path=Path.Combine(expectedRoot,"sample.cs");
         var bytes=File.ReadAllBytes(path);var before=FixtureState(_fixtureRepository);var linkedBefore=FixtureState(_linkedRepository);
         try
         {
@@ -39,7 +45,9 @@ internal static partial class Program
             await UntilAsync(async()=> (await TextState(web,id)).GetProperty("sessions").EnumerateArray().Any(s=>s.GetProperty("id").GetString()==id&&s.GetProperty("editable").GetBoolean()));
             await FocusSource(main,web,window);Check(TestKey(window,"x",7,0)==0,"Cannot queue native source input.");
             await UntilAsync(async()=>TextDirty(await TextState(web,id),id));
-            var draft=(await TextState(web,id)).GetProperty("draft").GetProperty("text").GetString()!;
+            var capture=(await TextState(web,id)).GetProperty("draft");
+            Check(capture.GetProperty("rootKey").GetString()==WorkingTextFiles.RootKey(expectedRoot),"Draft ownership does not match the file being observed.");
+            var draft=capture.GetProperty("text").GetString()!;
             Check(TestKey(window,"s",1,1)==0,"Cannot queue native Command+S.");
             try { await UntilAsync(()=>File.ReadAllText(path)==draft); }
             catch
