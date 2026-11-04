@@ -42,21 +42,25 @@ internal static partial class Program
         web?.Focus(); if (web is not null) await web.InvokeScript("window.groveNative.command(() => window.gitx.focus())");
         await Task.Delay(150);
         var clickCount = 0;
+        var allMenuClicks = new List<string?>();
+        foreach (var group in NativeMenu.GetMenu(main)!.Items.OfType<NativeMenuItem>())
+            if (group.Menu is { } menu) foreach (var action in menu.Items.OfType<NativeMenuItem>())
+                action.Click += (_, _) => allMenuClicks.Add(action.Header);
         var recentItem = NativeMenu.GetMenu(main)!.Items.OfType<NativeMenuItem>().Single(i => i.Header == "搜索").Menu!.Items.OfType<NativeMenuItem>().Single(i => i.Header == "最近文件…");
         recentItem.Click += (_, _) => clickCount++;
         Samples.Add(new { phase = "before-cocoa-command-e", focus = ReadFocus(window), enabled = recentItem.IsEnabled, canExecute = recentItem.Command?.CanExecute(null), version = model.DocumentVersion });
-        Check(MenuKey(window, "e", 14) == 0, "Command+E was not handled by Cocoa from active owned window.");
+        Check(MenuKey(window, "e", 14) == 0, "Could not queue Command+E in the active owned application.");
         try { await UntilAsync(() => lifetime.Windows.Any(w => w.Title == "最近文件")); }
         catch
         {
             var field = typeof(MainWindow).GetField("_recentFilesWindow", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main) as Window;
-            Samples.Add(new { phase = "failed-cocoa-command-e", clickCount, focus = ReadFocus(window), version = model.DocumentVersion, error = model.Error, trackedPicker = field is null ? null : new { field.IsVisible, field.IsActive }, windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible }).ToArray(), menu = ReadMenus() });
+            Samples.Add(new { phase = "failed-cocoa-command-e", clickCount, allMenuClicks, focus = ReadFocus(window), version = model.DocumentVersion, error = model.Error, trackedPicker = field is null ? null : new { field.IsVisible, field.IsActive }, windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible }).ToArray(), menu = ReadMenus() });
             throw;
         }
         Check(lifetime.Windows.Count(w => w.Title == "最近文件") == 1, "Command+E opened duplicate pickers.");
         lifetime.Windows.Single(w => w.Title == "最近文件").Close(); await Task.Delay(150);
         Check(model.DocumentVersion == version, "Cancel changed the current document.");
-        Samples.Add(new { phase = "native-recent-files", menuAction = true, cocoaCommandE = true, duplicateWindows = false, cancelledWithoutDocumentChange = true });
+        Samples.Add(new { phase = "native-recent-files", menuAction = true, nsApplicationCommandE = true, duplicateWindows = false, cancelledWithoutDocumentChange = true });
         // No Git write: hold an in-memory operation so Quit must use Closing's
         // existing write guard instead of a forced lifetime Shutdown.
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -69,7 +73,7 @@ internal static partial class Program
             Check(!file.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("title").GetString() == "打开本地仓库…").GetProperty("enabled").GetBoolean(), "Open repository enabled during a Git operation.");
             Check(ActivateTestWindow(window) == 0, "Could not activate owned window for Quit guard.");
             await UntilAsync(() => main.IsActive);
-            Check(MenuKey(window, "q", 12) == 0, "Command+Q equivalent unavailable."); await Task.Delay(250);
+            Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application."); await Task.Delay(250);
             Check(main.IsVisible && model.IsWriting, "Native Quit bypassed the write guard.");
             Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitKeptWindowOpen = true });
         }

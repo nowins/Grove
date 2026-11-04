@@ -109,11 +109,15 @@ __attribute__((visibility("default"))) int grove_menu_key(void* w, const char* c
         if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !characters) return -1;
         if (!NSApp.isActive || !window.isKeyWindow) return -3;
         NSString* text = [NSString stringWithUTF8String:characters];
-        NSEvent* event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
-            timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil characters:text
-            charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
-        // Exercise Cocoa key-equivalent dispatch, not managed command invocation.
-        return [NSApp.mainMenu performKeyEquivalent:event] ? 0 : -2;
+        for (int i=0; i<2; i++) {
+            NSEvent* event = [NSEvent keyEventWithType:i == 0 ? NSEventTypeKeyDown : NSEventTypeKeyUp
+                location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand timestamp:NSProcessInfo.processInfo.systemUptime
+                windowNumber:window.windowNumber context:nil characters:text charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
+            [NSApp postEvent:event atStart:NO];
+        }
+        // Actual NSApplication keyboard queue: menu routing and the focused
+        // native view see the same key-down/up sequence. No system-wide input.
+        return 0;
     }
 }
 
