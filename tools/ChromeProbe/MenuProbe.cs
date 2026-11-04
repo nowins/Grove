@@ -32,7 +32,10 @@ internal static partial class Program
         var version = model.DocumentVersion;
         Check(InvokeMenu("搜索", "最近文件…") == 0, "Native recent-files action unavailable.");
         await UntilAsync(() => lifetime.Windows.Any(w => w.Title == "最近文件"));
-        var picker = lifetime.Windows.Single(w => w.Title == "最近文件"); picker.Close(); await Task.Delay(150);
+        var picker = lifetime.Windows.Single(w => w.Title == "最近文件");
+        var closeEvents = 0; picker.Closing += (_, _) => closeEvents++;
+        picker.Close(); await Task.Delay(150);
+        Check(closeEvents == 1 && !picker.IsVisible, "Recent picker must close once without deactivation reentry.");
         var web = typeof(MainWindow).GetField("_webView", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(main) as NativeWebView;
         web?.Focus(); if (web is not null) await web.InvokeScript("window.groveNative.command(() => window.gitx.focus())");
         Check(MenuKey(window, "e", 14) == 0, "Command+E was not handled by Cocoa.");

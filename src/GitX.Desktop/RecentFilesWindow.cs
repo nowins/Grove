@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Controls.Presenters;
 using Avalonia.VisualTree;
+using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -20,7 +21,7 @@ internal sealed class RecentFilesWindow : Window
     private readonly ListBox _list = new() { Background = Brushes.Transparent, BorderThickness = new(0), AutoScrollToSelectedItem = true };
     private readonly TextBlock _status = new() { Classes = { "muted" }, TextWrapping = TextWrapping.Wrap };
     private IReadOnlyList<RecentFile> _files = [];
-    private bool _opening, _shown;
+    private bool _opening, _shown, _closing;
     public bool OpenedFile { get; private set; }
 
     public RecentFilesWindow(Func<RecentFile, Task<string?>> open, Func<RecentFile, Task> forget)
@@ -56,7 +57,7 @@ internal sealed class RecentFilesWindow : Window
         {
             if (_opening || _list.SelectedItem is not RecentFile file) return;
             _opening = true; _status.Text = "正在打开…";
-            try { var error = await open(file); if (error is null) { OpenedFile = true; Close(); } else _status.Text = error; }
+            try { var error = await open(file); if (error is null) { OpenedFile = true; Dismiss(); } else _status.Text = error; }
             catch (Exception ex) { _status.Text = "打开失败：" + ex.Message; }
             finally { _opening = false; }
         }
@@ -65,7 +66,7 @@ internal sealed class RecentFilesWindow : Window
         AddHandler(KeyDownEvent, async (_, e) =>
         {
             if (_search.IsKeyboardFocusWithin && _search.GetVisualDescendants().OfType<TextPresenter>().Any(p => !string.IsNullOrEmpty(p.PreeditText))) return;
-            if (e.Key == Key.Escape) { e.Handled = true; if (!_opening) Close(); }
+            if (e.Key == Key.Escape) { e.Handled = true; if (!_opening) Dismiss(); }
             else if (e.Key == Key.Enter && !e.Handled) { e.Handled = true; await OpenAsync(); }
             else if (e.Key is Key.Down or Key.Up && e.KeyModifiers == KeyModifiers.None)
             {
@@ -82,7 +83,21 @@ internal sealed class RecentFilesWindow : Window
         Opened += (_, _) => { _shown = true; FocusSearch(); };
         // A click elsewhere dismisses this transient window; owned modal dialogs
         // are not involved and no file is opened on focus loss.
-        Deactivated += (_, _) => { if (_shown && !_opening) Close(); };
+        Closing += (_, _) => _closing = true;
+        Closed += (_, _) => { _closing = true; _shown = false; };
+        Deactivated += (_, _) =>
+        {
+            // Cocoa also sends Deactivated from HandleClosed, after releasing
+            // the native proxy. Check visibility on the next dispatch turn and
+            // never reenter Close while an existing close is in progress.
+            if (!_shown || _opening || _closing) return;
+            Dispatcher.UIThread.Post(() => { if (!_closing && !_opening && !IsActive && IsVisible) Dismiss(); }, DispatcherPriority.Background);
+        };
+    }
+    private void Dismiss()
+    {
+        if (_closing) return;
+        _closing = true; Close();
     }
     public void SetFiles(IReadOnlyList<RecentFile> files)
     {
