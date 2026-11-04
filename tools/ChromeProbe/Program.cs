@@ -132,7 +132,15 @@ internal static partial class Program
     private static async Task UntilAsync(Func<bool> condition)
     { for (var i = 0; i < 160; i++) { if (condition()) return; await Task.Delay(50); } throw new TimeoutException("Native window transition did not complete."); }
     private static void Check(bool value, string error) { if (!value) throw new IOException(error); }
-    private static void Save(string path, object result) => File.WriteAllText(path, JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, IncludeFields = true }));
+    private static void Save(string path, object result)
+    {
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, IncludeFields = true });
+        File.WriteAllText(path, json);
+        // The probe uses only its generated fixture. Keep failure diagnostics
+        // available in CI logs even when an artifact cannot be downloaded.
+        Console.WriteLine("GROVE_NATIVE_PROBE_RESULT");
+        Console.WriteLine(json);
+    }
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public double X, Y, Width, Height; public int Visible, Hit; }
     [DllImport("grove-chrome-probe", EntryPoint = "grove_read_chrome")] private static extern int Read(nint window, nint view, [Out] NativeRect[] buttons, [Out] byte[] menu, int capacity, out double scale);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_hit_system_button")] private static extern int Hit(nint window, nint view, double x, double y);

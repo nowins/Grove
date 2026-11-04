@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform;
 using GitX.Desktop;
 using GitX.Desktop.ViewModels;
@@ -75,17 +76,56 @@ internal static partial class Program
             Check(!file.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("title").GetString() == "打开本地仓库…").GetProperty("enabled").GetBoolean(), "Open repository enabled during a Git operation.");
             Check(ActivateTestWindow(window) == 0, "Could not activate owned window for Quit guard.");
             await UntilAsync(() => main.IsActive);
-            var quitAttempts = 0; var quitCancelled = false;
+            var quitAttempts = 0; var quitCancelled = false; var quitMenuClicks = 0;
+            var shutdownRequests = new List<object>();
+            var quitKeys = new List<object>();
+            var applicationMenu = NativeMenu.GetMenu(Application.Current!)!;
+            var quitItem = applicationMenu.Items.OfType<NativeMenuItem>().Single(i => i.Gesture is { Key: Key.Q, KeyModifiers: KeyModifiers.Meta });
             void ObserveClosing(object? sender, WindowClosingEventArgs args) { quitAttempts++; quitCancelled |= args.Cancel; }
+            void ObserveShutdown(object? sender, ShutdownRequestedEventArgs args) => shutdownRequests.Add(new { args.Cancel });
+            void ObserveQuitClick(object? sender, EventArgs args) => quitMenuClicks++;
+            void ObserveKey(object? sender, KeyEventArgs args)
+            {
+                if (args.Key == Key.Q) quitKeys.Add(new { key = args.Key.ToString(), modifiers = args.KeyModifiers.ToString(), args.Handled, source = args.Source?.GetType().Name });
+            }
             main.Closing += ObserveClosing;
+            lifetime.ShutdownRequested += ObserveShutdown;
+            quitItem.Click += ObserveQuitClick;
+            main.AddHandler(InputElement.KeyDownEvent, ObserveKey, RoutingStrategies.Tunnel, handledEventsToo: true);
             try
             {
+                Samples.Add(new { phase = "before-cocoa-command-q", focus = ReadFocus(window), quitItem.Header, quitItem.IsEnabled,
+                    mainOwner = main.Owner?.Title, shutdownMode = lifetime.ShutdownMode.ToString(), windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.Title }).ToArray(), menu = ReadMenus() });
                 Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application.");
-                await UntilAsync(() => quitAttempts > 0);
+                try { await UntilAsync(() => quitAttempts > 0); }
+                catch
+                {
+                    Samples.Add(new { phase = "failed-cocoa-command-q", quitAttempts, quitCancelled, quitMenuClicks, shutdownRequests = shutdownRequests.ToArray(),
+                        quitKeys = quitKeys.ToArray(), allMenuClicks = allMenuClicks.ToArray(), focus = ReadFocus(window), mainOwner = main.Owner?.Title,
+                        writing = model.IsWriting, windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.Title }).ToArray(), menu = ReadMenus() });
+                    // Diagnose the native Quit action separately; it is never a
+                    // substitute for the required Command+Q keyboard assertion.
+                    try
+                    {
+                        var invoked = InvokeMenu("", quitItem.Header!);
+                        await Task.Delay(250);
+                        Samples.Add(new { phase = "quit-action-after-key-failure", invoked, quitAttempts, quitCancelled, quitMenuClicks,
+                            shutdownRequests = shutdownRequests.ToArray(), writing = model.IsWriting, main.IsVisible });
+                    }
+                    catch (Exception diagnosticError) { Samples.Add(new { phase = "quit-action-diagnostic-error", error = diagnosticError.ToString() }); }
+                    throw;
+                }
                 Check(quitCancelled && main.IsVisible && model.IsWriting, "Native Quit bypassed the write guard.");
-                Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitAttempts, quitCancelled, quitKeptWindowOpen = true });
+                Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitAttempts, quitCancelled, quitMenuClicks,
+                    shutdownRequests = shutdownRequests.ToArray(), quitKeys = quitKeys.ToArray(), quitKeptWindowOpen = true });
             }
-            finally { main.Closing -= ObserveClosing; }
+            finally
+            {
+                main.Closing -= ObserveClosing;
+                lifetime.ShutdownRequested -= ObserveShutdown;
+                quitItem.Click -= ObserveQuitClick;
+                main.RemoveHandler(InputElement.KeyDownEvent, ObserveKey);
+            }
         }
         finally { release.TrySetResult(); await task; }
         Check(InvokeMenu("", "关于 Grove…") == 0, "Native application About command unavailable.");
