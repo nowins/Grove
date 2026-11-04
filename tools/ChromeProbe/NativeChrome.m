@@ -151,7 +151,8 @@ __attribute__((visibility("default"))) int grove_test_window_focus(void* w, char
         NSWindow* window = (__bridge NSWindow*)w;
         if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !output || capacity < 1) return -1;
         NSDictionary* value = @{ @"appActive": @(NSApp.isActive), @"keyWindow": @(window.isKeyWindow),
-            @"firstResponder": window.firstResponder ? NSStringFromClass(window.firstResponder.class) : @"" };
+            @"firstResponder": window.firstResponder ? NSStringFromClass(window.firstResponder.class) : @"",
+            @"miniaturized": @(window.isMiniaturized), @"visible": @(window.isVisible) };
         NSData* data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
         if (!data || data.length + 1 > capacity) return -2;
         memcpy(output, data.bytes, data.length); output[data.length] = 0; return 0;
@@ -172,5 +173,24 @@ __attribute__((visibility("default"))) int grove_focus_test_webview(void* w) {
             [remaining addObjectsFromArray:view.subviews];
         }
         return -4;
+    }
+}
+
+__attribute__((visibility("default"))) int grove_pointer_target(void* w, void* v, double x, double y, char* output, int capacity) {
+    @autoreleasepool {
+        NSWindow* window = (__bridge NSWindow*)w; NSView* view = (__bridge NSView*)v;
+        if (!owned(window, view) || !output || capacity < 1) return -1;
+        NSPoint point = NSMakePoint(x, view.isFlipped ? y : view.bounds.size.height - y);
+        NSView* frame = window.contentView.superview;
+        NSPoint converted = [frame convertPoint:[view convertPoint:point toView:nil] fromView:nil];
+        NSView* hit = [frame hitTest:converted];
+        NSMutableArray* chain = [NSMutableArray array];
+        for (NSView* node = hit; node && chain.count < 12; node = node.superview) [chain addObject:NSStringFromClass(node.class)];
+        NSDictionary* value = @{ @"hit": hit ? NSStringFromClass(hit.class) : @"", @"chain": chain,
+            @"x": @(x), @"y": @(y), @"viewWidth": @(view.bounds.size.width), @"viewHeight": @(view.bounds.size.height),
+            @"windowVisible": @(window.isVisible), @"miniaturized": @(window.isMiniaturized) };
+        NSData* data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
+        if (!data || data.length + 1 > capacity) return -2;
+        memcpy(output, data.bytes, data.length); output[data.length] = 0; return 0;
     }
 }

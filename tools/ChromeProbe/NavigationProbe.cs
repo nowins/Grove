@@ -172,9 +172,47 @@ internal static partial class Program
         Check(ActivateTestWindow(window) == 0, "Cannot activate history fixture."); await UntilAsync(() => main.IsActive);
         var anchor = main.GetVisualDescendants().OfType<Button>().Single(b => AutomationProperties.GetName(b) == "历史分支筛选");
         Check(anchor.IsEffectivelyVisible && anchor.IsEnabled, "History fixture panel is not visible before native input.");
-        var origin = anchor.TranslatePoint(default, main)!.Value;
-        Check(ClickHeader(window, view, origin.X + anchor.Bounds.Width / 2, origin.Y + anchor.Bounds.Height / 2) == 0, "Native history filter pointer failed.");
-        await UntilAsync(() => Popup(main) is { IsOpen: true });
+        Point center = default, last = new(double.NaN, double.NaN); var stable = 0;
+        // Dock placement and the native child frame are applied on separate
+        // event-loop turns. Require stable, hittable geometry before one click.
+        await UntilAsync(() =>
+        {
+            main.UpdateLayout(); var origin = anchor.TranslatePoint(default, main)!.Value;
+            center = new(origin.X + anchor.Bounds.Width / 2, origin.Y + anchor.Bounds.Height / 2);
+            var hit = main.InputHitTest(center) as Visual;
+            var matches = hit?.GetSelfAndVisualAncestors().Contains(anchor) == true;
+            stable = matches && center == last ? stable + 1 : 0; last = center;
+            return stable >= 3;
+        });
+        var clicks = 0; var pointers = new List<object>();
+        var beforeGeneration = Private<long>(main, "_shellGeneration");
+        void ObserveClick(object? sender, Avalonia.Interactivity.RoutedEventArgs args)
+        {
+            clicks++; pointers.Add(new { kind = "click", shellGeneration = Private<long>(main, "_shellGeneration"), open = Popup(main)?.IsOpen });
+        }
+        void ObservePointer(object? sender, PointerPressedEventArgs args)
+        {
+            pointers.Add(new { kind = "pointer-down", source = args.Source?.GetType().Name, point = args.GetPosition(main).ToString(), args.Handled });
+        }
+        anchor.Click += ObserveClick;
+        main.AddHandler(InputElement.PointerPressedEvent, ObservePointer, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        Samples.Add(new { phase = "before-native-history-pointer", center, main.Bounds, main.RenderScaling, managedHit = main.InputHitTest(center)?.GetType().Name, native = PointerTarget(window, view, center), beforeGeneration });
+        try
+        {
+            Check(ClickHeader(window, view, center.X, center.Y) == 0, "Native history filter pointer failed.");
+            await UntilAsync(() => Popup(main) is { IsOpen: true });
+            Samples.Add(new { phase = "native-history-pointer-opened", clicks, pointers });
+        }
+        catch
+        {
+            Samples.Add(new { phase = "failed-native-history-pointer", center, clicks, pointers, generation = Private<long>(main, "_shellGeneration"), open = Popup(main)?.IsOpen, native = PointerTarget(window, view, center), focus = ReadFocus(window) });
+            throw;
+        }
+        finally
+        {
+            anchor.Click -= ObserveClick;
+            main.RemoveHandler(InputElement.PointerPressedEvent, ObservePointer);
+        }
         var panel = (Control)Popup(main)!.Content!;
         var list = panel.GetVisualDescendants().OfType<ListBox>().Single(); var search = panel.GetVisualDescendants().OfType<TextBox>().Single();
         await UntilAsync(() => search.IsKeyboardFocusWithin);
@@ -200,6 +238,12 @@ internal static partial class Program
             return value.RootElement.GetProperty("Recent").EnumerateArray().Any(r => r.GetString() == key);
         });
     }
+    private static JsonElement PointerTarget(nint window, nint view, Point point)
+    {
+        var bytes = new byte[4096]; Check(ReadPointerTarget(window, view, point.X, point.Y, bytes, bytes.Length) == 0, "Cannot inspect the owned native pointer target.");
+        using var value = JsonDocument.Parse(System.Text.Encoding.UTF8.GetString(bytes).TrimEnd('\0')); return value.RootElement.Clone();
+    }
+    [DllImport("grove-chrome-probe", EntryPoint = "grove_pointer_target")] private static extern int ReadPointerTarget(nint window, nint view, double x, double y, byte[] output, int capacity);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_test_key")] private static extern int TestKey(nint window, [MarshalAs(UnmanagedType.LPUTF8Str)] string key, ushort code, uint modifiers);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_owned_key_window")] private static extern nint OwnedKeyWindow();
 }
