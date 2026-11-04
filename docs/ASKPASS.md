@@ -1,6 +1,6 @@
 # Askpass 的 Unix 短路径
 
-此修复位于独立分支，尚未合并或进入 Preview 3。
+此修复已合并到 main，尚未进入公开安装包；现有 Preview 3 不包含它。
 
 .NET 的 Unix 命名管道默认把相对管道名放在临时目录下，并添加 `CoreFxPipe_` 前缀。macOS 的临时目录较长时，完整 Unix domain socket 路径可能超过 104 字节。
 

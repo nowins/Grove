@@ -84,3 +84,11 @@ SourceLanguage 已改为源生成 JSON；独立 Windows x64 AOT 探针恢复 Typ
 四平台原生构建与自动化回归通过：Core 524/524、Editor 83/83。WKWebView 探针覆盖异步命令和 JSON 状态交换；完整测试结果以 CI 为准。
 
 版本标识更新为 0.1.0-preview.3；正式安装包以该提交的 CI 和 Release 资产为准。此版本不包含尚在开发的在线更新或工作树删除功能，签名、公证及用户数据兼容边界不变。
+
+## main 中已整合的后续功能（尚未发布新安装包）
+
+在线更新与可取消后台下载、干净关联工作树删除、短 Unix askpass 端点、macOS 标题栏安全区与应用名称、Windows 系统最小化/恢复处理，以及注解菜单冗余标题清理已整合。现有 Preview 3 的 Release 标签和安装包保持原状；合并源代码不等于发布新版，Preview 3 不包含这些后续改动。
+
+Windows 本地整合回归 Core 611/611、Editor 83/83、锁定依赖恢复和零警告 Release 构建通过。原生 Git loopback 凭据交互通过，测试使用临时仓库与隔离配置。四个平台的组合构建、原生 askpass、两种 Mac 架构的 AppKit 标题栏探针及打包检查，以对应 main 的 [CI 运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)结果为准；独立分支曾通过的结果不能代替整合后的验证。
+
+Windows 消息级回归和 Mac 程序化原生事件不代表真实任务栏点击、物理键盘、Retina/多屏或完整人工 GUI 验收。在线更新安装仍需确认，macOS 只打开 DMG 供用户自行替换；发布签名与公证的限制不变。
