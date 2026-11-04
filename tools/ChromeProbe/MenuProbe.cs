@@ -142,6 +142,19 @@ internal static partial class Program
             }
         }
         finally { release.TrySetResult(); await task; }
+        Check(ActivateTestWindow(window) == 0, "Could not activate owned window for menu shortcut regression.");
+        await UntilAsync(() => main.IsActive);
+        Check(FocusTestWebView(window) == 0, "Could not focus the owned WKWebView for Command+M.");
+        await UntilAsync(() => ReadFocus(window).GetProperty("firstResponder").GetString() == "ManagedWKWebView");
+        var minimizeFocus = ReadFocus(window);
+        Check(MenuKey(window, "m", 46) == 0, "Could not queue Command+M.");
+        await UntilAsync(() => main.WindowState == WindowState.Minimized);
+        main.WindowState = WindowState.Normal;
+        await UntilAsync(() => main.WindowState == WindowState.Normal);
+        Check(ActivateTestWindow(window) == 0, "Could not restore owned window after Command+M.");
+        await UntilAsync(() => main.IsActive);
+        await Task.Delay(350);
+        Samples.Add(new { phase = "native-command-m-from-webview", focus = minimizeFocus, minimized = true, restored = true });
         Check(InvokeMenu("", "关于 Grove…") == 0, "Native application About command unavailable.");
         await UntilAsync(() => lifetime.Windows.Any(w => w.Title == "关于 Grove"));
         lifetime.Windows.Single(w => w.Title == "关于 Grove").Close(); await Task.Delay(150);

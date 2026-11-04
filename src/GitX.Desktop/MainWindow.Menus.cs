@@ -136,8 +136,8 @@ public sealed partial class MainWindow
 
     private void AttachNativeWindowMenu(Window owner)
     {
-        owner.AddHandler(KeyDownEvent, RouteMacApplicationQuit, RoutingStrategies.Bubble);
-        owner.Closed += (_, _) => owner.RemoveHandler(KeyDownEvent, RouteMacApplicationQuit);
+        owner.AddHandler(KeyDownEvent, RouteMacMenuShortcut, RoutingStrategies.Bubble);
+        owner.Closed += (_, _) => owner.RemoveHandler(KeyDownEvent, RouteMacMenuShortcut);
         var root = new NativeMenu();
         foreach (var group in ShellCommands.WindowMenu(true).GroupBy(c => c.Group))
         {
@@ -156,12 +156,27 @@ public sealed partial class MainWindow
         NativeMenu.SetMenu(owner, root);
     }
 
-    private void RouteMacApplicationQuit(object? sender, KeyEventArgs e)
+    private void RouteMacMenuShortcut(object? sender, KeyEventArgs e)
     {
-        // AppKit menu equivalents get the first opportunity. An embedded native
-        // view can instead forward an unhandled Meta+Q into Avalonia; use the
-        // same guarded application action when that happens. Do not force exit.
-        if (!OperatingSystem.IsMacOS() || e.Handled || e.Key != Key.Q || e.KeyModifiers != KeyModifiers.Meta || _closed ||
+        // AppKit gets the first opportunity. Embedded native views may instead
+        // forward an unhandled menu key into Avalonia. Reuse the very same
+        // commands, enablement, context checks and queue as the native menu.
+        if (!OperatingSystem.IsMacOS() || e.Handled || _closed || sender is not Window owner) return;
+        if ((e.KeyModifiers & KeyModifiers.Meta) != 0)
+        {
+            var item = NativeMenu.GetMenu(owner)?.Items.OfType<NativeMenuItem>()
+                .SelectMany(group => group.Menu?.Items.OfType<NativeMenuItem>() ?? [])
+                .FirstOrDefault(action => action.Gesture?.Matches(e) == true);
+            if (item is not null)
+            {
+                e.Handled = true;
+                if (item.Command is { } command && command.CanExecute(null)) command.Execute(null);
+                return;
+            }
+        }
+        // Application Quit is supplied by the framework's application menu.
+        // Its fallback uses the same guarded action; never force shutdown.
+        if (e.Key != Key.Q || e.KeyModifiers != KeyModifiers.Meta ||
             Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lifetime) return;
         e.Handled = true;
         if (_applicationQuitQueued) return;
