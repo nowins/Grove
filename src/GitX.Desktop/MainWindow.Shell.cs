@@ -244,6 +244,7 @@ public sealed partial class MainWindow
         Item(git, "Git 输出", ShowOutput, "OutputIcon", _model.Root is not null);
         var help = Group("帮助");
         Item(help, "快捷键…", () => ShowShellText("快捷键", "Ctrl+O  打开仓库\nCtrl+1 / 2 / 3  项目 / 提交 / Git Log 工具\nShift+Esc  隐藏当前工具\nShift+F12  恢复默认布局\nAlt+M  主菜单\nF5  刷新\nCtrl+F  编辑器内查找\n双击 Shift  快速搜索（文件 / 代码内容）\nCtrl+Shift+F  跨文件内容搜索\nCtrl+Shift+N  文件定位\nCtrl+F12  当前文件结构（Java / C# / Python / JS / TS）\nCtrl+Shift+E  在项目树定位当前文件\nCtrl+F（项目树）  展开项目文件筛选\nF7 / Shift+F7  下一处 / 上一处变更\nCtrl+Alt+R  回退当前差异块\nEsc  返回文件列表\n\n历史：Ctrl+D 打开 diff，Alt+← 返回 Log；Shift+F10 打开提交菜单。"));
+        Item(help, "检查更新…", ShowUpdates, "RefreshIcon");
         Item(help, "关于 Grove…", ShowAbout);
         ShowShellPopup(menu, anchor);
     }

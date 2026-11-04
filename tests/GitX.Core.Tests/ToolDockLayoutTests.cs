@@ -94,10 +94,21 @@ public sealed class ToolDockLayoutTests
     }
 
     [Fact]
+    public void Legacy_layout_ids_are_preserved_and_new_update_tool_defaults_to_hidden()
+    {
+        var layout = new ToolDockLayout();
+        layout.Restore(new(1, [new((ToolId)5, ToolEdge.Right, Visible: true)]));
+        Assert.Equal(ToolEdge.Right, layout[ToolId.Worktrees].Edge);
+        Assert.True(layout[ToolId.Worktrees].Visible);
+        Assert.False(layout[ToolId.Updates].Visible);
+        Assert.Equal(ToolEdge.Bottom, layout[ToolId.Updates].Edge);
+        Assert.Equal(6, (int)ToolId.Updates);
+    }
+    [Fact]
     public void Reset_recovers_a_usable_docked_project_without_destroying_other_tool_definitions()
     {
         var layout = new ToolDockLayout(); foreach (var id in Enum.GetValues<ToolId>()) layout.Float(id, 3000, 2000);
-        layout.Reset(); Assert.Equal(6, layout.Tools.Count); Assert.Single(layout.Tools, t => t.Visible);
+        layout.Reset(); Assert.Equal(7, layout.Tools.Count); Assert.Single(layout.Tools, t => t.Visible);
         Assert.True(layout[ToolId.Project].Visible); Assert.All(layout.Tools, tool => Assert.False(tool.Floating));
     }
 }

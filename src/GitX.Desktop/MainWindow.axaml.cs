@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window
             if (_mergeWindow is not null) { e.Cancel = true; _mergeWindow.Activate(); return; }
             if (_model.IsWriting) { e.Cancel = true; ShowGitTask(); return; }
             if (_commentDraft is not null) { e.Cancel = true; await ConfirmCommentCloseAsync(); return; }
+            if (_updateBusy) { e.Cancel = true; await CancelUpdateForCloseAsync(); if (!_closed) Close(); return; }
             if (!_dockCloseReady && _dock is not null)
             { e.Cancel = true; await _dock.FlushAsync(); _dockCloseReady = true; Close(); return; }
             _dock?.PrepareOwnerClose();
