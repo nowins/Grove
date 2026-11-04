@@ -37,9 +37,22 @@ internal static partial class Program
         picker.Close(); await Task.Delay(150);
         Check(closeEvents == 1 && !picker.IsVisible, "Recent picker must close once without deactivation reentry.");
         var web = typeof(MainWindow).GetField("_webView", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(main) as NativeWebView;
+        Check(ActivateTestWindow(window) == 0, "Could not activate owned test window.");
+        await UntilAsync(() => main.IsActive);
         web?.Focus(); if (web is not null) await web.InvokeScript("window.groveNative.command(() => window.gitx.focus())");
-        Check(MenuKey(window, "e", 14) == 0, "Command+E was not handled by Cocoa.");
-        await UntilAsync(() => lifetime.Windows.Any(w => w.Title == "最近文件"));
+        await Task.Delay(150);
+        var clickCount = 0;
+        var recentItem = NativeMenu.GetMenu(main)!.Items.OfType<NativeMenuItem>().Single(i => i.Header == "搜索").Menu!.Items.OfType<NativeMenuItem>().Single(i => i.Header == "最近文件…");
+        recentItem.Click += (_, _) => clickCount++;
+        Samples.Add(new { phase = "before-cocoa-command-e", focus = ReadFocus(window), enabled = recentItem.IsEnabled, canExecute = recentItem.Command?.CanExecute(null), version = model.DocumentVersion });
+        Check(MenuKey(window, "e", 14) == 0, "Command+E was not handled by Cocoa from active owned window.");
+        try { await UntilAsync(() => lifetime.Windows.Any(w => w.Title == "最近文件")); }
+        catch
+        {
+            var field = typeof(MainWindow).GetField("_recentFilesWindow", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(main) as Window;
+            Samples.Add(new { phase = "failed-cocoa-command-e", clickCount, focus = ReadFocus(window), version = model.DocumentVersion, error = model.Error, trackedPicker = field is null ? null : new { field.IsVisible, field.IsActive }, windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible }).ToArray(), menu = ReadMenus() });
+            throw;
+        }
         Check(lifetime.Windows.Count(w => w.Title == "最近文件") == 1, "Command+E opened duplicate pickers.");
         lifetime.Windows.Single(w => w.Title == "最近文件").Close(); await Task.Delay(150);
         Check(model.DocumentVersion == version, "Cancel changed the current document.");
@@ -54,6 +67,8 @@ internal static partial class Program
             var busy = ReadMenus();
             var file = busy.EnumerateArray().Single(g => g.GetProperty("title").GetString() == "文件");
             Check(!file.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("title").GetString() == "打开本地仓库…").GetProperty("enabled").GetBoolean(), "Open repository enabled during a Git operation.");
+            Check(ActivateTestWindow(window) == 0, "Could not activate owned window for Quit guard.");
+            await UntilAsync(() => main.IsActive);
             Check(MenuKey(window, "q", 12) == 0, "Command+Q equivalent unavailable."); await Task.Delay(250);
             Check(main.IsVisible && model.IsWriting, "Native Quit bypassed the write guard.");
             Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitKeptWindowOpen = true });
@@ -68,6 +83,13 @@ internal static partial class Program
         var bytes = new byte[32768]; Check(MenuSnapshot(bytes, bytes.Length) == 0, "Could not inspect actual NSMenu.");
         using var json = JsonDocument.Parse(Encoding.UTF8.GetString(bytes).TrimEnd('\0')); return json.RootElement.Clone();
     }
+    private static JsonElement ReadFocus(nint window)
+    {
+        var bytes = new byte[2048]; Check(TestWindowFocus(window, bytes, bytes.Length) == 0, "Could not inspect owned focus.");
+        using var value = JsonDocument.Parse(Encoding.UTF8.GetString(bytes).TrimEnd('\0')); return value.RootElement.Clone();
+    }
+    [DllImport("grove-chrome-probe", EntryPoint = "grove_activate_test_window")] private static extern int ActivateTestWindow(nint window);
+    [DllImport("grove-chrome-probe", EntryPoint = "grove_test_window_focus")] private static extern int TestWindowFocus(nint window, byte[] output, int capacity);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_menu_snapshot")] private static extern int MenuSnapshot(byte[] output, int capacity);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_invoke_menu")] private static extern int InvokeMenu([MarshalAs(UnmanagedType.LPUTF8Str)] string group, [MarshalAs(UnmanagedType.LPUTF8Str)] string title);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_menu_key")] private static extern int MenuKey(nint window, [MarshalAs(UnmanagedType.LPUTF8Str)] string key, ushort code);

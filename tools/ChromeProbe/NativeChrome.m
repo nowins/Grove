@@ -107,12 +107,31 @@ __attribute__((visibility("default"))) int grove_menu_key(void* w, const char* c
     @autoreleasepool {
         NSWindow* window = (__bridge NSWindow*)w;
         if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !characters) return -1;
-        [window makeKeyAndOrderFront:nil];
+        if (!NSApp.isActive || !window.isKeyWindow) return -3;
         NSString* text = [NSString stringWithUTF8String:characters];
         NSEvent* event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
             timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil characters:text
             charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
         // Exercise Cocoa key-equivalent dispatch, not managed command invocation.
         return [NSApp.mainMenu performKeyEquivalent:event] ? 0 : -2;
+    }
+}
+
+__attribute__((visibility("default"))) int grove_activate_test_window(void* w) {
+    @autoreleasepool {
+        NSWindow* window = (__bridge NSWindow*)w;
+        if (![NSThread isMainThread] || ![NSApp.windows containsObject:window]) return -1;
+        [NSApp activateIgnoringOtherApps:YES]; [window makeKeyAndOrderFront:nil]; return 0;
+    }
+}
+__attribute__((visibility("default"))) int grove_test_window_focus(void* w, char* output, int capacity) {
+    @autoreleasepool {
+        NSWindow* window = (__bridge NSWindow*)w;
+        if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !output || capacity < 1) return -1;
+        NSDictionary* value = @{ @"appActive": @(NSApp.isActive), @"keyWindow": @(window.isKeyWindow),
+            @"firstResponder": window.firstResponder ? NSStringFromClass(window.firstResponder.class) : @"" };
+        NSData* data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
+        if (!data || data.length + 1 > capacity) return -2;
+        memcpy(output, data.bytes, data.length); output[data.length] = 0; return 0;
     }
 }
