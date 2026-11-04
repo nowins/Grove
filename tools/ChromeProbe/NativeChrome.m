@@ -139,3 +139,20 @@ __attribute__((visibility("default"))) int grove_test_window_focus(void* w, char
         memcpy(output, data.bytes, data.length); output[data.length] = 0; return 0;
     }
 }
+
+__attribute__((visibility("default"))) int grove_focus_test_webview(void* w) {
+    @autoreleasepool {
+        NSWindow* window = (__bridge NSWindow*)w;
+        if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !window.isKeyWindow) return -1;
+        Class webViewClass = NSClassFromString(@"WKWebView");
+        if (!webViewClass || !window.contentView) return -2;
+        NSMutableArray<NSView*>* remaining = [NSMutableArray arrayWithObject:window.contentView];
+        while (remaining.count) {
+            NSView* view = remaining.lastObject; [remaining removeLastObject];
+            if (view.window == window && !view.isHiddenOrHasHiddenAncestor && [view isKindOfClass:webViewClass])
+                return [window makeFirstResponder:view] ? 0 : -3;
+            [remaining addObjectsFromArray:view.subviews];
+        }
+        return -4;
+    }
+}

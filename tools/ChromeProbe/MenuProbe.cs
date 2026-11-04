@@ -105,6 +105,8 @@ internal static partial class Program
                 await UntilAsync(() => main.IsActive);
                 web?.Focus(); if (web is not null) await web.InvokeScript("window.groveNative.command(() => window.gitx.focus())");
                 await Task.Delay(150);
+                Check(FocusTestWebView(window) == 0, "Could not focus the owned WKWebView for the Quit regression.");
+                await UntilAsync(() => ReadFocus(window).GetProperty("firstResponder").GetString() == "ManagedWKWebView");
                 Samples.Add(new { phase = "before-cocoa-command-q", focus = ReadFocus(window), quitItem.Header, quitItem.IsEnabled,
                     mainOwner = main.Owner?.GetType().Name, shutdownMode = lifetime.ShutdownMode.ToString(), windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.GetType().Name }).ToArray(), menu = ReadMenus() });
                 Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application.");
@@ -154,6 +156,7 @@ internal static partial class Program
         var bytes = new byte[2048]; Check(TestWindowFocus(window, bytes, bytes.Length) == 0, "Could not inspect owned focus.");
         using var value = JsonDocument.Parse(Encoding.UTF8.GetString(bytes).TrimEnd('\0')); return value.RootElement.Clone();
     }
+    [DllImport("grove-chrome-probe", EntryPoint = "grove_focus_test_webview")] private static extern int FocusTestWebView(nint window);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_activate_test_window")] private static extern int ActivateTestWindow(nint window);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_test_window_focus")] private static extern int TestWindowFocus(nint window, byte[] output, int capacity);
     [DllImport("grove-chrome-probe", EntryPoint = "grove_menu_snapshot")] private static extern int MenuSnapshot(byte[] output, int capacity);
