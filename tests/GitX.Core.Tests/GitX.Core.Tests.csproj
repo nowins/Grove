@@ -15,6 +15,8 @@
     <Compile Include="../../src/GitX.Desktop/ViewModels/BlameNavigation.cs" Link="BlameNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/CodeNavigation.cs" Link="CodeNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/FileNavigation.cs" Link="FileNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/HistoryReferencePreferences.cs" Link="HistoryReferencePreferences.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/HistoryReferenceChoices.cs" Link="HistoryReferenceChoices.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentFileStore.cs" Link="RecentFileStore.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/ShellCommands.cs" Link="ShellCommands.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentRepositoryStore.cs" Link="RecentRepositoryStore.cs" />

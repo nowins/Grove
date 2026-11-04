@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test diff-layout.test.js diff-folding.test.js diff-scroll.test.js merge-layout.test.js merge-choices.test.js comment-layout.test.js merge-save-state.test.js source-symbols.test.js source-languages.test.js note-list.test.js double-shift.test.js source-update.test.js tool-feedback.test.js markdown-preview.test.js native-bridge.test.js recent-files-shortcut.test.js"
+    "test": "node --test diff-layout.test.js diff-folding.test.js diff-scroll.test.js merge-layout.test.js merge-choices.test.js comment-layout.test.js merge-save-state.test.js source-symbols.test.js source-languages.test.js note-list.test.js double-shift.test.js source-update.test.js tool-feedback.test.js markdown-preview.test.js native-bridge.test.js recent-files-shortcut.test.js go-to-line.test.js"
   },
   "dependencies": {
     "@vscode/tree-sitter-wasm": "0.3.1",

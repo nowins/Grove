@@ -1,3 +1,5 @@
+import { GoToLine } from './go-to-line.js';
+import './go-to-line.css';
 import { recentFilesShortcut } from './recent-files-shortcut.js';
 import './node_modules/monaco-editor/esm/vs/nls/lang/zh-cn.js';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
@@ -98,6 +100,20 @@ const sourceSymbols = new SourceSymbols({ getState: () => ({ available: !loading
     const range = models[1].validateRange({ startLineNumber: symbol.line, startColumn: symbol.column, endLineNumber: symbol.line, endColumn: symbol.column + symbol.length });
     right.setSelection(range); right.revealRangeInCenter(range, monaco.editor.ScrollType.Immediate);
   } });
+const goToLine = new GoToLine({
+  getState: () => ({ available: !loading && sourceMode && !plan && !!models[1] && !models[1].isDisposed(),
+    version: generation, model: models[1], modelVersion: models[1]?.getVersionId(), path: sourcePath,
+    lineCount: models[1]?.getLineCount(), line: right.getPosition()?.lineNumber ?? 1 }),
+  beforeOpen: () => { sourceSymbols.close(false); more.open = false; blameMenu.close(); if (markdown.active) markdown.activate(false, false); },
+  focus: () => { activePane = 1; right.focus(); },
+  reveal: async line => {
+    const model = models[1], version = generation;
+    await right.getAction('editor.unfold')?.run({ selectionLines: [line - 1], levels: 99 });
+    if (loading || generation !== version || models[1] !== model || model.isDisposed()) return;
+    right.setPosition({ lineNumber: line, column: 1 });
+    right.revealLineInCenter(line, monaco.editor.ScrollType.Immediate); right.focus();
+  }
+});
 const blameMenu = new BlameMenu({ getState: () => ({ blame, loading, version: generation, blameView }), send, setView: setBlameView,
   focusEditor: () => panes[activePane].focus(), beforeOpen: () => { document.getElementById('diff-more').open = false; } });
 const diffActions = new DiffActions({ panes, send, getState: () => ({ plan, canInclude, canRevert: canRevert && !inclusionBusy, loading, busy: inclusionBusy, generation, included,
@@ -646,6 +662,7 @@ async function load(version) {
   generation = version;
   loading = true;
   markdown.setLoading(true);
+  goToLine.close(false);
   sourceSymbols.invalidate(); sourceSymbols.update();
   blameMenu.close(); more.open = false;
   scheduleConnectors();
@@ -757,7 +774,7 @@ function navigate(direction) {
   if (loading || !plan) { pendingDirection = direction; return; }
   queueNavigation(() => selectChange(changeFromCursor(direction)));
 }
-window.gitx = { load, navigate, openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => sourceTabs.update(toolbar),
+window.gitx = { load, navigate, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => sourceTabs.update(toolbar),
   captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane, markdown: markdown.capture() }),
   restoreDockView: value => {
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch { return; } }
@@ -777,7 +794,7 @@ window.addEventListener('compositionstart', () => { composingSearch = true; doub
 window.addEventListener('compositionend', () => { composingSearch = false; doubleShift.reset(); }, true);
 window.addEventListener('pointerdown', () => doubleShift.reset(), true);
 window.addEventListener('focusin', () => doubleShift.reset(), true);
-window.addEventListener('blur', () => { composingSearch = false; doubleShift.reset(); });
+window.addEventListener('blur', () => { composingSearch = false; doubleShift.reset(); goToLine.close(false); });
 window.addEventListener('input', () => doubleShift.reset(), true);
 window.addEventListener('keyup', event => {
   if (doubleShift.release(event.key === 'Shift', shiftAllowed(event), performance.now()))
@@ -786,6 +803,8 @@ window.addEventListener('keyup', event => {
 window.addEventListener('keydown', event => {
   doubleShift.press(event.key === 'Shift', shiftAllowed(event), performance.now());
   if (event.isComposing) return;
+  if (goToLine.handleKey(event)) return;
+  if (right.hasTextFocus() && event.target.closest?.('.monaco-editor') && !event.target.closest('.comment-ui') && goToLine.handleShortcut(event, /Mac|iPhone|iPad/.test(navigator.platform))) return;
   if (markdown.active && event.key === 'Escape' && !event.shiftKey) {
     event.preventDefault(); event.stopImmediatePropagation(); markdown.activate(false, true); return;
   }
@@ -851,6 +870,6 @@ window.addEventListener('keydown', event => {
   }
 }, true);
 installFocusBoundary(direction => send({ type: 'focus-out', direction, version: generation }));
-window.addEventListener('beforeunload', () => { sourceSymbols.dispose(); fetchController?.abort(); folding?.dispose(); diffFolding.registration.dispose(); panes.forEach(pane => pane.dispose()); models.forEach(model => model?.dispose()); });
+window.addEventListener('beforeunload', () => { goToLine.dispose(); sourceSymbols.dispose(); fetchController?.abort(); folding?.dispose(); diffFolding.registration.dispose(); panes.forEach(pane => pane.dispose()); models.forEach(model => model?.dispose()); });
 display({ text: '打开本地 Git 仓库，然后选择文件。\n\n代码浏览 · 本地改动 · 提交历史\n\nCtrl+O 打开仓库    F5 刷新    F7 下一变更块', language: 'plaintext', isNotice: true });
 send({ type: 'ready' });

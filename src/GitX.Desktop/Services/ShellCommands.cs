@@ -6,7 +6,7 @@ internal enum ShellCommandId
     ProjectTool, CommitTool, GitTool, Output, RevealFile, ProjectFilter, ResetLayout, Refresh,
     HistoryBranches, HistoryFiles, QuickSearch, RecentFiles, FindFile, FindText, Structure, Notes, FileHistory,
     Branches, Sync, Stashes, Stage, Unstage, RestoreDiscard, Amend, Conflicts,
-    Shortcuts, Updates, About, Minimize, Zoom
+    Shortcuts, Updates, About, Minimize, Zoom, GoToLine
 }
 
 internal sealed record ShellCommandDefinition(ShellCommandId Id, string Group, string Header,
@@ -40,6 +40,7 @@ internal static class ShellCommands
         new(ShellCommandId.RecentFiles, "搜索", "最近文件…", "HistoryIcon", "Ctrl+E", "Meta+E"),
         new(ShellCommandId.FindFile, "搜索", "查找文件…", "FileIcon", "Ctrl+Shift+N", "Meta+Shift+O"),
         new(ShellCommandId.FindText, "搜索", "跨文件搜索内容…", "SearchIcon", "Ctrl+Shift+F", "Meta+Shift+F"),
+        new(ShellCommandId.GoToLine, "搜索", "跳转到行…", "RevealIcon", "Ctrl+G", "Meta+L"),
         new(ShellCommandId.Structure, "搜索", "当前文件结构…", "FileIcon", "Ctrl+F12", "Meta+F12"),
         new(ShellCommandId.Notes, "搜索", "本地代码笔记…", "CommentIcon"),
         new(ShellCommandId.FileHistory, "搜索", "当前文件历史…", "HistoryIcon"),

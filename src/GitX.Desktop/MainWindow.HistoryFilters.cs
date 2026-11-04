@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
+using Avalonia.VisualTree;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -31,7 +33,7 @@ public sealed partial class MainWindow
         };
         panel.AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (e.Key != Key.Escape) return;
+            if (e.Key != Key.Escape || focus is TextBox input && input.GetVisualDescendants().OfType<TextPresenter>().Any(p => !string.IsNullOrEmpty(p.PreeditText))) return;
             e.Handled = true; CloseShellPopup(restoreFocus: true);
         }, RoutingStrategies.Bubble);
         var right = owner is not null && anchor.TranslatePoint(default, owner) is { } point && point.X + panel.Width + 20 > owner.Bounds.Width;
@@ -40,29 +42,9 @@ public sealed partial class MainWindow
 
     private async void HistorySearchOptionClicked(object? sender, RoutedEventArgs e) => await _model.ApplyHistoryQueryAsync();
 
-    private void HistoryBranchFilterClicked(object? sender, RoutedEventArgs e)
+    private async void HistoryBranchFilterClicked(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Control anchor || ToggleShellPopup(anchor)) return;
-        var panel = new StackPanel { Width = 300, Spacing = 4 };
-        panel.Children.Add(new TextBlock { Text = "分支与标签", Classes = { "dialog-label" }, Margin = new(4, 4) });
-        var search = new TextBox { PlaceholderText = "分支或标签", Margin = new(4,4,4,6) };
-        AutomationProperties.SetName(search, "筛选历史引用候选"); panel.Children.Add(search);
-        var all = new[] { new HistoryBranchNode("all", "全部提交"), new HistoryBranchNode("HEAD", "HEAD（当前分支）") }
-            .Concat(_model.HistoryReferenceCandidates.OrderBy(r => r.Kind).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(r => new HistoryBranchNode(r.CanonicalName, r.Name, r))).ToArray();
-        var list = new ListBox { MaxHeight = 260, MinHeight = 70, ItemsSource = all,
-            ItemTemplate = HistoryBranchTree.ItemTemplate };
-        AutomationProperties.SetName(list, "历史引用候选"); panel.Children.Add(list);
-        var count = new TextBlock { Classes = { "filter-summary" }, Margin = new(4), Text = $"{all.Length} 个候选" }; panel.Children.Add(count);
-        search.TextChanged += (_, _) =>
-        {
-            var matches = all.Where(n => n.Name.Contains(search.Text ?? "", StringComparison.OrdinalIgnoreCase)).ToArray();
-            list.ItemsSource = matches; count.Text = matches.Length == 0 ? "没有匹配的分支或标签" : $"{matches.Length} 个候选";
-        };
-        list.SelectionChanged += async (_, _) =>
-            { if (list.SelectedItem is HistoryBranchNode node) { CloseShellPopup(restoreFocus: true); await _model.SelectHistoryReferenceAsync(node.Key == "all" ? null : node.Key); } };
-        search.KeyDown += (_, args) => { if (args.Key == Key.Down && list.ItemCount > 0) { args.Handled = true; list.Focus(); } };
-        ShowHistoryPopup(panel, anchor, search);
+        if (sender is Control anchor) await OpenHistoryReferencePickerAsync(anchor);
     }
 
     private void HistoryValueFilter(Control anchor, string label, string value, string hint, IEnumerable<string> candidates, Action<string> apply)

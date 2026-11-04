@@ -29,6 +29,7 @@ public sealed partial class MainWindow
             ShellCommandId.Unstage => _model.CanUnstageFile,
             ShellCommandId.RestoreDiscard => _model.CanRestoreDiscard,
             ShellCommandId.RevealFile => _model.CurrentProjectFile is not null,
+            ShellCommandId.GoToLine => _ready && _webView is not null && _model.Mode == 0 && _model.CurrentDocument is { IsNotice: false } && _loadedEditorVersion == _model.DocumentVersion,
             ShellCommandId.Structure => _model.Mode == 0 && _model.CurrentDocument is { IsNotice: false } document && SourceLanguage.SupportsStructure(document.Language),
             ShellCommandId.FileHistory => _model.Mode == 0 && _model.CurrentDocument is { IsNotice: false },
             ShellCommandId.HistoryBranches or ShellCommandId.HistoryFiles => _bottomOpen,
@@ -67,6 +68,7 @@ public sealed partial class MainWindow
             case ShellCommandId.RecentFiles: _ = OpenRecentFilesAsync(); break;
             case ShellCommandId.FindFile: _ = OpenCodeSearchAsync(true); break;
             case ShellCommandId.FindText: _ = OpenCodeSearchAsync(false); break;
+            case ShellCommandId.GoToLine: _webView?.Focus(); _ = InvokeEditorAsync("window.gitx.goToLine()"); break;
             case ShellCommandId.Structure: _ = OpenSourceSymbolsAsync(); break;
             case ShellCommandId.Notes: _ = OpenLocalNotesAsync(); break;
             case ShellCommandId.FileHistory: _ = OpenSourceHistoryAsync(_model.DocumentVersion); break;
@@ -92,7 +94,7 @@ public sealed partial class MainWindow
         var commands = ShellCommands.All.Where(c => c.Gesture(mac) is not null)
             .Select(c => c.Gesture(mac)!.Replace("Meta", "Command").Replace("D1", "1").Replace("D2", "2").Replace("D3", "3") + "  " + c.Header);
         return string.Join("\n", commands) + "\n双击 Shift  快速搜索\nShift+Esc  隐藏当前工具\nF7 / Shift+F7  下一处 / 上一处差异\nEsc  返回文件列表" +
-            (mac ? "\nCommand+Q  退出 Grove（保留退出保护）" : "\nAlt+M  主菜单\nCtrl+F（项目树）  筛选项目文件");
+            (mac ? "\nCtrl+G  跳转到行（另支持 Command+L）\nCommand+Q  退出 Grove（保留退出保护）" : "\nAlt+M  主菜单\nCtrl+F（项目树）  筛选项目文件");
     }
 
     private void InitializePlatformMenus()
@@ -220,7 +222,7 @@ public sealed partial class MainWindow
             {
                 main._queuedMenuCommands.Remove(id);
                 // A stale native menu must not act on a different repository or document.
-                var documentCommand = id is ShellCommandId.Stage or ShellCommandId.Unstage or ShellCommandId.RevealFile or ShellCommandId.Structure or ShellCommandId.FileHistory;
+                var documentCommand = id is ShellCommandId.Stage or ShellCommandId.Unstage or ShellCommandId.RevealFile or ShellCommandId.Structure or ShellCommandId.FileHistory or ShellCommandId.GoToLine;
                 var globalCommand = id is ShellCommandId.About or ShellCommandId.Updates or ShellCommandId.Shortcuts or ShellCommandId.CloseWindow or ShellCommandId.Minimize or ShellCommandId.Zoom or ShellCommandId.OpenRepository or ShellCommandId.RecentRepositories;
                 if (!CanExecute(null) || !globalCommand && root != main._model.Root || documentCommand && version != main._model.DocumentVersion) return;
                 main.RunShellCommand(id, owner);

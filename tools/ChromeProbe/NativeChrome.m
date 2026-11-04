@@ -103,22 +103,40 @@ __attribute__((visibility("default"))) int grove_invoke_menu(const char* group, 
         [menu performActionForItemAtIndex:index]; return 0;
     }
 }
-__attribute__((visibility("default"))) int grove_menu_key(void* w, const char* characters, unsigned short code) {
+// Keys are queued only to windows owned by this probe application. The
+// character/control-code distinction matches Cocoa's keyboard event contract.
+__attribute__((visibility("default"))) int grove_test_key(void* w, const char* characters, unsigned short code, unsigned int modifiers) {
     @autoreleasepool {
         NSWindow* window = (__bridge NSWindow*)w;
-        if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !characters) return -1;
+        if (![NSThread isMainThread] || ![NSApp.windows containsObject:window] || !characters || (modifiers & ~15u)) return -1;
         if (!NSApp.isActive || !window.isKeyWindow) return -3;
-        NSString* text = [NSString stringWithUTF8String:characters];
+        NSString* plain = [NSString stringWithUTF8String:characters];
+        if (!plain) return -2;
+        NSEventModifierFlags flags = 0;
+        if (modifiers & 1) flags |= NSEventModifierFlagCommand;
+        if (modifiers & 2) flags |= NSEventModifierFlagControl;
+        if (modifiers & 4) flags |= NSEventModifierFlagShift;
+        if (modifiers & 8) flags |= NSEventModifierFlagOption;
+        NSString* text = plain;
+        if ((modifiers & 2) && plain.length == 1 && [plain characterAtIndex:0] >= 'a' && [plain characterAtIndex:0] <= 'z') {
+            unichar control = [plain characterAtIndex:0] & 0x1f;
+            text = [NSString stringWithCharacters:&control length:1];
+        }
         for (int i=0; i<2; i++) {
             NSEvent* event = [NSEvent keyEventWithType:i == 0 ? NSEventTypeKeyDown : NSEventTypeKeyUp
-                location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand timestamp:NSProcessInfo.processInfo.systemUptime
-                windowNumber:window.windowNumber context:nil characters:text charactersIgnoringModifiers:text isARepeat:NO keyCode:code];
+                location:NSZeroPoint modifierFlags:flags timestamp:NSProcessInfo.processInfo.systemUptime
+                windowNumber:window.windowNumber context:nil characters:text charactersIgnoringModifiers:plain isARepeat:NO keyCode:code];
             [NSApp postEvent:event atStart:NO];
         }
-        // Actual NSApplication keyboard queue: menu routing and the focused
-        // native view see the same key-down/up sequence. No system-wide input.
         return 0;
     }
+}
+__attribute__((visibility("default"))) int grove_menu_key(void* w, const char* characters, unsigned short code) {
+    return grove_test_key(w, characters, code, 1);
+}
+__attribute__((visibility("default"))) void* grove_owned_key_window(void) {
+    if (![NSThread isMainThread] || !NSApp.isActive || ![NSApp.windows containsObject:NSApp.keyWindow]) return NULL;
+    return (__bridge void*)NSApp.keyWindow;
 }
 
 __attribute__((visibility("default"))) int grove_activate_test_window(void* w) {

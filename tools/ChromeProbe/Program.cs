@@ -24,13 +24,12 @@ internal static partial class Program
         NativeLibrary.SetDllImportResolver(typeof(Program).Assembly, (name, assembly, search) => name == "grove-chrome-probe" ? NativeLibrary.Load(library) : 0);
         var fixture = Path.Combine(Path.GetTempPath(), "grove-chrome-" + Guid.NewGuid().ToString("N"));
         var repository = Path.Combine(fixture, "演示项目-long-repository-name"); Directory.CreateDirectory(repository);
-        File.WriteAllText(Path.Combine(repository, "sample.cs"), "class Fixture { int Value => 42; }\n");
-        var init = new ProcessStartInfo("git") { WorkingDirectory = repository, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-        init.ArgumentList.Add("init"); init.ArgumentList.Add("-b"); init.ArgumentList.Add("main");
-        using (var git = Process.Start(init)!) { git.StandardOutput.ReadToEnd(); var error = git.StandardError.ReadToEnd(); git.WaitForExit(); if (git.ExitCode != 0) throw new IOException(error); }
+        _fixtureRoot = fixture; _fixtureRepository = repository;
+        _linkedRepository = Path.Combine(fixture, "linked-worktree");
+        PrepareNavigationFixture();
         Environment.SetEnvironmentVariable("GITX_DATA_DIR", Path.Combine(fixture, "profile"));
         using var stop = new CancellationTokenSource();
-        _ = Task.Run(async () => { try { await Task.Delay(TimeSpan.FromSeconds(90), stop.Token); Save(result, new { passed = false, error = "Native chrome probe timed out." }); Environment.Exit(23); } catch (OperationCanceledException) { } });
+        _ = Task.Run(async () => { try { await Task.Delay(TimeSpan.FromSeconds(180), stop.Token); Save(result, new { passed = false, error = "Native chrome probe timed out." }); Environment.Exit(23); } catch (OperationCanceledException) { } });
         try
         {
             AppBuilder.Configure<App>().UsePlatformDetect().AfterSetup(builder => Dispatcher.UIThread.Post(async () =>
@@ -80,6 +79,7 @@ internal static partial class Program
             }
         }
         await VerifyNativeMenusAsync(main, model, window);
+        await VerifyNativeNavigationAsync(main, model, window, view);
         Check(Click(window, 1) == 0, "Native minimize button could not be invoked.");
         await UntilAsync(() => main.WindowState == WindowState.Minimized);
         Samples.Add(new { phase = "native-minimize", state = main.WindowState.ToString() });
