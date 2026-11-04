@@ -68,14 +68,24 @@ internal static partial class Program
         await UntilAsync(() => model.IsWriting);
         try
         {
+            Check(ActivateTestWindow(window) == 0, "Could not activate owned window for busy menu inspection.");
+            await UntilAsync(() => main.IsActive);
             var busy = ReadMenus();
             var file = busy.EnumerateArray().Single(g => g.GetProperty("title").GetString() == "文件");
             Check(!file.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("title").GetString() == "打开本地仓库…").GetProperty("enabled").GetBoolean(), "Open repository enabled during a Git operation.");
             Check(ActivateTestWindow(window) == 0, "Could not activate owned window for Quit guard.");
             await UntilAsync(() => main.IsActive);
-            Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application."); await Task.Delay(250);
-            Check(main.IsVisible && model.IsWriting, "Native Quit bypassed the write guard.");
-            Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitKeptWindowOpen = true });
+            var quitAttempts = 0; var quitCancelled = false;
+            void ObserveClosing(object? sender, WindowClosingEventArgs args) { quitAttempts++; quitCancelled |= args.Cancel; }
+            main.Closing += ObserveClosing;
+            try
+            {
+                Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application.");
+                await UntilAsync(() => quitAttempts > 0);
+                Check(quitCancelled && main.IsVisible && model.IsWriting, "Native Quit bypassed the write guard.");
+                Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitAttempts, quitCancelled, quitKeptWindowOpen = true });
+            }
+            finally { main.Closing -= ObserveClosing; }
         }
         finally { release.TrySetResult(); await task; }
         Check(InvokeMenu("", "关于 Grove…") == 0, "Native application About command unavailable.");
