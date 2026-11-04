@@ -3,6 +3,12 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using LibGit2Sharp;
+using GitX.Core;
+
+if (Environment.GetEnvironmentVariable(GitAskPassSession.PipeVariable) is not null && args.Length > 0)
+{ Environment.ExitCode = await GitAskPassSession.RunClientAsync(args[0]); return; }
+if (args.Length == 2 && args[0] == "--askpass-probe")
+{ await AskPassProbe.RunAsync(args[1]); return; }
 
 if (args.Length != 3) throw new ArgumentException("Expected architecture, publish directory and JSON result path.");
 var expected = args[0]; var publish = Path.GetFullPath(args[1]);
