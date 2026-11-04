@@ -2,7 +2,8 @@ using GitX.Core;
 
 namespace GitX.Desktop.ViewModels;
 
-public sealed record SourceTabInfo(string Id, string Path, string? Revision, string? Label = null);
+public sealed record SourceTabInfo(string Id, string Path, string? Revision, string? Label = null, bool LocalFile = false);
+public enum SourceTabCloseScope { Current, Others, All }
 
 public sealed partial class MainViewModel
 {
@@ -25,9 +26,12 @@ public sealed partial class MainViewModel
         tab.Entry.Kind == ComparisonKind.LocalChanges ? "本地改动" : tab.Entry.Kind == ComparisonKind.Index ? "暂存" :
         tab.Entry.Kind == ComparisonKind.Worktree ? "未暂存" : tab.Entry.Kind == ComparisonKind.CommitWorktree ? "与本地比较" :
         tab.Entry.Kind == ComparisonKind.CommitParentWorktree ? "更改前与本地比较" :
-        tab.Entry.BaseCommit is { } start ? $"{start[..Math.Min(8, start.Length)]} → {tab.Entry.Commit?[..Math.Min(8, tab.Entry.Commit.Length)]}" : "差异")).ToArray();
+        tab.Entry.BaseCommit is { } start ? $"{start[..Math.Min(8, start.Length)]} → {tab.Entry.Commit?[..Math.Min(8, tab.Entry.Commit.Length)]}" : "差异",
+        LocalFile: tab.Target is null && tab.Entry.Kind == ComparisonKind.WorkingFile)).ToArray();
     public string? ActiveSourceTabId => _sourceTabVisible ? _activeSourceTab?.Id : null;
     public event Action? SourceTabsChanged;
+
+    public Func<SourceTextCloseRequest, Task<SourceTextCloseLease>>? ConfirmSourceTextClose { get; set; }
 
     private void ResetSourceTabs()
     {
@@ -71,19 +75,35 @@ public sealed partial class MainViewModel
             ActiveSourceTabId == id) return Task.CompletedTask;
         return ActivateSourceTabAsync(tab);
     }
-    public Task CloseSourceTabAsync(string id, long version)
+    public Task CloseSourceTabAsync(string id, long version) => CloseSourceTabsAsync(id, version, SourceTabCloseScope.Current);
+    public async Task CloseSourceTabsAsync(string id, long version, SourceTabCloseScope scope)
     {
-        if (_closed || version != _documentVersion) return Task.CompletedTask;
-        var index = _sourceTabs.FindIndex(tab => tab.Id == id); if (index < 0) return Task.CompletedTask;
-        var removed = _sourceTabs[index]; _sourceTabs.RemoveAt(index);
-        if (removed != _activeSourceTab || !_sourceTabVisible)
+        if (_closed || version != _documentVersion || !Enum.IsDefined(scope)) return;
+        // Require the clicked tab even for All. A stale menu cannot close tabs
+        // from another publication/repository after its original target vanished.
+        var index = _sourceTabs.FindIndex(tab => tab.Id == id); if (index < 0) return;
+        var target = _sourceTabs[index];
+        bool Remove(SourceTabState tab) => scope switch
         {
-            if (removed == _activeSourceTab) _activeSourceTab = _sourceTabs.Count > 0 ? _sourceTabs[Math.Min(index, _sourceTabs.Count - 1)] : null;
-            SourceTabsChanged?.Invoke(); return Task.CompletedTask;
+            SourceTabCloseScope.Current => tab == target,
+            SourceTabCloseScope.Others => tab != target,
+            SourceTabCloseScope.All => true,
+            _ => false
+        };
+        var epoch = _repositoryVersion; var tabs = _sourceTabs.Select(tab => tab.Id).ToArray();
+        var ids = _sourceTabs.Where(Remove).Select(tab => tab.Id).ToArray();
+        await using var lease = ConfirmSourceTextClose is { } guard ? await guard(new("tabs", ids)) : new SourceTextCloseLease(true);
+        if (!lease.Allowed || _closed || epoch != _repositoryVersion || !tabs.SequenceEqual(_sourceTabs.Select(tab => tab.Id))) return;
+        var removedActive = _activeSourceTab is { } active && Remove(active);
+        if (_sourceTabs.RemoveAll(tab => Remove(tab)) == 0) return;
+        if (!removedActive || !_sourceTabVisible)
+        {
+            if (removedActive) _activeSourceTab = _sourceTabs.Count > 0 ? _sourceTabs[Math.Min(index, _sourceTabs.Count - 1)] : null;
+            SourceTabsChanged?.Invoke(); return;
         }
-        if (_sourceTabs.Count > 0) return ActivateSourceTabAsync(_sourceTabs[Math.Min(index, _sourceTabs.Count - 1)]);
+        if (_sourceTabs.Count > 0) { await ActivateSourceTabAsync(_sourceTabs[Math.Min(index, _sourceTabs.Count - 1)]); return; }
         SuspendSourceTab(); _activeSourceTab = null; _selectedEntry = null; Changed(nameof(SelectedEntry));
-        ClearDocument("选择文件查看内容。"); return Task.CompletedTask;
+        ClearDocument("选择文件查看内容。"); return;
     }
 
     private async Task<RepositoryDocument> ReadSourceAsync(string root, NavigationEntry entry, CancellationToken token)
@@ -94,6 +114,11 @@ public sealed partial class MainViewModel
             ? await _blameReader.ReadRevisionAsync(root, target, annotate, token)
             : annotate ? await _blameReader.ReadAsync(root, entry.Path, token)
             : await _reader.DocumentAsync(new(root, entry.Path, entry.Kind), token);
+        if (target is null && annotate && entry.Kind == ComparisonKind.WorkingFile && document.SourceRevision is null && !document.IsNotice)
+        {
+            var working = await _reader.DocumentAsync(new(root, entry.Path, ComparisonKind.WorkingFile), token);
+            if (!working.IsNotice && working.Text == document.Text) document = document with { Editing = working.Editing };
+        }
         return document with { RevealLine = reveal };
     }
 

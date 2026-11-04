@@ -19,7 +19,7 @@ public sealed partial class MainWindow
     private readonly TextBlock _projectEmpty = new() { Text = "没有可显示的文件", Margin = new(12), Classes = { "muted" }, IsHitTestVisible = false };
     private readonly FileNavigation _projectNavigation = new();
     private string? _projectRoot, _projectSelected;
-    private bool _syncingProject, _projectFilterVisible;
+    private bool _syncingProject, _projectFilterVisible, _projectContextPress;
     private readonly TextBlock _projectNotice = new() { Classes = { "dialog-hint" }, TextWrapping = TextWrapping.Wrap, Margin = new(8, 0, 8, 6), IsVisible = false };
     private readonly Button _projectFilterToggle = new() { Classes = { "toolbar", "icon-button", "log-filter" }, Content = IconContent.Icon("FilterIcon") };
     private void InitializeProjectTool()
@@ -60,6 +60,7 @@ public sealed partial class MainWindow
         };
         _projectList.PointerReleased += async (_, e) =>
         {
+            if (_projectContextPress) { _projectContextPress = false; return; }
             if (e.InitialPressMouseButton != MouseButton.Left || (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<Button>().Any() == true) return;
             if ((e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault()?.DataContext is FileNavigationRow { Entry: { } entry } && entry != _model.SelectedEntry)
                 await _model.OpenEditorEntryAsync(entry);
@@ -71,6 +72,8 @@ public sealed partial class MainWindow
         };
         _projectList.AddHandler(KeyDownEvent, async (_, e) =>
         {
+            if (_projectList.SelectedItem is FileNavigationRow context && (e.Key == Key.Apps || e.Key == Key.F10 && e.KeyModifiers == KeyModifiers.Shift))
+            { e.Handled = true; ShowProjectLocationMenu(_projectList.ContainerFromIndex(_projectList.SelectedIndex) ?? _projectList, context, false); return; }
             if (NavigateListPage(_projectList, e)) return;
             if (_projectList.SelectedItem is not FileNavigationRow row) return;
             if (row.CanExpand && (e.Key is Key.Enter or Key.Space || e.Key == Key.Right && !row.IsExpanded || e.Key == Key.Left && row.IsExpanded))
@@ -80,12 +83,15 @@ public sealed partial class MainWindow
         }, RoutingStrategies.Tunnel);
         _projectList.AddHandler(PointerPressedEvent, (_, e) =>
         {
-            if (!e.GetCurrentPoint(_projectList).Properties.IsRightButtonPressed) return;
+            var point = e.GetCurrentPoint(_projectList).Properties;
+            _projectContextPress = point.IsRightButtonPressed || OperatingSystem.IsMacOS() && point.IsLeftButtonPressed && e.KeyModifiers.HasFlag(KeyModifiers.Control);
+            if (!_projectContextPress) return;
             var row = (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault();
-            if (row?.DataContext is not FileNavigationRow { Entry: { } entry } file || _model.Root is not { } root) return;
-            e.Handled = true; _projectList.SelectedItem = file; row.Focus();
-            var menu = new MenuFlyout(); var item = new MenuItem { Header = "文件历史", Icon = IconContent.Icon("HistoryIcon") };
-            item.Click += async (_, _) => { menu.Hide(); if (root == _model.Root) await OpenFileHistoryAsync(new(root, entry.Path)); }; menu.Items.Add(item); menu.ShowAt(row, true);
+            if (row?.DataContext is not FileNavigationRow target || _model.Root is null) return;
+            e.Handled = true;
+            _syncingProject = true;
+            try { _projectList.SelectedItem = target; } finally { _syncingProject = false; }
+            row.Focus(); ShowProjectLocationMenu(row, target, true);
         }, RoutingStrategies.Tunnel);
     }
     private void RefreshProjectTool(bool preserveScroll)

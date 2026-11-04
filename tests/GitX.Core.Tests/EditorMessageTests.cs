@@ -22,6 +22,20 @@ public sealed class EditorMessageTests
         Assert.Equal(1, handled); Assert.Single(errors);
     }
 
+    [Theory]
+    [InlineData("source-save", false)] [InlineData("source-edit-state", true)]
+    public async Task Text_save_messages_are_small_validated_and_publication_bound(string type, bool flags)
+    {
+        var handled = 0; var errors = new List<string>();
+        var body = JsonSerializer.Serialize(new { type, version = 7, id = "working-tab", editable = true, dirty = true });
+        await EditorMessage.DispatchAsync(body, () => Current, _ => { handled++; return Task.CompletedTask; }, errors.Add);
+        Assert.Equal(1, handled); Assert.Empty(errors);
+        await EditorMessage.DispatchAsync(body.Replace("\"version\":7", "\"version\":6"), () => Current, _ => { handled++; return Task.CompletedTask; }, errors.Add);
+        Assert.Equal(1, handled);
+        var missing = flags ? "{\"type\":\"source-edit-state\",\"version\":7,\"id\":\"tab\"}" : "{\"type\":\"source-save\",\"version\":7}";
+        await EditorMessage.DispatchAsync(missing, () => Current, _ => { handled++; return Task.CompletedTask; }, errors.Add);Assert.Single(errors);Assert.Equal(1, handled);
+    }
+
     private static readonly EditorMessageState Current = new(false, 7, 7, "repo");
 
     [Theory]
@@ -89,6 +103,10 @@ public sealed class EditorMessageTests
     [InlineData("""{"type":"blame","version":7}""")]
     [InlineData("""{"type":"source-tab","version":7,"id":"历史标签","action":"select"}""")]
     [InlineData("""{"type":"source-tab","version":7,"id":"tab","action":"close"}""")]
+    [InlineData("""{"type":"source-tab","version":7,"id":"tab","action":"close-others"}""")]
+    [InlineData("""{"type":"source-tab","version":7,"id":"tab","action":"close-all"}""")]
+    [InlineData("""{"type":"source-tab","version":7,"id":"tab","action":"reveal"}""")]
+    [InlineData("""{"type":"source-tab","version":7,"id":"tab","action":"terminal"}""")]
     [InlineData("""{"type":"blame-action","version":7,"line":3,"action":"diff"}""")]
     [InlineData("""{"type":"blame-view","version":7,"field":"date","value":true}""")]
     [InlineData("""{"type":"stage-selection","version":7,"side":1,"block":null,"startLine":1,"endLine":2}""")]
@@ -125,6 +143,8 @@ public sealed class EditorMessageTests
     [InlineData("""{"type":"include-file","version":7}""", 6, 7)]
     [InlineData("""{"type":"include-file","version":7}""", 7, 8)]
     [InlineData("""{"type":"source-tab","version":6,"action":null}""", 7, 7)]
+    [InlineData("""{"type":"source-tab","version":6,"id":"tab","action":"close-all"}""", 7, 7)]
+    [InlineData("""{"type":"source-tab","version":7,"id":"tab","action":"close-others"}""", 7, 8)]
     [InlineData("""{"type":"whitespace","version":6,"value":2}""", 7, 7)]
     [InlineData("""{"type":"comment","action":"begin","version":6}""", 7, 7)]
     [InlineData("""{"type":"comment","action":"open-source","version":6}""", 7, 7)]

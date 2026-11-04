@@ -31,6 +31,7 @@ import { BlameMenu } from './blame-menu.js';
 import { defaultBlameView, blameFields, blameFieldText } from './blame-fields.js';
 import { canReuseSourceModel } from './source-update.js';
 import { SourceTabs } from './source-tabs.js';
+import { SourceEditing, renderedModelCount } from './source-editing.js';
 import { SourceSymbols } from './source-symbols.js';
 
 iconLabel(document.getElementById('previous-change'), 'up');
@@ -91,7 +92,8 @@ installNativeBridge(window, () => {
   const version = generation;
   return error => { if (version === generation) send({ type: 'error', version, message: String(error) }); };
 });
-const sourceTabs = new SourceTabs({ getVersion: () => generation, send });
+const sourceTabs = new SourceTabs({ getVersion: () => generation, send, isReady: () => !loading,
+  beforeMenu: () => { goToLine.close(false); sourceSymbols.close(false); blameMenu.close(); more.open = false; } });
 const markdown = new MarkdownPreview({ send, getVersion: () => generation, onSource: () => { panes.forEach(pane => pane.layout()); right.focus(); } });
 const sourceSymbols = new SourceSymbols({ getState: () => ({ available: !loading && sourceMode && !plan && !!models[1],
   identity: `${generation}:${models[1]?.id}`, language: models[1]?.getLanguageId(), path: sourcePath, text: () => models[1]?.getValue() }),
@@ -104,7 +106,7 @@ const goToLine = new GoToLine({
   getState: () => ({ available: !loading && sourceMode && !plan && !!models[1] && !models[1].isDisposed(),
     version: generation, model: models[1], modelVersion: models[1]?.getVersionId(), path: sourcePath,
     lineCount: models[1]?.getLineCount(), line: right.getPosition()?.lineNumber ?? 1 }),
-  beforeOpen: () => { sourceSymbols.close(false); more.open = false; blameMenu.close(); if (markdown.active) markdown.activate(false, false); },
+  beforeOpen: () => { sourceTabs.closeMenu(); sourceSymbols.close(false); more.open = false; blameMenu.close(); if (markdown.active) markdown.activate(false, false); },
   focus: () => { activePane = 1; right.focus(); },
   reveal: async line => {
     const model = models[1], version = generation;
@@ -115,7 +117,7 @@ const goToLine = new GoToLine({
   }
 });
 const blameMenu = new BlameMenu({ getState: () => ({ blame, loading, version: generation, blameView }), send, setView: setBlameView,
-  focusEditor: () => panes[activePane].focus(), beforeOpen: () => { document.getElementById('diff-more').open = false; } });
+  focusEditor: () => panes[activePane].focus(), beforeOpen: () => { sourceTabs.closeMenu(); document.getElementById('diff-more').open = false; } });
 const diffActions = new DiffActions({ panes, send, getState: () => ({ plan, canInclude, canRevert: canRevert && !inclusionBusy, loading, busy: inclusionBusy, generation, included,
   hidden: [0, 1].map(side => folding?.regions.filter(region => folding.collapsed.has(region.id)).map(region => ({ start: folding.start(region, side), end: folding.start(region, side) + region.count - 1 })) ?? []) }),
   selectLine: (side, line) => { activePane = side; panes[side].setPosition({ lineNumber: line, column: 1 }); panes[side].focus(); } });
@@ -409,8 +411,41 @@ function sideHeader(element, side, other) {
 
 const diffViews = new Map();
 let displayedDiffKey = null;
-let displayedSource = null, displayedSourceTab = null;
+let displayedSource = null, displayedSourceTab = null, sourcePublished = null;
+const textEditing = new SourceEditing({createModel: (text, language) => monaco.editor.createModel(text,language), getVersion: () => generation, changed: updateTextEditing});
+const saveButton = document.getElementById('source-save'), saveStatus = document.getElementById('source-save-state');
+let markdownEditTimer;
+function requestTextSave() {
+  const s=textEditing.active;if(loading || !s || !s.info.canEdit || s.busy || composingSearch)return;
+  send({type:'source-save',id:s.id,version:generation});
+}
+saveButton.addEventListener('click',requestTextSave);
+function updateTextEditing() {
+  const s=textEditing.active, editable=!loading && sourceMode && !plan && textEditing.editable(s), dirty=!!s&&textEditing.dirty(s);
+  right.updateOptions({readOnly:!editable,domReadOnly:!editable,ariaLabel:editable?'工作区文本，可编辑':'文件，只读'});
+  sourceTabs.setTextStates(textEditing.metadata());
+  saveButton.hidden=!s;saveStatus.hidden=!s&&!sourcePublished?.editing?.reason;
+  saveButton.disabled=!s || !dirty || s.busy || !s.info.canEdit || !!s.readOnlyReason || loading;
+  saveButton.title=/Mac/.test(navigator.platform)?'保存文件 · ⌘S':'保存文件 · Ctrl+S';
+  saveStatus.textContent=s?(s.error || s.readOnlyReason || (s.busy?'正在保存…':s.info.fingerprint!==s.disk?'磁盘已变化 · 草稿保留':dirty?'未保存':'已保存')+` · UTF-8${s.info.bom?' BOM':''} · ${s.info.newline}`):(sourcePublished?.editing?.reason??'');
+  saveStatus.title=saveStatus.textContent;saveStatus.classList.toggle('attention',!!s&&(dirty||!!s.error||s.info.fingerprint!==s.disk));
+  if(s)send({type:'source-edit-state',id:s.id,version:generation,editable:!!s.info.canEdit&&!s.readOnlyReason,dirty});
+  if(s && textEditing.unsafe(s)) {
+    canAnnotate=false;blame=null;document.body.classList.remove('blame-mode');blameMenu.close();renderBlame();
+    if(comments.doc?.commentContext)comments.attach({...comments.doc,commentContext:null,blame:null});
+  } else if(s && sourcePublished && sourcePublished.editing?.fingerprint===s.info.fingerprint) {
+    if(comments.doc && !comments.doc.commentContext)comments.attach(sourcePublished);
+  }
+  clearTimeout(markdownEditTimer);
+  if(s&&sourcePublished?.language==='markdown')markdownEditTimer=setTimeout(()=>{
+    if(textEditing.active===s&&!loading)markdown.update({...sourcePublished,text:s.model.getValue(),isNotice:false},generation,s.id);
+  },160);
+}
+window.addEventListener('beforeunload',()=>textEditing.dispose());
 function display(doc, toolbar) {
+  sourcePublished=doc;
+  const editing=textEditing.prepare(doc,toolbar);doc=editing.doc;
+
   const reuseSource = !plan && models[1] && toolbar?.sourceMode
     && canReuseSourceModel(displayedSource, doc, displayedSourceTab, toolbar.activeSourceTabId);
   if (displayedDiffKey && plan) {
@@ -448,7 +483,7 @@ function display(doc, toolbar) {
   if (reuseSource) {
     // Blame changes the gutter, not the source model. Keep tokenization,
     // folds, selection, find state and inline note zones intact.
-    panes.forEach(pane => pane.layout()); renderBlame();
+    updateTextEditing(); panes.forEach(pane => pane.layout()); renderBlame();
     return Promise.resolve();
   }
   const expanded = savedDiff?.expanded ?? (doc.preserveView && folding ? folding.regions.filter(region => !folding.collapsed.has(region.id)) : []);
@@ -488,7 +523,7 @@ function display(doc, toolbar) {
   const modelId = ++modelSequence;
   models = plan ? [monaco.editor.createModel(plan.oldLines.join('\n'), doc.language, monaco.Uri.parse(`gitx-diff://document/${modelId}/old`)),
     monaco.editor.createModel(plan.newLines.join('\n'), doc.language, monaco.Uri.parse(`gitx-diff://document/${modelId}/new`))]
-    : [null, notice ? null : monaco.editor.createModel(doc.text, doc.language)];
+    : [null, notice ? null : editing.model ?? monaco.editor.createModel(doc.text, doc.language)];
   models.forEach(model => model?.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false } }));
   sourceSymbols.update();
   if (plan) folding = new DiffFolding({ monaco, panes, models, plan, ranges: diffFolding.ranges,
@@ -498,11 +533,13 @@ function display(doc, toolbar) {
     onError: message => send({ type: 'error', message }) });
   panes.forEach((pane, side) => {
     pane.setModel(models[side]);
+    pane.updateOptions({ readOnly: side === 0 || !textEditing.editable(), domReadOnly: side === 0 || !textEditing.editable() });
     const lines = plan ? (side === 0 ? plan.oldLines.length : plan.newLines.length) : null;
     pane.updateOptions({ lineNumbers: plan ? 'off' : 'on', folding: true,
       showFoldingControls: plan ? 'never' : 'mouseover', foldingHighlight: !plan, unfoldOnClickAfterEndOfLine: !plan });
   });
-  previous.forEach(model => model?.dispose());
+  previous.forEach(model => { if(model && !models.includes(model) && !textEditing.owns(model))model.dispose(); });
+  textEditing.disposeRetired(models);updateTextEditing();
   if (plan) {
     sideHeader('old-label', doc.diff.old, doc.diff.new); sideHeader('new-label', doc.diff.new, doc.diff.old);
     installZones(left, [], 0); installZones(right, [], 1);
@@ -543,7 +580,7 @@ function display(doc, toolbar) {
       panes[activePane].trigger('refresh', 'actions.find', null);
       if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) document.activeElement.setSelectionRange(findInput.start, findInput.end);
     }
-    comments.attach(doc);
+    comments.attach(doc);updateTextEditing();
   });
 }
 
@@ -661,6 +698,7 @@ async function load(version) {
   if (version !== generation) pendingDirection = null;
   generation = version;
   loading = true;
+  sourceTabs.closeMenu();
   markdown.setLoading(true);
   goToLine.close(false);
   sourceSymbols.invalidate(); sourceSymbols.update();
@@ -693,7 +731,7 @@ async function load(version) {
     }
     await display(payload.document, payload.toolbar);
     if (request !== loadSequence || version !== generation) return;
-    markdown.update(payload.document, version, payload.toolbar?.activeSourceTabId); markdown.setLoading(false);
+    markdown.update(textEditing.active ? {...payload.document,...textEditing.active.header,text:textEditing.active.model.getValue(),isNotice:false} : payload.document, version, payload.toolbar?.activeSourceTabId); markdown.setLoading(false);
     if (!plan && models[1] && !payload.document.preserveView && payload.document.revealLine) {
       const line = Math.max(1, Math.min(models[1].getLineCount(), payload.document.revealLine));
       const column = payload.document.revealColumn ?? 1;
@@ -708,7 +746,7 @@ async function load(version) {
       // Visible ranges omit the partially clipped bottom line.
       if (endLine) monaco.editor.colorizeModelLine(model, Math.min(model.getLineCount(), endLine + 1));
     }
-    loading = false;
+    loading = false;updateTextEditing();
     toolFeedback.end(request); updateCounter();
     sourceSymbols.update();
     scheduleConnectors();
@@ -721,7 +759,7 @@ async function load(version) {
     }
     panes.forEach(pane => pane.render(true));
     workspace.classList.remove('document-preparing'); workspace.setAttribute('aria-busy', 'false');
-    send({ type: 'loaded', version, models: monaco.editor.getModels().length, hunks: plan?.blocks.length ?? 0 });
+    send({ type: 'loaded', version, models: renderedModelCount(payload.document, models, panes), hunks: plan?.blocks.length ?? 0 });
   } catch (error) {
     if (error.name !== 'AbortError' && request === loadSequence && version === generation) {
       loading = false; pendingDirection = null;
@@ -774,7 +812,9 @@ function navigate(direction) {
   if (loading || !plan) { pendingDirection = direction; return; }
   queueNavigation(() => selectChange(changeFromCursor(direction)));
 }
-window.gitx = { load, navigate, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => sourceTabs.update(toolbar),
+window.gitx = { load, navigate, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => { sourceTabs.update(toolbar);textEditing.sync(toolbar);textEditing.disposeRetired(models);updateTextEditing(); },
+  fileSessions: () => ({sessions:textEditing.metadata(),composing:composingSearch}), fileDraft:id=>textEditing.draft(id),
+  fileSaving:draft=>textEditing.saving(draft),fileSaved:result=>textEditing.saved(result),lockFiles:(ids,value)=>textEditing.lock(ids,value),
   captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane, markdown: markdown.capture() }),
   restoreDockView: value => {
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch { return; } }
@@ -803,6 +843,10 @@ window.addEventListener('keyup', event => {
 window.addEventListener('keydown', event => {
   doubleShift.press(event.key === 'Shift', shiftAllowed(event), performance.now());
   if (event.isComposing) return;
+  if(event.key.toLowerCase()==='s' && !event.shiftKey && !event.altKey && (/Mac|iPhone|iPad/.test(navigator.platform)?event.metaKey&&!event.ctrlKey:event.ctrlKey&&!event.metaKey)
+      && !event.target.closest?.('.comment-ui textarea')) {
+    event.preventDefault();event.stopImmediatePropagation();requestTextSave();return;
+  }
   if (goToLine.handleKey(event)) return;
   if (right.hasTextFocus() && event.target.closest?.('.monaco-editor') && !event.target.closest('.comment-ui') && goToLine.handleShortcut(event, /Mac|iPhone|iPad/.test(navigator.platform))) return;
   if (markdown.active && event.key === 'Escape' && !event.shiftKey) {

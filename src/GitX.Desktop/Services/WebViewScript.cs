@@ -12,9 +12,9 @@ internal static class WebViewScript
 
     // WebView2 can return a JSON-encoded JS string; WKWebView can return the
     // string itself. Accept either representation, but only a bounded object.
-    public static string? DecodeObject(string? result)
+    public static string? DecodeObject(string? result, int maximumCharacters = 1024 * 1024)
     {
-        if (string.IsNullOrWhiteSpace(result) || result.Length > 1024 * 1024) return null;
+        if (string.IsNullOrWhiteSpace(result) || maximumCharacters < 1 || maximumCharacters > 16 * 1024 * 1024 || result.Length > maximumCharacters) return null;
         try
         {
             using var outer = JsonDocument.Parse(result, new JsonDocumentOptions { MaxDepth = 32 });

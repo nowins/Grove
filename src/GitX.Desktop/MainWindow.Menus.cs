@@ -25,6 +25,7 @@ public sealed partial class MainWindow
             ShellCommandId.Branches or ShellCommandId.Sync or ShellCommandId.Stashes => ready,
             ShellCommandId.Amend => ready && !_model.HasOperation,
             ShellCommandId.Conflicts => ready && _model.HasOperation,
+            ShellCommandId.SaveFile => ReferenceEquals(owner, this) && CanSaveText && _fileHistoryPanel?.IsKeyboardFocusWithin != true,
             ShellCommandId.Stage => _model.CanStageFile,
             ShellCommandId.Unstage => _model.CanUnstageFile,
             ShellCommandId.RestoreDiscard => _model.CanRestoreDiscard,
@@ -75,6 +76,7 @@ public sealed partial class MainWindow
             case ShellCommandId.Branches: BranchesClicked(BranchButton, new RoutedEventArgs()); break;
             case ShellCommandId.Sync: _ = OpenRemoteMenuAsync(RemoteButton); break;
             case ShellCommandId.Stashes: _ = OpenStashesAsync(); break;
+            case ShellCommandId.SaveFile: _ = SaveTextAsync(); break;
             case ShellCommandId.Stage: StageClicked(null, new RoutedEventArgs()); break;
             case ShellCommandId.Unstage: UnstageClicked(null, new RoutedEventArgs()); break;
             case ShellCommandId.RestoreDiscard: RestoreDiscardClicked(null, new RoutedEventArgs()); break;

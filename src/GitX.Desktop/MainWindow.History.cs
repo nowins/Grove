@@ -42,6 +42,7 @@ public sealed partial class MainWindow
     }
     private async Task FocusRequestedSourceAsync(long version)
     {
+        if (_model.CurrentDocument is not { IsNotice: false }) return;
         _loadedEditorVersion = version;
         if (_sourceFocusIntent is not { } intent) return;
         bool Current() => !_closed && IsActive && _model.Root == intent.Root &&

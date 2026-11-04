@@ -64,6 +64,7 @@ input[type=checkbox]:indeterminate{background:linear-gradient(#aeb5bd,#aeb5bd) c
 @media(prefers-reduced-motion:reduce){#editor-tools button,#editor-tools summary,#editor-tools select,.source-minimap canvas{transition:none}#diff-more[open] #fold-controls{animation:none}}
 .file-history-diff #editor-tab,.file-history-diff .comment-toolbar{display:none!important}
 .file-history-diff:not(.diff-mode) #editor-tools{display:none}
+#source-save-state{font-size:var(--ui-secondary-font-size);color:var(--muted);min-width:0;max-width:270px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#source-save-state.attention{color:var(--text)}.source-tab [role=tab].has-text-draft::before{content:'●';font-size:8px;color:var(--accent);padding-right:5px}@media(max-width:850px){#source-save-state{max-width:140px}}
 </style></head><body>
 <div id="editor-header">
  <div id="editor-tab"><div id="source-tabs" role="tablist" aria-label="代码标签页" hidden></div><div id="file-path"><span id="tab-caption">提交:</span><span id="file-parent"></span><span id="file-name">选择文件</span><button id="close-file" title="关闭文件" aria-label="关闭文件">×</button></div></div>
@@ -74,7 +75,7 @@ input[type=checkbox]:indeterminate{background:linear-gradient(#aeb5bd,#aeb5bd) c
   <select class="diff-only" id="whitespace-mode" aria-label="空白比较方式"><option value="0">不忽略空白</option><option value="1" selected>修剪首尾空白</option><option value="2">忽略空白</option></select>
   <select class="diff-only" id="highlight-mode" aria-label="差异高亮方式"><option value="words">按词高亮</option><option value="lines">按行高亮</option><option value="none">不高亮</option></select>
   <button class="diff-only" id="toggle-unchanged" aria-label="折叠未变化片段" title="折叠未变化片段" aria-pressed="false"></button>
-  <button id="source-symbols" hidden title="当前文件结构 · Ctrl+F12">结构</button><button id="source-history" hidden title="查看当前路径的提交历史；不跟随重命名">文件历史</button><span id="source-note-slot"></span><span id="source-revision" hidden></span>
+  <button id="source-symbols" hidden title="当前文件结构 · Ctrl+F12">结构</button><button id="source-history" hidden title="查看当前路径的提交历史；不跟随重命名">文件历史</button><button id="source-save" hidden>保存</button><span id="source-save-state" role="status" hidden></span><span id="source-note-slot"></span><span id="source-revision" hidden></span>
   <div id="status"><span id="change-count" aria-label="差异与包含数量"></span><span id="tool-feedback" role="status" aria-live="polite" hidden></span></div>
   <details id="diff-more"><summary title="更多选项" aria-label="更多选项"></summary><div id="fold-controls"><button class="diff-only" id="expand-all">展开未变化片段</button><button class="diff-only" id="collapse-all">折叠未变化片段</button><button class="diff-only" id="toggle-minimap" aria-pressed="true">显示代码缩略图</button><button id="stage-block" hidden>暂存当前块</button><button id="stage-lines" hidden>暂存选中行</button></div></details>
  </div><div id="editor-messages"></div>

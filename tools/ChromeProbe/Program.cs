@@ -81,6 +81,7 @@ internal static partial class Program
         // Run this batch's native navigation checks independently of the
         // existing menu/quit/minimize regression, preserving diagnostics for both.
         await VerifyNativeNavigationAsync(main, model, window, view);
+        await VerifyNativeTextEditingAsync(main, model, window);
         await VerifyNativeMenusAsync(main, model, window);
         Check(Click(window, 1) == 0, "Native minimize button could not be invoked.");
         await UntilAsync(() => main.WindowState == WindowState.Minimized);

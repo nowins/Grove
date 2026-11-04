@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
             list.SizeChanged += (_, _) => list.Classes.Set("compact-file-list", list.Bounds.Width < 420);
         InitializeShell();
         _blameViewReady = LoadBlameViewAsync();
+        _model.ConfirmSourceTextClose = ConfirmTextCloseAsync;
         _model.DocumentChanged += OnDocumentChanged;
         _model.SourceTabsChanged += OnSourceTabsChanged;
         _model.InclusionChanged += RefreshInclusion;
@@ -75,6 +76,7 @@ public sealed partial class MainWindow : Window
             if (_updateBusy) { e.Cancel = true; await CancelUpdateForCloseAsync(); if (!_closed) Close(); return; }
             if (!_dockCloseReady && _dock is not null)
             { e.Cancel = true; await _dock.FlushAsync(); await _recentFileWrite; _dockCloseReady = true; Close(); return; }
+            if (!_textCloseReady) { e.Cancel = true; await ConfirmTextWindowCloseAsync(); return; }
             _dock?.PrepareOwnerClose();
         };
         Closed += (_, _) =>
@@ -164,8 +166,8 @@ public sealed partial class MainWindow : Window
 
     private async Task PublishEditorDocumentAsync(long version, RepositoryDocument document, bool tabsOnly = false)
     {
-        tabsOnly &= _publishedVersion == version && _publishedDocument is { } published && published.Path == document.Path &&
-            published.Text == document.Text && published.SourceRevision == document.SourceRevision && published.IsNotice == document.IsNotice;
+        _textEditable.IntersectWith(_model.SourceTabs.Where(tab => tab.LocalFile).Select(tab => tab.Id));
+        tabsOnly &= _loadedEditorVersion == version && _publishedVersion == version && _publishedDocument == document;
         if (!tabsOnly) _blameRead?.Cancel();
         var sequence = ++_publicationSequence;
         if (_server is null) { _fallback.Text = document.Text; return; }
@@ -227,10 +229,23 @@ public sealed partial class MainWindow : Window
             case "blame": await _model.ToggleBlameAsync(); break;
             case "blame-action": await HandleBlameActionAsync(root.GetProperty("action").GetString()!, root.GetProperty("line").GetInt32(), version); break;
             case "blame-view": await HandleBlameViewAsync(root.GetProperty("field").GetString()!, root.GetProperty("value").GetBoolean(), version); break;
+            case "source-save": await SaveTextAsync(root.GetProperty("id").GetString()); break;
+            case "source-edit-state":
+                var textId = root.GetProperty("id").GetString()!;
+                if (_model.SourceTabs.Any(t => t.Id == textId && t.LocalFile))
+                { if (root.GetProperty("editable").GetBoolean()) _textEditable.Add(textId); else _textEditable.Remove(textId); }
+                break;
             case "source-tab":
                 var id = root.GetProperty("id").GetString()!;
-                if (root.GetProperty("action").GetString() == "close") await _model.CloseSourceTabAsync(id, version);
-                else await _model.SelectSourceTabAsync(id, version);
+                switch (root.GetProperty("action").GetString())
+                {
+                    case "close": await _model.CloseSourceTabAsync(id, version); break;
+                    case "close-others": await _model.CloseSourceTabsAsync(id, version, SourceTabCloseScope.Others); break;
+                    case "close-all": await _model.CloseSourceTabsAsync(id, version, SourceTabCloseScope.All); break;
+                    case "select": await _model.SelectSourceTabAsync(id, version); break;
+                    case "reveal": await OpenTabDesktopLocationAsync(id, DesktopLocationAction.Reveal); break;
+                    case "terminal": await OpenTabDesktopLocationAsync(id, DesktopLocationAction.Terminal); break;
+                }
                 break;
             case "stage-selection":
                 var selection = new StageSelection(root.GetProperty("block").ValueKind == JsonValueKind.Null ? null : root.GetProperty("block").GetInt32(),
@@ -326,6 +341,8 @@ public sealed partial class MainWindow : Window
         { e.Handled = true; _dock?.HideFocused(); FocusEditor(); return; }
         if (e.Key == Key.E && e.KeyModifiers == (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control))
         { e.Handled = true; _ = OpenRecentFilesAsync(); return; }
+        if (e.Key == Key.S && e.KeyModifiers == (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) && _webView?.IsKeyboardFocusWithin == true)
+        { e.Handled = true; _ = SaveTextAsync(); return; }
         if (_fileHistoryPanel?.HandleKey(e) == true) return;
         if (HistoryFileShortcut(e)) return;
         if (!OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Alt && e.Key == Key.M) { e.Handled = true; MainMenuClicked(MainMenuButton, new RoutedEventArgs()); }

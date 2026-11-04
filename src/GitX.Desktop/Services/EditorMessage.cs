@@ -35,10 +35,10 @@ internal sealed record EditorMessage(string Type, JsonElement Payload, long? Ver
         if (root.ValueKind != JsonValueKind.Object || !Text(root, "type")) throw new JsonException();
         var type = root.GetProperty("type").GetString()!;
         if (type is not ("ready" or "loaded" or "refresh" or "comment" or "open" or "view" or "blame" or
-            "blame-action" or "blame-view" or "source-tab" or "markdown-open" or "stage-selection" or "revert-block" or "include-line" or
+            "blame-action" or "blame-view" or "source-tab" or "source-save" or "source-edit-state" or "markdown-open" or "stage-selection" or "revert-block" or "include-line" or
             "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out" or "recent-files" or "code-search" or "source-history" or "project-reveal" or "history-back" or "error")) return null;
 
-        var needsVersion = type is "markdown-open" or "project-reveal" or "source-history" or "history-back" or "recent-files" or "code-search" or "loaded" or "blame" or "blame-action" or "blame-view" or "source-tab" or "stage-selection" or
+        var needsVersion = type is "source-save" or "source-edit-state" or "markdown-open" or "project-reveal" or "source-history" or "history-back" or "recent-files" or "code-search" or "loaded" or "blame" or "blame-action" or "blame-view" or "source-tab" or "stage-selection" or
             "revert-block" or "include-line" or "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out"
             || type == "comment" && Choice(root, "action", "begin") || type == "comment" && Choice(root, "action", "open-source");
         long? version = null;
@@ -58,7 +58,9 @@ internal sealed record EditorMessage(string Type, JsonElement Payload, long? Ver
         {
             "view" => Integer(root, "index", 0, 2),
             "code-search" => Boolean(root, "filesOnly") && (!root.TryGetProperty("quick", out _) || Boolean(root, "quick")),
-            "source-tab" => Choice(root, "action", "select", "close") && Text(root, "id"),
+            "source-save" => Text(root, "id"),
+            "source-edit-state" => Text(root, "id") && Boolean(root, "editable") && Boolean(root, "dirty"),
+            "source-tab" => Choice(root, "action", "select", "close", "close-others", "close-all", "reveal", "terminal") && Text(root, "id"),
             "markdown-open" => Text(root, "href") && root.GetProperty("href").GetString()!.Length <= 4096,
             "blame-action" => Choice(root, "action", "close", "previous", "copy", "diff", "history") && Integer(root, "line", 1),
             "blame-view" => Choice(root, "field", "revision", "date", "author", "commitNumber") && Boolean(root, "value"),

@@ -224,7 +224,7 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
     {
         (RepositoryDocument? Preview, DiffSide? Old, DiffSide? New, CommentContext? Context) snapshot;
         try { snapshot = await Task.Run(() => Capture(request, token), token).ConfigureAwait(false); }
-        catch (PreviewLimitException e) { return Notice(request, e.Message); }
+        catch (IOException e) when (e is PreviewLimitException or WorkingTextLimitException) { return Notice(request, e.Message); }
         if (snapshot.Preview is not null) return snapshot.Preview;
         var oldSide = snapshot.Old!;
         var newSide = snapshot.New!;
@@ -248,11 +248,17 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
         {
             try
             {
-                var preview = TextDocument(request, ReadWorktree(fullPath), request.Kind == ComparisonKind.Conflict ? "冲突 · 工作区（只读）" : "工作区 · 只读");
+                var editable = request.Kind == ComparisonKind.WorkingFile ? WorkingTextFiles.Capture(repo, request.Path, token) : null;
+                var preview = editable is null ? TextDocument(request, ReadWorktree(fullPath), "冲突 · 工作区（只读）")
+                    : editable.Problem is not null || editable.Text is null ? Notice(request, editable.Problem ?? "文件不是有效 UTF-8，未创建编辑基线。")
+                    : new RepositoryDocument(request.Path, editable.Text!, Language(request.Path), "工作区 · 文本",
+                        $"UTF-8 · {editable.Info.Newline} · {editable.Bytes.Length:N0} 字节");
                 if (!preview.IsNotice && request.Kind == ComparisonKind.WorkingFile)
-                    preview = preview with { CommentContext = CommentContext.Create(repo, request, revision, null, new(request.Path, "工作区", preview.Text, true)) };
+                    preview = preview with { CommentContext = CommentContext.Create(repo, request, revision, null, new(request.Path, "工作区", preview.Text, true)), Editing = editable!.Info };
                 return (preview, null, null, preview.CommentContext);
             }
+            catch (IOException e) when (request.Kind == ComparisonKind.WorkingFile && e is FileNotFoundException or DirectoryNotFoundException)
+            { return (Notice(request, "文件已不存在。已打开的未保存草稿仍保留，不会重新创建或覆盖其他文件。"), null, null, null); }
             catch (IOException e) when (request.Kind == ComparisonKind.Conflict && e is FileNotFoundException or DirectoryNotFoundException)
             { return (Notice(request, "此冲突路径在工作区不存在。请打开合并窗口，核对删除或重命名状态。"), null, null, null); }
         }

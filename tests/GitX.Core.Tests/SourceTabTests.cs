@@ -53,6 +53,104 @@ public sealed class SourceTabTests
         Assert.Equal("latest a", model.CurrentDocument!.Text);
     }
 
+    [Fact]
+    public async Task Closing_others_keeps_the_active_document_and_view_publication_without_reloading()
+    {
+        using var repo = new TestRepository();
+        foreach (var path in new[] { "a.txt", "目录/b.txt", "c.txt" }) repo.Write(path, path + "\n");
+        repo.Commit("base"); using var model = new MainViewModel(); await model.OpenAsync(repo.Root);
+        foreach (var path in new[] { "a.txt", "目录/b.txt", "c.txt" }) await model.OpenEditorEntryAsync(new(path, path, ComparisonKind.WorkingFile));
+        var active = model.ActiveSourceTabId!; var document = model.CurrentDocument; var version = model.DocumentVersion;
+        var publications = 0; var tabChanges = 0;
+        model.DocumentChanged += (_, _) => publications++; model.SourceTabsChanged += () => tabChanges++;
+        await model.CloseSourceTabsAsync(active, version, SourceTabCloseScope.Others);
+        Assert.Equal(active, Assert.Single(model.SourceTabs).Id); Assert.Same(document, model.CurrentDocument);
+        Assert.Equal(version, model.DocumentVersion); Assert.Equal(0, publications); Assert.Equal(1, tabChanges);
+        await model.CloseSourceTabsAsync(active, version, SourceTabCloseScope.Others);
+        Assert.Equal(1, tabChanges); Assert.Equal(0, publications);
+    }
+
+    [Fact]
+    public async Task Closing_others_around_a_background_tab_selects_its_exact_revision_once_and_never_writes_Git()
+    {
+        using var repo = new TestRepository(); repo.Write("same.txt", "historical\n"); repo.Write("other.txt", "other\n"); repo.Commit("old");
+        var revision = repo.Git("rev-parse", "HEAD").Trim(); repo.Write("same.txt", "current\n"); repo.Commit("current");
+        using var model = new MainViewModel(); await model.OpenAsync(repo.Root);
+        await model.OpenEditorEntryAsync(new("same.txt", "same.txt", ComparisonKind.WorkingFile)); var working = model.ActiveSourceTabId!;
+        await model.OpenRevisionSourceAsync("same.txt", revision); var historical = model.ActiveSourceTabId!;
+        await model.OpenEditorEntryAsync(new("other.txt", "other.txt", ComparisonKind.WorkingFile));
+        Assert.Equal(3, model.SourceTabs.Count); Assert.NotEqual(working, historical);
+        var before = FixtureState(); var completed = 0;
+        model.DocumentChanged += (_, document) => { if (!document.IsNotice) completed++; };
+        await model.CloseSourceTabsAsync(historical, model.DocumentVersion, SourceTabCloseScope.Others);
+        Assert.Equal(historical, Assert.Single(model.SourceTabs).Id); Assert.Equal(historical, model.ActiveSourceTabId);
+        Assert.Equal(revision, model.CurrentDocument!.SourceRevision); Assert.Equal("historical\n", model.CurrentDocument.Text);
+        Assert.Equal(1, completed); Assert.Equal(before, FixtureState());
+        string FixtureState() => repo.Git("rev-parse", "HEAD") + repo.Git("symbolic-ref", "HEAD") + repo.Git("diff", "--cached", "--raw")
+            + repo.Git("status", "--porcelain=v1", "--untracked-files=all") + repo.Git("hash-object", "same.txt", "other.txt");
+    }
+
+    [Fact]
+    public async Task Batch_closing_rejects_stale_versions_missing_targets_and_invalid_scopes_including_after_repository_switch()
+    {
+        using var first = new TestRepository(); first.Write("same.txt", "first\n"); first.Commit("first");
+        using var next = new TestRepository(); next.Write("same.txt", "next\n"); next.Commit("next");
+        using var model = new MainViewModel(); await model.OpenAsync(first.Root);
+        await model.OpenEditorEntryAsync(new("same.txt", "same.txt", ComparisonKind.WorkingFile));
+        var original = model.ActiveSourceTabId!; var version = model.DocumentVersion;
+        await model.CloseSourceTabsAsync(original, version - 1, SourceTabCloseScope.All);
+        await model.CloseSourceTabsAsync("missing", version, SourceTabCloseScope.All);
+        await model.CloseSourceTabsAsync(original, version, (SourceTabCloseScope)99);
+        Assert.Equal(original, Assert.Single(model.SourceTabs).Id);
+        await model.OpenAsync(next.Root); await model.OpenEditorEntryAsync(new("same.txt", "same.txt", ComparisonKind.WorkingFile));
+        var current = model.ActiveSourceTabId!; version = model.DocumentVersion;
+        await model.CloseSourceTabsAsync(original, version, SourceTabCloseScope.All);
+        Assert.Equal(current, Assert.Single(model.SourceTabs).Id); Assert.Equal("next\n", model.CurrentDocument!.Text);
+        await model.CloseSourceTabsAsync(current, version, SourceTabCloseScope.All);
+        Assert.Empty(model.SourceTabs); Assert.Null(model.CurrentDocument); Assert.Null(model.SelectedEntry); Assert.Null(model.ActiveSourceTabId);
+        var cleared = model.DocumentVersion;
+        await model.CloseSourceTabsAsync(current, cleared, SourceTabCloseScope.All);
+        Assert.Equal(cleared, model.DocumentVersion);
+    }
+
+    [Fact]
+    public async Task Closing_all_tabs_cancels_pending_reads_and_late_completions_cannot_reopen_a_document()
+    {
+        var reader = new PendingReader(); using var model = new MainViewModel(reader); await model.OpenAsync("repo");
+        model.SelectedEntry = model.Entries[0]; var a = model.ActiveSourceTabId!; var oldA = reader.Reads[^1];
+        model.SelectedEntry = model.Entries[1]; var oldB = reader.Reads[^1];
+        Assert.NotNull(a); Assert.Equal(2, model.SourceTabs.Count); Assert.NotNull(model.ActiveSourceTabId);
+        var beforeVersion = model.DocumentVersion;
+        await model.CloseSourceTabsAsync(a, model.DocumentVersion, SourceTabCloseScope.All); var version = model.DocumentVersion;
+        Assert.True(version > beforeVersion, $"Close All must invalidate the current read: {beforeVersion} -> {version}; tabs={model.SourceTabs.Count}, active={model.ActiveSourceTabId}");
+        oldA.SetResult(Document("a.txt", "late a")); oldB.SetResult(Document("b.txt", "late b")); await Task.Delay(30);
+        Assert.Empty(model.SourceTabs); Assert.Null(model.CurrentDocument); Assert.Null(model.ActiveSourceTabId); Assert.Equal(version, model.DocumentVersion);
+    }
+
+    [Fact]
+    public async Task Closing_others_while_loading_keeps_only_one_current_read_for_the_target()
+    {
+        var reader = new PendingReader(); using var model = new MainViewModel(reader); await model.OpenAsync("repo");
+        model.SelectedEntry = model.Entries[0]; var a = model.ActiveSourceTabId!; var oldA = reader.Reads[^1];
+        model.SelectedEntry = model.Entries[1]; var oldB = reader.Reads[^1];
+        var closing = model.CloseSourceTabsAsync(a, model.DocumentVersion, SourceTabCloseScope.Others); var currentA = reader.Reads[^1];
+        Assert.Equal(3, reader.Reads.Count);
+        oldA.SetResult(Document("a.txt", "old a")); oldB.SetResult(Document("b.txt", "late b")); currentA.SetResult(Document("a.txt", "current a")); await closing;
+        Assert.Equal(a, Assert.Single(model.SourceTabs).Id); Assert.Equal(a, model.ActiveSourceTabId); Assert.Equal("current a", model.CurrentDocument!.Text);
+    }
+
+    [Fact]
+    public async Task Closing_all_tabs_keeps_the_current_tool_mode_and_clears_only_the_editor()
+    {
+        using var repo = new TestRepository(); repo.Write("a.txt", "source\n"); repo.Commit("base");
+        using var model = new MainViewModel(); await model.OpenAsync(repo.Root);
+        await model.OpenEditorEntryAsync(new("a.txt", "a.txt", ComparisonKind.WorkingFile)); var tab = model.ActiveSourceTabId!;
+        model.SwitchView(2); var version = model.DocumentVersion; var document = model.CurrentDocument;
+        await model.CloseSourceTabsAsync(tab, version, SourceTabCloseScope.All);
+        Assert.Empty(model.SourceTabs); Assert.Equal(2, model.Mode); Assert.True(model.DocumentVersion > version); Assert.Null(model.CurrentDocument); Assert.Null(model.SelectedEntry);
+    }
+
+
     private static RepositoryDocument Document(string path, string text) => new(path, text, "plaintext", "working", "");
     private static async Task UntilAsync(Func<bool> ready) { for (var i = 0; i < 100 && !ready(); i++) await Task.Delay(20); Assert.True(ready()); }
     private sealed class PendingReader : IRepositoryReader

@@ -32,5 +32,15 @@ public sealed class WebViewScriptTests
     public void Invalid_or_non_object_snapshots_are_not_injected_as_script(string? result) => Assert.Null(WebViewScript.DecodeObject(result));
 
     [Fact]
+    public void Text_drafts_have_an_explicit_bound_for_WebKit_and_WebView2_escaped_strings()
+    {
+        var raw = JsonSerializer.Serialize(new { text = new string('中', 350000), id = "tab" });
+        Assert.Null(WebViewScript.DecodeObject(raw));
+        var direct = WebViewScript.DecodeObject(raw, 16 * 1024 * 1024);
+        Assert.NotNull(direct);Assert.Equal(direct, WebViewScript.DecodeObject(JsonSerializer.Serialize(raw), 16 * 1024 * 1024));
+        Assert.Null(WebViewScript.DecodeObject(raw, 17 * 1024 * 1024));
+    }
+
+    [Fact]
     public void Oversized_snapshots_are_rejected() => Assert.Null(WebViewScript.DecodeObject(new string('x', 1024 * 1024 + 1)));
 }

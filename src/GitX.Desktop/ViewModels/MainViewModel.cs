@@ -40,7 +40,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private string _repositoryPath = "", _filter = "", _status = "打开一个本地 Git 仓库", _error = "";
     private string _branch = "未打开仓库", _title = "Grove", _fileTitle = "选择文件", _comparison = "工作区 · 只读", _detail = "";
-    private string _repositoryDetail = "代码、本地改动和提交历史。所有文件以只读方式打开。";
+    private string _repositoryDetail = "代码、本地改动和提交历史。普通 UTF-8 工作区文件可编辑，历史与差异保持只读。";
     private int _mode;
     private bool _busy, _hasMoreHistory, _historyLoading;
     private readonly NavigationCollection _entries = [];
@@ -68,6 +68,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string>? RepositoryOpened;
     public event Action? NavigationChanged;
     public string? Root => _snapshot?.Root;
+    internal long RepositoryGeneration => _repositoryVersion;
     public IReadOnlyList<string> RepositoryPaths => _snapshot?.Files.Select(file => file.Path).ToArray() ?? [];
     public long DocumentVersion => _documentVersion;
     public RepositoryDocument? CurrentDocument => _document;
@@ -364,6 +365,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (IsWriting) { ReportError("Git 操作进行中，请完成后再切换仓库。"); return; }
         if (_closed || string.IsNullOrWhiteSpace(path)) return;
+        var beforeClose = _repositoryVersion; var beforeTabs = _sourceTabs.Select(tab => tab.Id).ToArray();
+        await using var textLease = ConfirmSourceTextClose is { } textGuard ? await textGuard(new("repository", beforeTabs)) : new SourceTextCloseLease(true);
+        if (!textLease.Allowed || _closed || beforeClose != _repositoryVersion || !beforeTabs.SequenceEqual(_sourceTabs.Select(tab => tab.Id))) return;
         ResetSourceTabs();
         SetHistoryEntries([]);
         var previousSelection = _selectedEntry;
@@ -487,7 +491,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private static bool SameDocument(RepositoryDocument? a, RepositoryDocument b) => a is not null && a.Path == b.Path && a.Text == b.Text &&
-        a.Comparison == b.Comparison && a.SourceRevision == b.SourceRevision && a.CommentContext == b.CommentContext && a.Diff?.Old == b.Diff?.Old && a.Diff?.New == b.Diff?.New && (a.Blame ?? []).SequenceEqual(b.Blame ?? []);
+        a.Comparison == b.Comparison && a.SourceRevision == b.SourceRevision && a.CommentContext == b.CommentContext && a.Editing == b.Editing && a.Diff?.Old == b.Diff?.Old && a.Diff?.New == b.Diff?.New && (a.Blame ?? []).SequenceEqual(b.Blame ?? []);
 
     public void SwitchView(int mode)
     {
@@ -619,7 +623,11 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _document = null;
         WriteStateChanged();
         FileTitle = "选择文件"; Comparison = "只读"; Detail = "";
-        DocumentChanged?.Invoke(++_documentVersion, new("", text, "plaintext", "只读", "", IsNotice: true));
+        // Invalidation is model state, independent of event subscribers. A
+        // nullable event invocation would otherwise skip its ++ argument and
+        // allow a late read to restore a tab that was already closed.
+        var version = ++_documentVersion;
+        DocumentChanged?.Invoke(version, new("", text, "plaintext", "只读", "", IsNotice: true));
     }
 
     public void ReportError(string message) { Error = message; Status = "操作未完成 · 修正问题后可重试"; }

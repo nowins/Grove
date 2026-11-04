@@ -60,7 +60,7 @@ public sealed record DocumentRequest(string Root, string Path, ComparisonKind Ki
 
 public sealed record RepositoryDocument(string Path, string Text, string Language, string Comparison,
     string Detail, bool IsDiff = false, SideBySideDiff? Diff = null, bool PreserveView = false, string? WriteToken = null, bool CanStage = false, IReadOnlyList<BlameLine>? Blame = null, bool IsNotice = false, CommentContext? CommentContext = null, bool CanInclude = false,
-    string? SourceRevision = null, int? RevealLine = null, int? RevealColumn = null, int? RevealLength = null);
+    string? SourceRevision = null, int? RevealLine = null, int? RevealColumn = null, int? RevealLength = null, WorkingTextEditInfo? Editing = null);
 
 public sealed record DiffSide(string Path, string Label, string Text, bool Exists)
 {

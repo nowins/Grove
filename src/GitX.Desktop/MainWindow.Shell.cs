@@ -113,7 +113,8 @@ public sealed partial class MainWindow
             // Missing recent paths or a mistyped destination must not clear the current editor/repository.
             var root = await RepositoryReader.ResolveWorkingDirectoryAsync(path.Trim());
             if (_closed || generation != _repositoryChoiceGeneration || !CanChangeRepository()) return;
-            SwitchView(0); await _model.OpenAsync(root);
+            var previous = _model.RepositoryGeneration; await _model.OpenAsync(root);
+            if (_model.RepositoryGeneration != previous && _model.Root == root) SwitchView(0);
         }
         catch (Exception ex) { if (!_closed && generation == _repositoryChoiceGeneration) _model.ReportError(ex.Message); }
     }

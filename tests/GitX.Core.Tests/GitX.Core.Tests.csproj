@@ -12,11 +12,13 @@
     <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryNavigation.cs" Link="HistoryNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/FileHistoryViewModel.cs" Link="FileHistoryViewModel.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryQueryInput.cs" Link="HistoryQueryInput.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/SourceTextClose.cs" Link="SourceTextClose.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/BlameNavigation.cs" Link="BlameNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/CodeNavigation.cs" Link="CodeNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/FileNavigation.cs" Link="FileNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferencePreferences.cs" Link="HistoryReferencePreferences.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferenceChoices.cs" Link="HistoryReferenceChoices.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/DesktopLocations.cs" Link="DesktopLocations.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentFileStore.cs" Link="RecentFileStore.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/ShellCommands.cs" Link="ShellCommands.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentRepositoryStore.cs" Link="RecentRepositoryStore.cs" />
