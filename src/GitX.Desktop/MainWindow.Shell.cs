@@ -214,7 +214,7 @@ public sealed partial class MainWindow
         Item(view, "Git 输出", ShowOutput, "OutputIcon");
         Item(view, "工作树", () => _ = OpenWorktreesAsync(), "BranchIcon");
         Item(view, "定位当前文件", RevealProjectFile, "RevealIcon", shortcut: "Ctrl+Shift+E");
-        Item(view, "筛选项目文件", ToggleProjectFilter, "FilterIcon", shortcut: "Ctrl+F（项目树）");
+        Item(view, "筛选项目文件（项目树）", ToggleProjectFilter, "FilterIcon", shortcut: "Ctrl+F");
         Item(view, "恢复默认布局", () => { if (_dock is not null) _ = _dock.ResetAsync(); }, "PanelIcon", shortcut: "Shift+F12");
         view.Items.Add(new Separator()); Item(view, "刷新", () => _ = RefreshCurrentAsync(), "RefreshIcon", shortcut: "F5");
         if (_bottomOpen)

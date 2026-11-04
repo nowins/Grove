@@ -5,25 +5,27 @@
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32" WindowDecorationsTheme="{StaticResource GitXWindowChrome}"
         WindowStartupLocation="CenterScreen">
   <Window.Styles><Style Selector="Border.main-toolbar Button"><Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="User" /></Style><Style Selector="ListBox#FileList TextBlock.group"><Setter Property="FontSize" Value="{DynamicResource UiFontSize}" /></Style></Window.Styles>
-  <Grid RowDefinitions="36,Auto,Auto,*,24">
-    <Border Grid.Row="0" Background="{StaticResource TitleBrush}" IsHitTestVisible="False" />
-    <Border Classes="main-toolbar" chrome:WindowDecorationProperties.ElementRole="TitleBar" Background="{StaticResource TitleBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4" Margin="42,0,140,0">
-      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+  <Grid x:Name="MainLayout" RowDefinitions="32,Auto,Auto,*,24">
+    <Border Grid.Row="0" Background="{StaticResource TitleBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" IsHitTestVisible="False" />
+    <Border x:Name="MainToolbar" Classes="main-toolbar" chrome:WindowDecorationProperties.ElementRole="TitleBar" Background="Transparent" Padding="0,2" Margin="42,0,140,0">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,*,Auto" HorizontalAlignment="Left">
         <Button Classes="toolbar icon-button" x:Name="MainMenuButton" Click="MainMenuClicked" ToolTip.Tip="主菜单 · Alt+M" automation:AutomationProperties.Name="主菜单" Margin="0,0,6,0"><Path Classes="icon" Data="{StaticResource MenuIcon}" /></Button>
-        <Button Classes="toolbar" x:Name="RepositoryButton" Grid.Column="1" Click="RepositoriesClicked" IsEnabled="{Binding CanInteract}" MaxWidth="200" ToolTip.Tip="{Binding RepositoryPath}" automation:AutomationProperties.Name="项目选择器">
+        <Button Classes="toolbar" x:Name="RepositoryButton" Grid.Column="1" Click="RepositoriesClicked" IsEnabled="{Binding CanInteract}" HorizontalAlignment="Left" ToolTip.Tip="{Binding RepositoryPath}" automation:AutomationProperties.Name="项目选择器">
           <Grid ColumnDefinitions="Auto,*,Auto"><Path Classes="icon" Data="{StaticResource FolderIcon}" /><TextBlock Grid.Column="1" Text="{Binding RepositoryName}" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" /><Path Grid.Column="2" Classes="icon" Data="{StaticResource ChevronDownIcon}" /></Grid>
         </Button>
         <Button Classes="toolbar" Grid.Column="2" x:Name="BranchButton" Click="BranchesClicked" IsEnabled="{Binding CanInteract}" Margin="8,0" MaxWidth="220" ToolTip.Tip="{Binding BranchContext}" automation:AutomationProperties.Name="分支" automation:AutomationProperties.HelpText="{Binding BranchContext}">
           <Grid ColumnDefinitions="Auto,*,Auto"><Path Classes="icon" Data="{StaticResource BranchIcon}" /><TextBlock Grid.Column="1" Text="{Binding Branch}" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" /><Path Grid.Column="2" Classes="icon" Data="{StaticResource ChevronDownIcon}" /></Grid>
         </Button>
-        <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="8,0">
+        </Grid>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="8,0">
           <Button Classes="toolbar" x:Name="GitTaskButton" IsVisible="False" Click="GitTaskClicked" ToolTip.Tip="在主界面查看任务、耗时和输出；隐藏面板不停止写入" automation:AutomationProperties.Name="Git 任务"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource OutputIcon}" /><TextBlock x:Name="GitTaskLabel" Text="Git 任务" MaxWidth="200" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /></StackPanel></Button>
           <Button x:Name="RemoteButton" Classes="toolbar icon-button" Click="RemoteToolbarClicked" IsEnabled="{Binding CanInteract}" ToolTip.Tip="同步 · Fetch / Pull / Push" automation:AutomationProperties.Name="同步"><Path Classes="icon" Data="{StaticResource RemoteIcon}" /></Button>
           <Button Classes="toolbar icon-button" Click="StashClicked" IsEnabled="{Binding CanInteract}" ToolTip.Tip="Stash · 保存或恢复本地改动" automation:AutomationProperties.Name="Stash"><Path Classes="icon" Data="{StaticResource StashIcon}" /></Button>
         </StackPanel>
-        <Button x:Name="EditorFocusButton" Classes="toolbar icon-button" Grid.Column="4" Click="ToggleEditorFocusClicked" ToolTip.Tip="聚焦代码 · 临时收起停靠工具窗口" automation:AutomationProperties.Name="聚焦代码"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
-        <Button x:Name="WorkspaceRefreshButton" Classes="toolbar icon-button" Grid.Column="5" Click="RefreshClicked" ToolTip.Placement="BottomEdgeAlignedRight" ToolTip.Tip="重新读取仓库 · F5" automation:AutomationProperties.Name="刷新"><Path Classes="icon" Data="{StaticResource RefreshIcon}" /></Button>
-        <Button Classes="toolbar icon-button" Grid.Column="6" Click="InfoClicked" IsVisible="False" Margin="6,0,0,0" ToolTip.Placement="BottomEdgeAlignedRight" ToolTip.Tip="显示或收起提交文件与详情" automation:AutomationProperties.Name="提交文件与详情"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
+        <Button x:Name="EditorFocusButton" Classes="toolbar icon-button" Grid.Column="2" Click="ToggleEditorFocusClicked" ToolTip.Tip="聚焦代码 · 临时收起停靠工具窗口" automation:AutomationProperties.Name="聚焦代码"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
+        <Button x:Name="WorkspaceRefreshButton" Classes="toolbar icon-button" Grid.Column="3" Click="RefreshClicked" ToolTip.Placement="BottomEdgeAlignedRight" ToolTip.Tip="重新读取仓库 · F5" automation:AutomationProperties.Name="刷新"><Path Classes="icon" Data="{StaticResource RefreshIcon}" /></Button>
+        <Button Classes="toolbar icon-button" Grid.Column="4" Click="InfoClicked" IsVisible="False" Margin="6,0,0,0" ToolTip.Placement="BottomEdgeAlignedRight" ToolTip.Tip="显示或收起提交文件与详情" automation:AutomationProperties.Name="提交文件与详情"><Path Classes="icon" Data="{StaticResource PanelIcon}" /></Button>
       </Grid>
     </Border>
     <Border Grid.Row="1" IsVisible="{Binding HasOperation}" Background="{StaticResource OperationBrush}" Padding="10,5">

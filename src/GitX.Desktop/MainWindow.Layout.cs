@@ -118,7 +118,11 @@ public sealed partial class MainWindow
         if (tool is < 0 or > 3) return;
         _dock?.Show((ToolId)tool, toggle, focus); UpdateNavigationLayout(); UpdateEditorFocusButton();
     }
-    private void FocusEditor() { Activate(); FocusManager?.Focus(null); _webView?.Focus(); _ = InvokeEditorAsync("window.gitx.focus()"); }
+    private void FocusEditor()
+    {
+        if (!WindowsWindowCommands.CanFocus(this)) return;
+        Activate(); FocusManager?.Focus(null); _webView?.Focus(); _ = InvokeEditorAsync("window.gitx.focus()");
+    }
     private void ToggleEditorFocusClicked(object? sender, RoutedEventArgs e)
     { _dock?.ToggleEditorFocus(); UpdateEditorFocusButton(); FocusEditor(); }
     private void UpdateEditorFocusButton()
