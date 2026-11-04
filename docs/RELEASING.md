@@ -1,8 +1,8 @@
 # Release 分发
 
-## 0.1.0 Preview 4
+## 0.1.0 Preview 5
 
-发布目标为 `v0.1.0-preview.4`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1`、`v0.1.0-preview.2` 和 `v0.1.0-preview.3` 保留，不覆盖其标签或资产。
+发布目标为 `v0.1.0-preview.5`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1`、`v0.1.0-preview.2` 、`v0.1.0-preview.3` 和 `v0.1.0-preview.4` 保留，不覆盖其标签或资产。
 
 | 平台 | 分发内容 | 自动验证 |
 | --- | --- | --- |
