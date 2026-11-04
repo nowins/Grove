@@ -78,4 +78,24 @@ public sealed class WorkingTextFileTests
         Assert.Equal(doc.Editing,await w.SaveAsync(repo.Root,"text.txt",doc.Editing!.Fingerprint,"old\n"));Assert.Equal(stamp,File.GetLastWriteTimeUtc(full));
         foreach(var value in new[]{"bad\0", "bad\r", new string('\ud800',3),new string('x',20001)})await Assert.ThrowsAnyAsync<IOException>(()=>w.SaveAsync(repo.Root,"text.txt",doc.Editing.Fingerprint,value));Assert.Equal("old\n",File.ReadAllText(full));
     }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Branch_or_HEAD_change_after_install_cannot_report_a_successful_save(bool changeRevision)
+    {
+        using var repo=new TestRepository();repo.Write("text.txt","old");repo.Commit("base");
+        var first=repo.Git("rev-parse","HEAD").Trim();repo.Write("other.txt","unrelated");repo.Commit("next");
+        repo.Git("branch","save-race");var doc=await Read(repo);
+        var writer=new WorkingTextWriter(null,()=>
+        {
+            if(changeRevision)repo.Git("update-ref","HEAD",first);
+            else repo.Git("symbolic-ref","HEAD","refs/heads/save-race");
+            return Task.CompletedTask;
+        });
+        var error=await Assert.ThrowsAnyAsync<IOException>(()=>writer.SaveAsync(repo.Root,"text.txt",doc.Editing!.Fingerprint,"draft"));
+        Assert.Contains("HEAD",error.Message);
+        var recovery=Path.Combine(repo.Root,".git","grove-text-recovery");
+        Assert.Contains(Directory.GetFiles(recovery,"original",SearchOption.AllDirectories),p=>File.ReadAllText(p)=="old");
+        Assert.Contains(Directory.GetFiles(recovery,"draft",SearchOption.AllDirectories),p=>File.ReadAllText(p)=="draft");
+    }
+
 }

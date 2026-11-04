@@ -131,6 +131,9 @@ public sealed class WorkingTextWriter
                 throw new IOException("检测到原子替换期间的外部修改，正在保留冲突副本。");
             var saved = ReadCurrent();
             if (!saved.Bytes.AsSpan().SequenceEqual(bytes)) throw new IOException("保存后文件又被外部程序修改，未将草稿标记为已保存。");
+            using (var verified = new Repository(root))
+                if (WorkingTextFiles.Head(verified) != originalHead)
+                    throw new IOException("保存期间分支或 HEAD 发生变化，未确认保存成功；请核对工作区和恢复副本。");
             File.Delete(backup); return saved.Info;
         }
         catch (Exception error)
