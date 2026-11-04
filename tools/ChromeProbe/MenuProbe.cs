@@ -94,6 +94,17 @@ internal static partial class Program
             main.AddHandler(InputElement.KeyDownEvent, ObserveKey, RoutingStrategies.Tunnel, handledEventsToo: true);
             try
             {
+                // Check the native menu action and keyboard dispatch separately.
+                // Both must reach the same guard exactly once.
+                Check(InvokeMenu("", quitItem.Header!) == 0, "Native Quit action unavailable.");
+                await UntilAsync(() => quitAttempts > 0);
+                Check(quitAttempts == 1 && quitCancelled && main.IsVisible && model.IsWriting, "Native Quit action bypassed or duplicated the write guard.");
+                Samples.Add(new { phase = "native-quit-menu-guard", quitAttempts, quitCancelled, quitMenuClicks, shutdownRequests = shutdownRequests.ToArray() });
+                quitAttempts = 0; quitCancelled = false; quitMenuClicks = 0; shutdownRequests.Clear(); quitKeys.Clear();
+                Check(ActivateTestWindow(window) == 0, "Could not reactivate owned window after Quit action.");
+                await UntilAsync(() => main.IsActive);
+                web?.Focus(); if (web is not null) await web.InvokeScript("window.groveNative.command(() => window.gitx.focus())");
+                await Task.Delay(150);
                 Samples.Add(new { phase = "before-cocoa-command-q", focus = ReadFocus(window), quitItem.Header, quitItem.IsEnabled,
                     mainOwner = main.Owner?.GetType().Name, shutdownMode = lifetime.ShutdownMode.ToString(), windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.GetType().Name }).ToArray(), menu = ReadMenus() });
                 Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application.");
@@ -115,7 +126,8 @@ internal static partial class Program
                     catch (Exception diagnosticError) { Samples.Add(new { phase = "quit-action-diagnostic-error", error = diagnosticError.ToString() }); }
                     throw;
                 }
-                Check(quitCancelled && main.IsVisible && model.IsWriting, "Native Quit bypassed the write guard.");
+                await Task.Delay(150);
+                Check(quitAttempts == 1 && shutdownRequests.Count == 1 && quitCancelled && main.IsVisible && model.IsWriting, "Command+Q bypassed or duplicated the write guard.");
                 Samples.Add(new { phase = "native-command-state-and-quit-guard", busyMenu = busy, quitAttempts, quitCancelled, quitMenuClicks,
                     shutdownRequests = shutdownRequests.ToArray(), quitKeys = quitKeys.ToArray(), quitKeptWindowOpen = true });
             }

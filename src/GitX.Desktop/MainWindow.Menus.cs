@@ -12,6 +12,7 @@ namespace GitX.Desktop;
 public sealed partial class MainWindow
 {
     private readonly HashSet<ShellCommandId> _queuedMenuCommands = [];
+    private bool _applicationQuitQueued;
 
     private bool CanRunShellCommand(ShellCommandId id, Window owner)
     {
@@ -135,6 +136,8 @@ public sealed partial class MainWindow
 
     private void AttachNativeWindowMenu(Window owner)
     {
+        owner.AddHandler(KeyDownEvent, RouteMacApplicationQuit, RoutingStrategies.Bubble);
+        owner.Closed += (_, _) => owner.RemoveHandler(KeyDownEvent, RouteMacApplicationQuit);
         var root = new NativeMenu();
         foreach (var group in ShellCommands.WindowMenu(true).GroupBy(c => c.Group))
         {
@@ -151,6 +154,23 @@ public sealed partial class MainWindow
             root.Items.Add(new NativeMenuItem(group.Key) { Menu = submenu });
         }
         NativeMenu.SetMenu(owner, root);
+    }
+
+    private void RouteMacApplicationQuit(object? sender, KeyEventArgs e)
+    {
+        // AppKit menu equivalents get the first opportunity. An embedded native
+        // view can instead forward an unhandled Meta+Q into Avalonia; use the
+        // same guarded application action when that happens. Do not force exit.
+        if (!OperatingSystem.IsMacOS() || e.Handled || e.Key != Key.Q || e.KeyModifiers != KeyModifiers.Meta || _closed ||
+            Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lifetime) return;
+        e.Handled = true;
+        if (_applicationQuitQueued) return;
+        _applicationQuitQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _applicationQuitQueued = false;
+            if (!_closed) lifetime.TryShutdown();
+        }, DispatcherPriority.Background);
     }
 
     private NativeMenuItem NativeCommand(ShellCommandDefinition definition, Window owner)
