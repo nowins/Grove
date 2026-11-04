@@ -233,7 +233,7 @@ public sealed partial class MainWindow : Window
             case "source-edit-state":
                 var textId = root.GetProperty("id").GetString()!;
                 if (_model.SourceTabs.Any(t => t.Id == textId && t.LocalFile))
-                { if (root.GetProperty("editable").GetBoolean()) _textEditable.Add(textId); else _textEditable.Remove(textId); }
+                { if (root.GetProperty("editable").GetBoolean()) _textEditable.Add(textId); else _textEditable.Remove(textId); RefreshSaveMenuState(); }
                 break;
             case "source-tab":
                 var id = root.GetProperty("id").GetString()!;

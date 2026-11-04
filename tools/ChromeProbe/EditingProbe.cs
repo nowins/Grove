@@ -41,7 +41,15 @@ internal static partial class Program
             await UntilAsync(async()=>TextDirty(await TextState(web,id),id));
             var draft=(await TextState(web,id)).GetProperty("draft").GetProperty("text").GetString()!;
             Check(TestKey(window,"s",1,1)==0,"Cannot queue native Command+S.");
-            await UntilAsync(()=>File.ReadAllText(path)==draft);
+            try { await UntilAsync(()=>File.ReadAllText(path)==draft); }
+            catch
+            {
+                Samples.Add(new{phase="native-text-save-failure",model.Error,model.Root,model.DocumentVersion,
+                    hostLoaded=Private<long>(main,"_loadedEditorVersion"),sessions=await TextState(web,id),nativeMenu=ReadMenus(),
+                    expectedCharacters=draft.Length,diskCharacters=File.ReadAllText(path).Length,
+                    editable=Private<HashSet<string>>(main,"_textEditable").Contains(id),saving=Private<HashSet<string>>(main,"_textSaving").Contains(id),focus=ReadFocus(window)});
+                throw;
+            }
             await UntilAsync(async()=>!TextDirty(await TextState(web,id),id));await NavigationReady(main,model);
             Samples.Add(new{phase="native-text-save",actualCocoaInput=true,commandS=true,utf8BytesMatched=File.ReadAllBytes(path).SequenceEqual(new UTF8Encoding(false,true).GetBytes(draft)),physicalInputTested=false});
             await FocusSource(main,web,window);Check(TestKey(window,"y",16,0)==0,"Cannot queue second native source input.");

@@ -210,6 +210,16 @@ public sealed partial class MainWindow
         return item;
     }
 
+    private void RefreshSaveMenuState()
+    {
+        // Editor session events do not raise a view-model property change.
+        // Push enablement to AppKit too, before its key-equivalent lookup.
+        foreach (var command in NativeMenu.GetMenu(this)?.Items.OfType<NativeMenuItem>()
+            .SelectMany(group => group.Menu?.Items.OfType<NativeMenuItem>() ?? [])
+            .Select(item => item.Command).OfType<ShellMenuCommand>() ?? [])
+            if (command.Id == ShellCommandId.SaveFile) command.Refresh();
+    }
+
     private sealed class ShellMenuCommand(MainWindow main, Window owner, ShellCommandId id) : ICommand
     {
         public ShellCommandId Id => id;
@@ -224,7 +234,7 @@ public sealed partial class MainWindow
             {
                 main._queuedMenuCommands.Remove(id);
                 // A stale native menu must not act on a different repository or document.
-                var documentCommand = id is ShellCommandId.Stage or ShellCommandId.Unstage or ShellCommandId.RevealFile or ShellCommandId.Structure or ShellCommandId.FileHistory or ShellCommandId.GoToLine;
+                var documentCommand = id is ShellCommandId.SaveFile or ShellCommandId.Stage or ShellCommandId.Unstage or ShellCommandId.RevealFile or ShellCommandId.Structure or ShellCommandId.FileHistory or ShellCommandId.GoToLine;
                 var globalCommand = id is ShellCommandId.About or ShellCommandId.Updates or ShellCommandId.Shortcuts or ShellCommandId.CloseWindow or ShellCommandId.Minimize or ShellCommandId.Zoom or ShellCommandId.OpenRepository or ShellCommandId.RecentRepositories;
                 if (!CanExecute(null) || !globalCommand && root != main._model.Root || documentCommand && version != main._model.DocumentVersion) return;
                 main.RunShellCommand(id, owner);

@@ -27,7 +27,7 @@ public sealed partial class MainWindow
         id??=_model.ActiveSourceTabId;var root=_model.Root;var epoch=_model.RepositoryGeneration;
         if(id is null || root is null || _closed || _textSaving.Contains(id) || _model.IsWriting) return false;
         if(!_model.SourceTabs.Any(t=>t.Id==id&&t.LocalFile))return false;
-        _textSaving.Add(id);TextDraft? draft=null;
+        _textSaving.Add(id);RefreshSaveMenuState();TextDraft? draft=null;
         try
         {
             var state=await ReadTextQueryAsync<TextSessions>("window.gitx.fileSessions()");
@@ -51,7 +51,7 @@ public sealed partial class MainWindow
             }
             return false;
         }
-        finally{_textSaving.Remove(id);}
+        finally{_textSaving.Remove(id);RefreshSaveMenuState();}
     }
     private async Task<SourceTextCloseLease> ConfirmTextCloseAsync(SourceTextCloseRequest request)
     {
