@@ -95,14 +95,14 @@ internal static partial class Program
             try
             {
                 Samples.Add(new { phase = "before-cocoa-command-q", focus = ReadFocus(window), quitItem.Header, quitItem.IsEnabled,
-                    mainOwner = main.Owner?.Title, shutdownMode = lifetime.ShutdownMode.ToString(), windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.Title }).ToArray(), menu = ReadMenus() });
+                    mainOwner = main.Owner?.GetType().Name, shutdownMode = lifetime.ShutdownMode.ToString(), windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.GetType().Name }).ToArray(), menu = ReadMenus() });
                 Check(MenuKey(window, "q", 12) == 0, "Could not queue Command+Q in the owned application.");
                 try { await UntilAsync(() => quitAttempts > 0); }
                 catch
                 {
                     Samples.Add(new { phase = "failed-cocoa-command-q", quitAttempts, quitCancelled, quitMenuClicks, shutdownRequests = shutdownRequests.ToArray(),
-                        quitKeys = quitKeys.ToArray(), allMenuClicks = allMenuClicks.ToArray(), focus = ReadFocus(window), mainOwner = main.Owner?.Title,
-                        writing = model.IsWriting, windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.Title }).ToArray(), menu = ReadMenus() });
+                        quitKeys = quitKeys.ToArray(), allMenuClicks = allMenuClicks.ToArray(), focus = ReadFocus(window), mainOwner = main.Owner?.GetType().Name,
+                        writing = model.IsWriting, windows = lifetime.Windows.Select(w => new { w.Title, w.IsActive, w.IsVisible, owner = w.Owner?.GetType().Name }).ToArray(), menu = ReadMenus() });
                     // Diagnose the native Quit action separately; it is never a
                     // substitute for the required Command+Q keyboard assertion.
                     try
