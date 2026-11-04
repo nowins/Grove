@@ -1,8 +1,8 @@
 # Release 分发
 
-## 0.1.0 Preview 3
+## 0.1.0 Preview 4
 
-发布目标为 `v0.1.0-preview.3`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1` 和 `v0.1.0-preview.2` 保留，不覆盖其标签或资产。
+发布目标为 `v0.1.0-preview.4`，仅使用同一准确提交、四平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1`、`v0.1.0-preview.2` 和 `v0.1.0-preview.3` 保留，不覆盖其标签或资产。
 
 | 平台 | 分发内容 | 自动验证 |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Windows 安装程序外壳是 NSIS x86 Unicode，可在受支持的原生 x64 / 
 
 macOS 包标识为 `io.github.nowins.grove`，CFBundleExecutable 为 Grove，内容位于 `Contents/MacOS`，图标位于 `Contents/Resources`。DMG 提供 Applications 入口。Developer ID 证书和公证凭据尚未配置，只有 ad-hoc 完整性签名；Gatekeeper 可能拒绝来自网络的应用。不要把签名完整性检查等同于 Apple 信任、公证或 GUI 验收，也不要为运行关闭系统安全保护。
 
-外部依赖仍为 Git，Windows 另需 WebView2 Runtime；安装包不静默安装这些依赖。macOS Finder 的 PATH 可能与终端不同。未提供自动更新、受信任发行证书签名或四平台 GUI 验收。
+外部依赖仍为 Git，Windows 另需 WebView2 Runtime；安装包不静默安装这些依赖。macOS Finder 的 PATH 可能与终端不同。Preview 4 提供匿名更新检查与可取消后台下载，默认关闭自动检查和后台下载，安装始终需要确认；macOS 确认后只打开 DMG，由用户自行替换。仍未提供受信任发行证书签名或完整四平台人工 GUI 验收。
 
 ## 构建与来源
 

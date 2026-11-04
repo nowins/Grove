@@ -13,14 +13,14 @@
 
 ## 下载与安装
 
-从 [Grove 0.1.0 Preview 3](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.3) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
+从 [Grove 0.1.0 Preview 4](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.4) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
 
 | 平台 | 推荐下载 |
 | --- | --- |
-| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-win-x64-setup.exe) |
-| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-win-arm64-setup.exe) |
-| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-osx-arm64.dmg) |
-| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.3/Grove-0.1.0-preview.3-osx-x64.dmg) |
+| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.4/Grove-0.1.0-preview.4-win-x64-setup.exe) |
+| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.4/Grove-0.1.0-preview.4-win-arm64-setup.exe) |
+| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.4/Grove-0.1.0-preview.4-osx-arm64.dmg) |
+| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.4/Grove-0.1.0-preview.4-osx-x64.dmg) |
 
 Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。公开 Release 可直接下载，无需 GitHub 登录；Release 包不受 Actions 的 14 天产物保留期限制。
 
@@ -68,6 +68,6 @@ pwsh ./tools/ci.ps1
 
 Grove 自身代码采用 [MIT](LICENSE)。第三方依赖、字体及语法资源继续保留各自许可证；应用包保留相应许可与通知文件。
 
-## main 中的在线更新（尚未发布）
+## 在线更新
 
-“帮助 → 检查更新”使用公开 GitHub Releases，无需登录；支持可取消的后台下载和确认后交给系统安装。此功能尚未进入现有安装包，详见 [在线更新说明](docs/UPDATES.md)。
+“帮助 → 检查更新”使用公开 GitHub Releases，无需登录；支持可取消的后台下载和确认后交给系统安装。从 Preview 4 起提供。Preview 3 及更早版本需先手动安装 Preview 4；默认关闭自动检查和后台下载，可在更新工具页启用。详见 [在线更新说明](docs/UPDATES.md)。

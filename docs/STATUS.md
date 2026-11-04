@@ -92,3 +92,9 @@ SourceLanguage 已改为源生成 JSON；独立 Windows x64 AOT 探针恢复 Typ
 Windows 本地整合回归 Core 611/611、Editor 83/83、锁定依赖恢复和零警告 Release 构建通过。原生 Git loopback 凭据交互通过，测试使用临时仓库与隔离配置。四个平台的组合构建、原生 askpass、两种 Mac 架构的 AppKit 标题栏探针及打包检查，以对应 main 的 [CI 运行](https://github.com/nowins/Grove/actions/workflows/ci.yml)结果为准；独立分支曾通过的结果不能代替整合后的验证。
 
 Windows 消息级回归和 Mac 程序化原生事件不代表真实任务栏点击、物理键盘、Retina/多屏或完整人工 GUI 验收。在线更新安装仍需确认，macOS 只打开 DMG 供用户自行替换；发布签名与公证的限制不变。
+
+## Preview 4：在线更新与后续修复
+
+此版本包含 main `8bd4558` 中已整合的在线更新、工作树删除、短 Unix askpass 端点、macOS 标题栏/应用名称、Windows 系统最小化/恢复及注解菜单精简。版本标识为 0.1.0-preview.4，macOS bundle 构建号为 4；Preview 3 标签与资产保持不变。Cmd+Q 间歇性反馈的未验证候选未纳入本版本。
+
+发布包必须来自 Preview 4 精确提交的四平台 CI，并核对 package metadata、内部应用版本及 SHA-256。详细构建提交、原生探针与验收边界记录于 Release 的 BUILD-INFO.json。未签名/未公证、真实任务栏点击、物理键盘、Retina/多屏和 Mac 更新安装界面的限制继续保留。
