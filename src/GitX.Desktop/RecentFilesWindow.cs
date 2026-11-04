@@ -21,7 +21,9 @@ internal sealed class RecentFilesWindow : Window
     private readonly ListBox _list = new() { Background = Brushes.Transparent, BorderThickness = new(0), AutoScrollToSelectedItem = true };
     private readonly TextBlock _status = new() { Classes = { "muted" }, TextWrapping = TextWrapping.Wrap };
     private IReadOnlyList<RecentFile> _files = [];
-    private bool _opening, _shown, _closing;
+    private bool _opening, _shown, _closing, _dismissedOutside;
+    public bool IsDismissed => _closing;
+    public bool RestoreFocusOnClose => !_dismissedOutside;
     public bool OpenedFile { get; private set; }
 
     public RecentFilesWindow(Func<RecentFile, Task<string?>> open, Func<RecentFile, Task> forget)
@@ -91,7 +93,7 @@ internal sealed class RecentFilesWindow : Window
             // the native proxy. Check visibility on the next dispatch turn and
             // never reenter Close while an existing close is in progress.
             if (!_shown || _opening || _closing) return;
-            Dispatcher.UIThread.Post(() => { if (!_closing && !_opening && !IsActive && IsVisible) Dismiss(); }, DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(() => { if (!_closing && !_opening && !IsActive && IsVisible) { _dismissedOutside = true; Dismiss(); } }, DispatcherPriority.Background);
         };
     }
     private void Dismiss()
