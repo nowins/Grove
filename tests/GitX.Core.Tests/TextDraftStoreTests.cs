@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Runtime.Versioning;
 using GitX.Core;
 using Xunit;
 
@@ -77,7 +80,8 @@ public sealed class TextDraftStoreTests : IDisposable
     [Fact] public async Task Corrupt_record_does_not_hide_valid_drafts_and_orphan_pending_is_not_recovered()
     {
         using var repo = new TestRepository(); var info = await Baseline(repo); var store = Store(); store.Put(repo.Root, "text.txt", info, "good", null);
-        File.WriteAllText(Path.Combine(directory, "bad.json"), "{broken"); File.WriteAllText(Path.Combine(directory, "orphan.pending"), "partial");
+        using (var bad = CreatePrivateFixture(Path.Combine(directory, "bad.json"))) bad.Write("{broken"u8);
+        using (var pending = CreatePrivateFixture(Path.Combine(directory, "orphan.pending"))) pending.Write("partial"u8);
         var listing = store.List(repo.Root); Assert.Single(listing.Drafts); Assert.Equal(1, listing.Unreadable);
         store.Clear(); Assert.Empty(store.List(repo.Root).Drafts); Assert.False(File.Exists(Path.Combine(directory, "orphan.pending"))); Assert.True(store.Enabled);
     }
@@ -107,7 +111,7 @@ public sealed class TextDraftStoreTests : IDisposable
     [Fact] public async Task Interrupted_pending_files_count_against_total_storage_budget()
     {
         using var repo = new TestRepository(); var info = await Baseline(repo); var store = Store();
-        using(var pending = File.Create(Path.Combine(directory, "interrupted.pending"))) pending.SetLength(TextDraftStore.MaxStoreBytes);
+        using(var pending = CreatePrivateFixture(Path.Combine(directory, "interrupted.pending"))) pending.SetLength(TextDraftStore.MaxStoreBytes);
         Assert.Throws<IOException>(() => store.Put(repo.Root, "text.txt", info, "draft", null));
         Assert.Empty(store.List(repo.Root).Drafts);
     }
@@ -125,6 +129,89 @@ public sealed class TextDraftStoreTests : IDisposable
         using(var gate = new FileStream(Path.Combine(directory, "store.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             Assert.Throws<IOException>(() => store.Put(repo.Root, "text.txt", info, "second", saved.Revision));
         Assert.Equal(saved, Assert.Single(store.List(repo.Root).Drafts));
+    }
+
+    [Fact] public async Task Windows_new_store_files_have_current_user_owner_and_private_acl_before_install()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var repo = new TestRepository(); var info = await Baseline(repo); var store = Store();
+        AssertPrivateWindowsAcl(new DirectoryInfo(directory));
+        AssertPrivateWindowsAcl(new FileInfo(Path.Combine(directory, "store.lock")));
+        AssertPrivateWindowsAcl(new FileInfo(Path.Combine(directory, "enabled")));
+        var inspectedPending = false;
+        var checking = new TextDraftStore(directory, () => DateTimeOffset.UtcNow, () =>
+        {
+            if (!OperatingSystem.IsWindows()) throw new InvalidOperationException("Windows ACL fixture required.");
+            AssertPrivateWindowsAcl(new FileInfo(Assert.Single(Directory.GetFiles(directory, "*.pending"))));
+            inspectedPending = true;
+        });
+        var saved = checking.Put(repo.Root, "text.txt", info, "private", null);
+        Assert.True(inspectedPending);
+        AssertPrivateWindowsAcl(new FileInfo(Assert.Single(Directory.GetFiles(directory, "*.json"))));
+        Assert.Equal(saved, Assert.Single(new TextDraftStore(directory).List(repo.Root).Drafts));
+        store.SetEnabled(true); Assert.True(store.Enabled);
+    }
+
+    [Theory]
+    [InlineData("store.lock")]
+    [InlineData("enabled")]
+    [InlineData("record")]
+    public async Task Windows_existing_file_with_other_principal_is_rejected_without_acl_repair(string kind)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var repo = new TestRepository(); var info = await Baseline(repo); var store = Store();
+        store.Put(repo.Root, "text.txt", info, "private", null);
+        var path = kind == "record" ? Assert.Single(Directory.GetFiles(directory, "*.json")) : Path.Combine(directory, kind);
+        var file = new FileInfo(path); var security = file.GetAccessControl();
+        security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), FileSystemRights.Read, AccessControlType.Allow));
+        file.SetAccessControl(security);
+        var before = file.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Owner | AccessControlSections.Access);
+        var bytes = File.ReadAllBytes(path);
+        if (kind == "record") Assert.Throws<IOException>(() => store.Clear());
+        else if (kind == "enabled") Assert.Throws<IOException>(() => { _ = store.Enabled; });
+        else Assert.Throws<IOException>(() => store.SetEnabled(true));
+        Assert.Equal(before, file.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Owner | AccessControlSections.Access));
+        Assert.Equal(bytes, File.ReadAllBytes(path));
+    }
+
+    [Fact] public void Windows_existing_directory_with_other_principal_is_rejected_without_acl_repair()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var store = Store(); var folder = new DirectoryInfo(directory); var security = folder.GetAccessControl();
+        security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), FileSystemRights.Read, AccessControlType.Allow));
+        folder.SetAccessControl(security);
+        var before = folder.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Owner | AccessControlSections.Access);
+        Assert.Throws<IOException>(() => store.SetEnabled(true));
+        Assert.Equal(before, folder.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Owner | AccessControlSections.Access));
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void AssertPrivateWindowsAcl(FileSystemInfo item)
+    {
+        var user = WindowsIdentity.GetCurrent().User!;
+        FileSystemSecurity security = item is DirectoryInfo folder ? folder.GetAccessControl() : ((FileInfo)item).GetAccessControl();
+        Assert.Equal(user, security.GetOwner(typeof(SecurityIdentifier)));
+        Assert.True(security.AreAccessRulesProtected);
+        var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
+        Assert.NotEmpty(rules);
+        Assert.All(rules, rule => { Assert.Equal(user, rule.IdentityReference); Assert.Equal(AccessControlType.Allow, rule.AccessControlType); });
+    }
+
+    private static FileStream CreatePrivateFixture(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var user = WindowsIdentity.GetCurrent().User!; var security = new FileSecurity();
+            security.SetOwner(user); security.SetAccessRuleProtection(true, false);
+            security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
+            return new FileInfo(path).Create(FileMode.CreateNew, FileSystemRights.Read | FileSystemRights.Write,
+                FileShare.None, 4096, FileOptions.None, security);
+        }
+        return new FileStream(path, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None,
+            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite
+        });
     }
 
 }
