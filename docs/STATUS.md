@@ -258,3 +258,11 @@ Linux 云工作区验证：锁定还原通过，Release 全解决方案 warnings
 - 原生 Mac/Windows/Linux WebView、真实重启/崩溃/断电、IME、多窗 UI、Windows ACL 实测未验收。构建与单元测试不等于原生验收。
 
 此候选不修改 main，不包含发布、推送或其他候选合并。
+
+## macOS 标题栏安全区修复（2026-11-05，独立验证分支）
+
+基于联合改动 main `6ddff609` 重放标题栏修复。旧实现以标题栏高度乘 4 预留左侧宽度，原生探针只检查不重叠，未限制多余空白。现在读取本窗口三个 AppKit 按钮的最右边界并保留 8 DIP，右侧保持 12 DIP；窗口布局和全屏恢复重新测量，Windows/Linux 原布局不变。启动时原生几何不可用仍保留保守回退。Intel 与 Apple Silicon 的 NSRect 返回 ABI 分别处理。
+
+云端 Linux：锁定还原、完整解决方案 Release warnings-as-errors 构建通过（0 警告、0 错误）；Core 819/819、Editor 131/131 全部通过且无跳过。Core 运行仅移除了工具注入的文档环境变量，未覆盖用户 Git 配置；Editor 使用仓库指定 Node 24.19.0。
+
+ChromeProbe 增加三个窗口宽度及恢复状态的左侧 8±1 DIP、右侧 12±1 DIP 断言，并保留真实 AppKit 边界、命中和垂直对齐检查。新代码的 Mac 原生结果以本分支精确提交 CI 为准；本地编译不代替 ABI 执行。真实用户 Mac 截图、PyCharm 对照、物理键盘/鼠标、Retina/多屏及完整人工 GUI 仍未验收。不访问用户本地 Codex 或 WT01，不发布安装包。
