@@ -122,15 +122,19 @@ internal static partial class Program
         if (main.WindowState != WindowState.FullScreen)
         {
             Check(visible.Length == 3 && visible.All(r => r.Hit != 0), "Traffic-light centers are not hit-testable.");
+            var leftGap = managed["RepositoryButton"].X - visible.Max(r => r.X + r.Width);
+            Check(leftGap is >= 7 and <= 9, "Traffic lights to repository gap is not 8 DIP: " + leftGap);
             var center = visible.Average(r => r.Y + r.Height / 2);
             Check(managed.Values.All(r => Math.Abs(r.Center.Y - center) <= 1.5), "Native and managed header controls are not vertically aligned.");
         }
+        var rightGap = main.Bounds.Width - managed["WorkspaceRefreshButton"].Right;
+        Check(rightGap is >= 11 and <= 13, "Mac trailing toolbar gap is not 12 DIP: " + rightGap);
         Check(!managed["RepositoryButton"].Intersects(managed["BranchButton"]), "Repository and branch controls overlap.");
         var repository = main.FindControl<Button>("RepositoryButton")!;
         var label = repository.GetVisualDescendants().OfType<TextBlock>().First();
         Samples.Add(new { phase, width = main.Bounds.Width, state = main.WindowState.ToString(), scale, appMenu, nativeHeight = main.WindowDecorationMargin.Top,
             trafficLights = system, controls = managed.ToDictionary(x => x.Key, x => new { x.Value.X, x.Value.Y, x.Value.Width, x.Value.Height }), projectText = label.Text, projectTextWidth = label.Bounds.Width,
-            rightGap = main.Bounds.Width - managed["WorkspaceRefreshButton"].Right });
+            rightGap, leftGap = visible.Length == 3 ? managed["RepositoryButton"].X - visible.Max(r => r.X + r.Width) : (double?)null });
     }
     private static async Task UntilAsync(Func<bool> condition)
     { for (var i = 0; i < 160; i++) { if (condition()) return; await Task.Delay(50); } throw new TimeoutException("Native window transition did not complete."); }
