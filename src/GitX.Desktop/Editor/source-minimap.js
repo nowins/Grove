@@ -29,7 +29,11 @@ export class SourceMinimap {
       column.classList.toggle('with-minimap', enabled);
       column.style.setProperty('--map-width', column.clientWidth >= 630 ? '145px' : '100px');
     });
-    if (changed) { this.sizes = [null, null]; this.colors = [null, null]; this.draw(); this.scheduleColors(plan); }
+    if (changed) {
+      // A queued pointer target must not retain the previous document's lines.
+      this.pending = null;
+      this.sizes = [null, null]; this.colors = [null, null]; this.draw(); this.scheduleColors(plan);
+    }
   }
   scheduleColors(owner) {
     if (!owner) return;
@@ -68,7 +72,7 @@ export class SourceMinimap {
     this.pending = { side, line, owner };
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
-      this.frame = null; const target = this.pending;
+      this.frame = null; const target = this.pending; this.pending = null;
       if (target?.owner === this.plan) this.reveal(target.side, target.line);
     });
   }

@@ -39,7 +39,9 @@ export class SourceSymbols {
   }
   invalidate() {
     ++this.sequence;
-    this.close(false); this.items = []; this.identity = null;
+    this.close(false); this.items = []; this.filtered = []; this.result = null; this.identity = null;
+    // Rows also close over symbols from the invalidated document.
+    this.list.replaceChildren();
   }
   stop() {
     clearTimeout(this.watchdog); this.watchdog = null;
