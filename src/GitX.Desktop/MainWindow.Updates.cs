@@ -21,6 +21,7 @@ public sealed partial class MainWindow
     private Task _updateFinished = Task.CompletedTask;
     private UpdateVersion _updateCurrent = null!;
     private string _updateRid = "", _updateMessage = "尚未检查更新。", _updateDetail = "";
+    private bool _supportsInAppUpdates;
     private bool _updateBusy, _updateError, _updatesInitialized, _updateDownloading;
     private long _updateSequence;
     private long _updatePreferenceSequence;
@@ -31,17 +32,26 @@ public sealed partial class MainWindow
         _updateCurrent = UpdateVersion.Parse(typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion)
             ?? throw new InvalidOperationException("应用版本无效，无法安全检查更新。");
         var architecture = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
-        _updateRid = OperatingSystem.IsWindows() ? "win-" + architecture : OperatingSystem.IsMacOS() ? "osx-" + architecture : "unsupported";
-        _updatesPanel = new(_updateCurrent.ToString(), _updateRid);
+        _updateRid = OperatingSystem.IsWindows() ? "win-" + architecture : OperatingSystem.IsMacOS() ? "osx-" + architecture : OperatingSystem.IsLinux() ? "linux-" + architecture : "unsupported";
+        _supportsInAppUpdates = UpdateOffer.SupportsRid(_updateRid);
+        _updatesPanel = new(_updateCurrent.ToString(), _updateRid, _supportsInAppUpdates);
+        if (!_supportsInAppUpdates)
+        {
+            _updateMessage = "当前平台使用手动更新。";
+            _updateDetail = "在浏览器查看正式 Releases（含预览版），选择与本机架构匹配的包并核对 SHA-256。若尚无对应 Linux 包，请继续使用当前开发版本。退出 Grove 后解压新包；不会自动覆盖应用或删除 GitX 用户数据。";
+        }
         _updatePreferences = new(IncludePreviews: _updateCurrent.Pre.Length > 0); _updatesPanel.Preferences(_updatePreferences);
         _updatesPanel.CheckRequested += () => { if (_updatesInitialized) _ = CheckUpdatesAsync(); };
         _updatesPanel.DownloadRequested += () => { if (_updatesInitialized) _ = DownloadUpdateAsync(); };
         _updatesPanel.InstallRequested += () => { if (_updatesInitialized) _ = InstallUpdateAsync(); };
         _updatesPanel.CancelRequested += () => _updateOperation?.Cancel();
         _updatesPanel.PreferencesChanged += preferences => { if (_updatesInitialized) _ = SaveUpdatePreferencesAsync(preferences); };
-        _updateTimer.Tick += (_, _) => { if (_updatePreferences.AutomaticChecks && !_updateBusy) _ = CheckUpdatesAsync(); };
+        _updateTimer.Tick += (_, _) => { if (_supportsInAppUpdates && _updatePreferences.AutomaticChecks && !_updateBusy) _ = CheckUpdatesAsync(); };
         Opened += async (_, _) =>
         {
+            // Manual-only platforms leave preferences from other platforms intact.
+            if (!_supportsInAppUpdates)
+            { _updatesInitialized = true; RenderUpdates(); return; }
             try { _updatePreferences = await _updateStore.ReadAsync(_updateCurrent.Pre.Length > 0, _updateLifetime.Token); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
             { _updatePreferences = new(IncludePreviews: _updateCurrent.Pre.Length > 0); _updateMessage = ex.Message; _updateError = true; }
@@ -65,7 +75,7 @@ public sealed partial class MainWindow
     { _updateMessage = message; _updateDetail = detail; _updateError = error; RenderUpdates(); }
     private async Task SaveUpdatePreferencesAsync(UpdatePreferences preferences)
     {
-        if (_updateBusy || _closed) return;
+        if (!_supportsInAppUpdates || _updateBusy || _closed) return;
         var sequence = ++_updatePreferenceSequence;
         try
         {
@@ -81,7 +91,7 @@ public sealed partial class MainWindow
     }
     private async Task RunUpdateAsync(Func<CancellationToken, Task> action)
     {
-        if (_updateBusy || _closed || !_updatesInitialized) return;
+        if (!_supportsInAppUpdates || _updateBusy || _closed || !_updatesInitialized) return;
         _updateBusy = true; var operation = _updateOperation = CancellationTokenSource.CreateLinkedTokenSource(_updateLifetime.Token);
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); _updateFinished = finished.Task;
         ++_updateSequence;

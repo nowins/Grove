@@ -9,13 +9,13 @@ public sealed partial class MainWindow
 {
     private sealed record TextSession(string Id,string Path,string RootKey,bool Dirty,bool Busy,bool Editable,bool Conflict);
     private sealed record TextSessions(TextSession[] Sessions,bool Composing);
-    private sealed record TextDraft(string Id,string Path,string RootKey,string Model,int Checkpoint,string Expected,string Text,bool Dirty);
+    private sealed record TextDraft(string Id,string Path,string RootKey,string Model,int Checkpoint,string Expected,string Text,bool Dirty,WorkingTextEditInfo Baseline);
     private readonly WorkingTextWriter _textWriter=new();
     private readonly HashSet<string> _textEditable=[];
     private readonly HashSet<string> _textSaving=[];
-    private bool _textClosePending,_textCloseReady,_textGuardPending;
+    private bool _textClosePending,_textCloseReady,_textGuardPending,_diskWriteGuardPending;
     private static readonly JsonSerializerOptions TextJson=new(){PropertyNameCaseInsensitive=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase};
-    private bool CanSaveText => _ready && _model.ActiveSourceTabId is {} id && _textEditable.Contains(id) && !_textSaving.Contains(id) && !_model.IsWriting;
+    private bool CanSaveText => !_diskWriteGuardPending && _ready && _model.ActiveSourceTabId is {} id && _textEditable.Contains(id) && !_textSaving.Contains(id) && !_model.IsWriting;
     private async Task<T?> ReadTextQueryAsync<T>(string expression)
     {
         if(_webView is null || !_ready) throw new IOException("编辑器尚未就绪，草稿未被关闭。");
@@ -25,7 +25,7 @@ public sealed partial class MainWindow
     private async Task<bool> SaveTextAsync(string? id=null)
     {
         id??=_model.ActiveSourceTabId;var root=_model.Root;var epoch=_model.RepositoryGeneration;
-        if(id is null || root is null || _closed || _textSaving.Contains(id) || _model.IsWriting) return false;
+        if(_diskWriteGuardPending || id is null || root is null || _closed || _textSaving.Contains(id) || _model.IsWriting) return false;
         if(!_model.SourceTabs.Any(t=>t.Id==id&&t.LocalFile))return false;
         _textSaving.Add(id);RefreshSaveMenuState();TextDraft? draft=null;
         try
@@ -40,6 +40,7 @@ public sealed partial class MainWindow
             var info=await Task.Run(()=>_textWriter.SaveAsync(root,draft.Path,draft.Expected,draft.Text));
             if(_closed || _webView is null || root!=_model.Root || epoch!=_model.RepositoryGeneration)return false;
             await _webView.InvokeCommandAsync("window.gitx.fileSaved("+JsonSerializer.Serialize(new{draft.Id,draft.Model,draft.Checkpoint,info},TextJson)+")");
+            await CheckpointDraftsAsync(forClose: true);
             await _model.RefreshAsync();return true;
         }
         catch(Exception error)
@@ -53,9 +54,37 @@ public sealed partial class MainWindow
         }
         finally{_textSaving.Remove(id);RefreshSaveMenuState();}
     }
+    private sealed record DiskWriteLockResult(bool? Locked);
+    // Freeze editing before reading dirty state, including tabs opened while a
+    // write waits for refresh. The lease lasts through write reconciliation.
+    private async Task<SourceTextCloseLease> GuardDiskWriteAsync(string root, IEnumerable<string> paths)
+    {
+        if (_diskWriteGuardPending || _textGuardPending || _textSaving.Count > 0 || !_ready || _webView is null) return new(false);
+        _diskWriteGuardPending = true;
+        var epoch = _model.RepositoryGeneration;
+        var locked = false;
+        async Task Release()
+        {
+            try { if (locked && !_closed) await InvokeEditorAsync("window.gitx.lockDiskWrites(false)"); }
+            finally { _diskWriteGuardPending = false; RefreshSaveMenuState(); }
+        }
+        try
+        {
+            locked = true;
+            var acknowledgement = await ReadTextQueryAsync<DiskWriteLockResult>("({locked:window.gitx.lockDiskWrites(true)})");
+            if (acknowledgement?.Locked != true) throw new IOException("无法确认编辑器已锁定，未修改磁盘文件。");
+            var state = await ReadTextQueryAsync<TextSessions>("window.gitx.fileSessions()");
+            var affected = new HashSet<string>(paths, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            if (state is null || state.Composing || !DraftWriteGuard.CanWrite(root, affected, state.Sessions.Select(s => new DraftWriteSession(s.RootKey, s.Path, s.Dirty, s.Busy))))
+                throw new IOException("待修改文件有未保存或正在保存的编辑，或输入法组合尚未结束；请先处理草稿。");
+            if (_closed || root != _model.Root || epoch != _model.RepositoryGeneration) throw new IOException("仓库已切换，操作已取消。");
+            return new(true, Release);
+        }
+        catch (Exception error) { await Release(); if (!_closed) _model.ReportError(error.Message); return new(false); }
+    }
     private async Task<SourceTextCloseLease> ConfirmTextCloseAsync(SourceTextCloseRequest request)
     {
-        if(_textGuardPending)return new(false);
+        if(_textGuardPending || _diskWriteGuardPending)return new(false);
         if(request.Ids.Count==0)return new(true);
         if(_textSaving.Count>0){_model.ReportError("文件正在保存，请完成后再关闭或切换仓库。");return new(false);}
         var ids=request.Ids.ToArray();var root=_model.Root;var epoch=_model.RepositoryGeneration;
@@ -72,8 +101,32 @@ public sealed partial class MainWindow
             var dirty=state.Sessions.Where(s=>ids.Contains(s.Id)&&s.Dirty).ToArray();
             if(dirty.Length>0)
             {
-                var choice=await SourceTextCloseDialog.ShowAsync(InteractionWindow,dirty.Select(s=>s.Path).ToArray());
+                var choice=await SourceTextCloseDialog.ShowAsync(InteractionWindow,dirty.Select(s=>s.Path).ToArray(), _draftEnabled);
                 if(choice==SourceTextCloseChoice.Cancel){await Release();return new(false);}
+                if(choice==SourceTextCloseChoice.Keep)
+                {
+                    await CheckpointDraftsAsync(forClose: true);
+                    foreach(var session in dirty)
+                    {
+                        var captured = await ReadTextQueryAsync<TextDraft>("window.gitx.fileDraft(" + JsonSerializer.Serialize(session.Id) + ")");
+                        if(captured is null || !_draftOwned.TryGetValue(captured.RootKey + "/" + captured.Path, out var persisted) || persisted.Text != captured.Text || persisted.Baseline != captured.Baseline || root is null || !await Task.Run(() => _draftStore.Contains(root, persisted)))
+                            throw new IOException("部分草稿未持久化（可能被排除、超限或写入失败），未关闭。");
+                    }
+                }
+                if(choice==SourceTextCloseChoice.Discard)
+                {
+                    await _draftGate.WaitAsync();
+                    try
+                    {
+                        foreach(var session in dirty)
+                        {
+                            var key = session.RootKey + "/" + session.Path;
+                            if(root is not null && _draftOwned.TryGetValue(key, out var persisted))
+                            { await Task.Run(() => _draftStore.Discard(root, persisted)); _draftOwned.Remove(key); }
+                        }
+                    }
+                    finally { _draftGate.Release(); }
+                }
                 if(choice==SourceTextCloseChoice.Save)
                     foreach(var session in dirty)if(!await SaveTextAsync(session.Id)){await Release();return new(false);}
                 if(choice==SourceTextCloseChoice.Save)

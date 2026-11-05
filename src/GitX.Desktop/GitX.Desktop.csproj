@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><RuntimeIdentifiers>win-x64;win-arm64;osx-arm64;osx-x64</RuntimeIdentifiers></PropertyGroup>
+  <PropertyGroup><RuntimeIdentifiers>win-x64;win-arm64;osx-arm64;osx-x64;linux-x64;linux-arm64</RuntimeIdentifiers></PropertyGroup>
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <Title>Grove</Title>
@@ -13,6 +13,7 @@
     <ApplicationIcon>Assets/gitx.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="../../docs/LINUX.md" Link="LINUX.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))" />
     <Content Include="../../LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../GitX.Core/GitX.Core.csproj" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />

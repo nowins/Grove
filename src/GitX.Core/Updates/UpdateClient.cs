@@ -10,6 +10,7 @@ public sealed class UpdateClient(IUpdateSource source)
 {
     public async Task<UpdateOffer?> CheckAsync(UpdateVersion current, bool previews, string rid, CancellationToken token)
     {
+        if (!UpdateOffer.SupportsRid(rid)) throw new IOException("当前平台请在正式 Releases 页面查看并手动更新；未发起自动检查。");
         var releases = new List<UpdateRelease>();
         for (var page = 1; page <= 20; page++)
         {

@@ -48,6 +48,21 @@ if (OperatingSystem.IsMacOS())
     }
 }
 
+if (OperatingSystem.IsLinux())
+{
+    var machine = expected switch { "x64" => (ushort)62, "arm64" => (ushort)183, _ => throw new InvalidOperationException("Unsupported Linux architecture.") };
+    var gitAssets = Directory.GetFiles(publish, "*git2*.so");
+    if (gitAssets.Length == 0) throw new FileNotFoundException("Published libgit2 SO missing.");
+    foreach (var file in new[] { "Grove", "libSkiaSharp.so", "libHarfBuzzSharp.so" }.Select(name => Path.Combine(publish, name)).Concat(gitAssets))
+    {
+        using var stream = File.OpenRead(file);
+        var header = new byte[20]; stream.ReadExactly(header);
+        if (!header.AsSpan(0, 4).SequenceEqual(new byte[] { 0x7f, 0x45, 0x4c, 0x46 }) || header[4] != 2 || header[5] != 1 || System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(18)) != machine)
+            throw new BadImageFormatException($"Wrong ELF architecture for {Path.GetFileName(file)}.");
+        nativeAssets.Add(new { file = Path.GetFileName(file), machine = $"0x{machine:x4}", architecture = expected });
+    }
+}
+
 // The WebView package uses a managed WebView2 loader. Verify the shipped
 // assembly is portable IL; browser runtime discovery is not a GUI smoke test.
 var webViewAssembly = Path.Combine(publish, "Avalonia.Controls.WebView.dll");

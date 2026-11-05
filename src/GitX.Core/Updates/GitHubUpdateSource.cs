@@ -16,9 +16,12 @@ public sealed class GitHubUpdateSource : IUpdateSource
     public const string ReleasesUrl = "https://github.com/nowins/Grove/releases";
     private static readonly HttpClient Shared = new(new SocketsHttpHandler
     { AllowAutoRedirect = false, UseCookies = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+    private static readonly UpdateRequestBackoff SharedBackoff = new();
     private readonly HttpClient _http;
-    public GitHubUpdateSource() => _http = Shared;
-    internal GitHubUpdateSource(HttpClient http) => _http = http;
+    private readonly UpdateRequestBackoff _backoff;
+    public GitHubUpdateSource() { _http = Shared; _backoff = SharedBackoff; }
+    internal GitHubUpdateSource(HttpClient http, UpdateRequestBackoff? backoff = null)
+    { _http = http; _backoff = backoff ?? new(); }
     public async Task<byte[]> PageAsync(int page, CancellationToken token)
     {
         if (page is < 1 or > 20) throw new ArgumentOutOfRangeException(nameof(page));
@@ -40,6 +43,8 @@ public sealed class GitHubUpdateSource : IUpdateSource
         {
             for (var hop = 0; hop < 4; hop++)
             {
+                timeout.Token.ThrowIfCancellationRequested();
+                _backoff.ThrowIfWaiting(current.Host);
                 using var request = new HttpRequestMessage(HttpMethod.Get, current);
                 request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Grove-Desktop-Updater", "1.0"));
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(binary ? "application/octet-stream" : "application/vnd.github+json"));
@@ -52,7 +57,7 @@ public sealed class GitHubUpdateSource : IUpdateSource
                     if (!AllowedRedirect(original, next)) throw new IOException("下载重定向不属于受支持的 GitHub 资产来源，已停止。");
                     current = next; continue;
                 }
-                if ((int)response.StatusCode is 403 or 429) throw new IOException("GitHub 请求受限，请稍后重试。公开 API 的匿名访问有频率限制；请求失败不表示没有更新。");
+                if ((int)response.StatusCode is 403 or 429) throw _backoff.Restriction(current.Host, response);
                 if (response.StatusCode == HttpStatusCode.NotFound) throw new IOException("更新源或资源不可访问。仓库可能尚未公开，或版本资源已移除；请查看正式 Releases 页面。");
                 if (response.StatusCode != HttpStatusCode.OK) throw new IOException("更新服务器请求失败，请稍后重试。");
                 if (response.Content.Headers.ContentLength is { } length && (length > limit || binary && length != limit)) throw new IOException("下载大小与资源声明不符，已停止。");

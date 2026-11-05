@@ -25,6 +25,7 @@ public sealed partial class MainWindow
             ShellCommandId.Branches or ShellCommandId.Sync or ShellCommandId.Stashes => ready,
             ShellCommandId.Amend => ready && !_model.HasOperation,
             ShellCommandId.Conflicts => ready && _model.HasOperation,
+            ShellCommandId.DraftRecovery => !_model.IsWriting && !_textGuardPending && !_draftDialogOpen,
             ShellCommandId.SaveFile => ReferenceEquals(owner, this) && CanSaveText && _fileHistoryPanel?.IsKeyboardFocusWithin != true,
             ShellCommandId.Stage => _model.CanStageFile,
             ShellCommandId.Unstage => _model.CanUnstageFile,
@@ -49,6 +50,7 @@ public sealed partial class MainWindow
         CloseShellPopup();
         switch (id)
         {
+            case ShellCommandId.DraftRecovery: _ = ShowDraftRecoveryAsync(); break;
             case ShellCommandId.OpenRepository: _ = PickRepositoryAsync(); break;
             case ShellCommandId.RecentRepositories: RepositoriesClicked(RepositoryButton, new RoutedEventArgs()); break;
             case ShellCommandId.Worktrees: _ = OpenWorktreesAsync(); break;

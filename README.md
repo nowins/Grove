@@ -50,6 +50,8 @@ Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SH
 
 Preview 5 起提供文本编辑。历史提交与 Diff 始终只读，不会因存在本地同名文件而写入工作区。
 
+Linux 开发候选的依赖、便携包及验证边界见 [Linux 说明](docs/LINUX.md)，尚未加入已发布下载资产。
+
 ## 从源码运行
 
 准备 Git、PowerShell 7、`global.json` 指定的 .NET SDK 和 `.node-version` 指定的 Node.js：

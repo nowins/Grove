@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using GitX.Core;
 using GitX.Desktop.Services;
 using GitX.Desktop.ViewModels;
 
@@ -57,13 +58,14 @@ public sealed partial class MainWindow
         _gitTerminate.IsEnabled = !_gitTerminating && current && state is { Running: true, TerminationRequested: false, ProcessId: not null };
     }
 
-    private async Task TerminateGitTaskAsync()
+    private async Task TerminateGitTaskAsync(Window? owner = null, GitWriteOperation? expected = null)
     {
         if (_gitTerminating || _model.LastGitOperation is not { } operation || operation.Snapshot() is not { ProcessId: { } pid } state || state.Root != _model.Root) return;
+        if (expected is not null && !ReferenceEquals(expected, operation)) return;
         _gitTerminating = true; _gitTerminate.IsEnabled = false;
         try
         {
-            if (await ConfirmDialog.ShowAsync(_dock?.WindowFor(ToolId.Output) ?? this, "终止外部 Git 进程", $"将终止此任务的 Git 进程及其子进程（PID {pid}）。\n\n写操作可能已部分完成，远端可能已部分更新。退出后请刷新本地状态；远端结果需重新拉取核对。此操作不是回滚，也不会删除锁文件。", "终止进程"))
+            if (await ConfirmDialog.ShowAsync(owner ?? _dock?.WindowFor(ToolId.Output) ?? this, "终止外部 Git 进程", $"将终止此任务的 Git 进程及其子进程（PID {pid}）。\n\n写操作可能已部分完成，远端可能已部分更新。退出后请刷新本地状态；远端结果需重新拉取核对。此操作不是回滚，也不会删除锁文件。", "终止进程"))
             {
                 if (_model.Root != state.Root || !ReferenceEquals(operation, _model.LastGitOperation)) return;
                 if (!await Task.Run(() => operation.Terminate(pid))) _gitOutputStatus.Text = "确认期间该 Git 进程已结束，没有终止其他命令。";

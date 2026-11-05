@@ -47,6 +47,7 @@ public sealed partial class MainWindow : Window
         _model.SourceTabsChanged += OnSourceTabsChanged;
         _model.InclusionChanged += RefreshInclusion;
         _model.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.IsWriting)) RefreshInclusion(); };
+        InitializeDraftRecovery();
         _model.RepositoryOpened += WatchRepository;
         _model.RepositoryOpened += _ => CloseFileHistory(false);
         AddHandler(KeyDownEvent, WindowKeyDown, RoutingStrategies.Tunnel);
@@ -82,6 +83,7 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _closed = true;
+            _draftTimer.Stop();
             _dock?.Dispose();
             CloseFileHistory(false);
             _blameRead?.Cancel(); _blameRead?.Dispose();
@@ -120,11 +122,7 @@ public sealed partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             _server = new EditorServer();
             _webView = new NativeWebView();
-            _webView.EnvironmentRequested += (_, e) =>
-            {
-                e.EnableDevTools = false;
-                if (e is WindowsWebView2EnvironmentRequestedEventArgs windows) windows.UserDataFolder = profile;
-            };
+            DesktopWebView.Configure(_webView, profile);
             _webView.NavigationStarted += (_, e) => { if (!_server.Owns(e.Request)) e.Cancel = true; };
             _webView.NewWindowRequested += (_, e) => e.Handled = true;
             _webView.WebMessageReceived += (_, e) => Dispatcher.UIThread.Post(() => _ = HandleWebMessage(e.Body));
@@ -209,6 +207,7 @@ public sealed partial class MainWindow : Window
                 RefreshInclusion();
                 if (root.TryGetProperty("models", out var models) && models.ValueKind == JsonValueKind.Number && models.TryGetInt32(out var count) && count > 0)
                     await FocusRequestedSourceAsync(version);
+                await ApplyPendingDraftAsync();
                 break;
             case "refresh": await RefreshCurrentAsync(); break;
             case "comment": await HandleCommentAsync(root); break;
@@ -231,6 +230,7 @@ public sealed partial class MainWindow : Window
             case "blame-view": await HandleBlameViewAsync(root.GetProperty("field").GetString()!, root.GetProperty("value").GetBoolean(), version); break;
             case "source-save": await SaveTextAsync(root.GetProperty("id").GetString()); break;
             case "source-edit-state":
+                ScheduleDraftCheckpoint();
                 var textId = root.GetProperty("id").GetString()!;
                 if (_model.SourceTabs.Any(t => t.Id == textId && t.LocalFile))
                 { if (root.GetProperty("editable").GetBoolean()) _textEditable.Add(textId); else _textEditable.Remove(textId); RefreshSaveMenuState(); }
@@ -431,9 +431,16 @@ public sealed partial class MainWindow : Window
         if (_model.IsWriting || version != _publishedVersion || version != _model.DocumentVersion || _model.CurrentWrite() is not { } context
             || context.Request.Kind is not (ComparisonKind.Worktree or ComparisonKind.LocalChanges) || context.Document.Diff is not { Old.Exists: true, New.Exists: true } diff
             || block < 0 || block >= diff.Blocks.Count) return;
-        var range = diff.Blocks[block];
-        if (await ConfirmDialog.ShowAsync(this, "回退变更块", $"回退 {context.Request.Path} 的第 {block + 1} 个变更块？\n\n{diff.Old.Label} 第 {range.OldStart + 1} 行起 {range.OldCount} 行 → 当前版本第 {range.NewStart + 1} 行起 {range.NewCount} 行。\n仅恢复此块，其他工作区改动和索引内容保留。原文件会备份，可通过“撤销丢弃”恢复。", "回退并保留备份"))
+        // Diff actions never save or discard a source tab's in-memory draft.
+        // Refuse a dirty/busy sibling instead of silently changing its disk baseline.
+        try
+        {
+            await using var lease = await GuardDiskWriteAsync(context.Request.Root, [context.Request.Path]);
+            if (!lease.Allowed) return;
+            if (_closed || _model.IsWriting || version != _publishedVersion || version != _model.DocumentVersion) return;
             await _model.RevertBlockAsync(context.Request, context.Document, block);
+        }
+        catch (Exception error) { _model.ReportError(error.Message); }
     }
     private async void CommitClicked(object? sender, RoutedEventArgs e) => await _model.CommitAsync();
     private async void CommitAndPushClicked(object? sender, RoutedEventArgs e)
@@ -460,7 +467,20 @@ public sealed partial class MainWindow : Window
             _ = InvokeEditorAsync($"window.gitx.setInclusion({state})");
         }
     }
-    private async void RestoreDiscardClicked(object? sender, RoutedEventArgs e) => await _model.RestoreDiscardAsync();
+    private async void RestoreDiscardClicked(object? sender, RoutedEventArgs e)
+    {
+        var recovery = _model.CurrentRecovery;
+        var epoch = _model.RepositoryGeneration;
+        if (recovery is null || !_model.CanRestoreDiscard) return;
+        try
+        {
+            await using var lease = await GuardDiskWriteAsync(recovery.Root, DraftWriteGuard.Paths(recovery));
+            if (!lease.Allowed) return;
+            if (_closed || epoch != _model.RepositoryGeneration || !ReferenceEquals(recovery, _model.CurrentRecovery) || !_model.CanRestoreDiscard) return;
+            await _model.RestoreDiscardAsync();
+        }
+        catch (Exception error) { _model.ReportError(error.Message); }
+    }
     private async void RefreshClicked(object? sender, RoutedEventArgs e) => await RefreshCurrentAsync();
     private async void MoreHistoryClicked(object? sender, RoutedEventArgs e) => await _model.LoadHistoryAsync();
     private void BrowseClicked(object? sender, RoutedEventArgs e) => OpenTool(0, true, true);

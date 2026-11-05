@@ -6,7 +6,7 @@ export function renderedModelCount(doc, models, panes) {
 }
 export class SourceEditing {
   constructor({ createModel, getVersion, changed = () => {} }) {
-    Object.assign(this, { createModel, getVersion, changed }); this.sessions = new Map(); this.retired = new Set(); this.locks = new Map();
+    Object.assign(this, { createModel, getVersion, changed }); this.sessions = new Map(); this.retired = new Set(); this.locks = new Map(); this.diskLocks = 0;
   }
   dirty(s) { return s.model.getAlternativeVersionId() !== s.saved; }
   owns(model) { return [...this.sessions.values()].some(s => s.model === model) || this.retired.has(model); }
@@ -41,11 +41,24 @@ export class SourceEditing {
     return { doc: effective, model: s.model };
   }
   unsafe(s = this.active) { return !!s && (this.dirty(s) || s.info.fingerprint !== s.published); }
-  editable(s = this.active) { return !!s?.info.canEdit && !s.readOnlyReason && this.sessions.get(s.id)===s && !this.locks.get(s.id); }
+  editable(s = this.active) { return !!s?.info.canEdit && !s.readOnlyReason && this.sessions.get(s.id)===s && !this.locks.get(s.id) && !this.diskLocks; }
   metadata() { return [...this.sessions.values()].map(s => ({ id:s.id,path:s.path,rootKey:s.info.rootKey,dirty:this.dirty(s),busy:s.busy,editable:this.editable(s),conflict:s.info.fingerprint!==s.disk })); }
   draft(id) {
     const s=this.sessions.get(id); if(!s || s.busy || !s.info.canEdit) return null;
-    return { id:s.id, path:s.path, rootKey:s.info.rootKey, model:s.model.id, checkpoint:s.model.getAlternativeVersionId(), expected:s.info.fingerprint, text:s.model.getValue(), dirty:this.dirty(s) };
+    return { id:s.id, path:s.path, rootKey:s.info.rootKey, model:s.model.id, checkpoint:s.model.getAlternativeVersionId(), expected:s.info.fingerprint, baseline:s.info, text:s.model.getValue(), dirty:this.dirty(s) };
+  }
+  restore(id, record) {
+    const s=this.sessions.get(id);
+    if(!s || s!==this.active || !this.editable(s) || s.busy || this.dirty(s) ||
+       s.path!==record.path || s.info.rootKey!==record.baseline.rootKey) return false;
+    // A persisted baseline must not be rebased onto today's disk: the existing
+    // writer will reject any external change, including a branch/HEAD change.
+    s.model.pushStackElement();
+    s.model.pushEditOperations([], [{range:s.model.getFullModelRange(),text:record.text}], () => null);
+    s.model.pushStackElement();
+    s.info=record.baseline;
+    // Even equal text represents an explicitly restored checkpoint until saved.
+    s.saved=-1;s.error='已恢复草稿，尚未写入磁盘';this.changed(this);return true;
   }
   saving(draft) { const s=this.sessions.get(draft.id); if(!s || s.model.id!==draft.model) return false; s.busy=true;s.error='';this.changed(this);return true; }
   saved(result) {
@@ -55,6 +68,7 @@ export class SourceEditing {
     else s.error=result.error || '保存失败，草稿保留';
     this.changed(this);
   }
+  lockDiskWrites(value) { this.diskLocks=Math.max(0,this.diskLocks+(value?1:-1));this.changed(this);return this.diskLocks>0; }
   lock(ids, value) { for(const id of ids){const count=(this.locks.get(id)||0)+(value?1:-1);if(count>0)this.locks.set(id,count);else this.locks.delete(id);}this.changed(this); }
   dispose() { for(const s of this.sessions.values()){s.subscription.dispose();s.model.dispose();}for(const m of this.retired)m.dispose();this.sessions.clear();this.retired.clear(); }
 }

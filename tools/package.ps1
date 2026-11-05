@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$PublishDirectory,
     [Parameter(Mandatory)][string]$OutputDirectory,
-    [Parameter(Mandatory)][ValidateSet('win-x64','win-arm64','osx-x64','osx-arm64')][string]$RuntimeIdentifier,
+    [Parameter(Mandatory)][ValidateSet('win-x64','win-arm64','osx-x64','osx-arm64','linux-x64','linux-arm64')][string]$RuntimeIdentifier,
     [string]$NsisCompiler
 )
 $ErrorActionPreference = 'Stop'
@@ -18,6 +18,7 @@ $suffix = [string]$properties.Project.PropertyGroup.VersionSuffix
 $bundleVersion = [string]$properties.Project.PropertyGroup.MacBundleVersion
 if ($numericVersion -notmatch '^\d+\.\d+\.\d+$' -or $suffix -notmatch '^[0-9A-Za-z.-]*$' -or $bundleVersion -notmatch '^\d+$') { throw 'Invalid packaging version.' }
 $version = if ($suffix) { "$numericVersion-$suffix" } else { $numericVersion }
+$isLinuxPackage = $RuntimeIdentifier.StartsWith('linux-')
 $isWindowsPackage = $RuntimeIdentifier.StartsWith('win-')
 $appHost = if ($isWindowsPackage) { 'Grove.exe' } else { 'Grove' }
 foreach ($relative in @($appHost,'Grove.dll','Grove.deps.json','Grove.runtimeconfig.json','Editor/dist/index.html')) {
@@ -65,6 +66,12 @@ if ($isWindowsPackage) {
     $portable = Join-Path $output "desktop-$RuntimeIdentifier.zip"
     Compress-Archive -Path (Join-Path $runtime '*') -DestinationPath $portable
     $assets += $installer,$portable
+} elseif ($isLinuxPackage) {
+    if (-not $IsLinux) { throw 'Build and verify Linux packages on Linux.' }
+    Run-PackageCommand /bin/chmod @('+x', (Join-Path $runtime 'Grove'))
+    $portable = Join-Path $output "desktop-$RuntimeIdentifier.tar.gz"
+    Run-PackageCommand tar @('-czf', $portable, '-C', $runtime, '.')
+    $assets += $portable
 } else {
     if (-not $IsMacOS) { throw 'Build and verify macOS bundles on macOS.' }
     $bundleRoot = Join-Path $stage 'dmg'; $app = Join-Path $bundleRoot 'Grove.app'
@@ -113,10 +120,10 @@ if ($isWindowsPackage) {
     $assets += $dmg,$portable
 }
 $bundleFiles = @()
-if (-not $isWindowsPackage) {
+if (-not $isWindowsPackage -and -not $isLinuxPackage) {
     $bundleFiles = @(Get-ChildItem -LiteralPath $app -Recurse -File -Force | ForEach-Object { @{path=[IO.Path]::GetRelativePath($app,$_.FullName); bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName).Hash.ToLowerInvariant()} })
 }
-$packageMetadata = @{ bundleFiles=$bundleFiles; version=$version; runtimeIdentifier=$RuntimeIdentifier; appHost=$appHost; developerSigned=$false; notarized=$false; macAdHocSigned=(-not $isWindowsPackage); installerBootstrapper= $(if ($isWindowsPackage) {'NSIS x86 Unicode; payload native to RID'} else {$null}); files=$manifest }
+$packageMetadata = @{ bundleFiles=$bundleFiles; version=$version; runtimeIdentifier=$RuntimeIdentifier; appHost=$appHost; developerSigned=$false; notarized=$false; macAdHocSigned=(-not $isWindowsPackage -and -not $isLinuxPackage); installerBootstrapper= $(if ($isWindowsPackage) {'NSIS x86 Unicode; payload native to RID'} else {$null}); files=$manifest }
 $packageMetadata | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $output 'package-metadata.json') -Encoding utf8
 $assets | ForEach-Object { "$((Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_))" } | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt') -Encoding utf8
 Write-Host "Packaged $version $RuntimeIdentifier (not Developer-signed)."

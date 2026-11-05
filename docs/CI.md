@@ -1,4 +1,4 @@
-# Windows 与 macOS CI
+# Windows、macOS 与 Linux CI
 
 工作流位于 [.github/workflows/ci.yml](../.github/workflows/ci.yml)，本地与 Actions 共用 [tools/ci.ps1](../tools/ci.ps1)。它不依赖 GitHub 仓库名称；当前解决方案为 Grove.slnx；内部 src/GitX.*、命名空间及 Core 程序集保持兼容；桌面程序集和启动文件为 Grove。
 
@@ -10,8 +10,10 @@
 | windows-11-arm | win-arm64 | 同上，在原生 Windows ARM64 runner 运行测试与 publish |
 | macos-15 | osx-arm64 | 同上，在 Apple Silicon runner 运行测试与本机架构 publish |
 | macos-15-intel | osx-x64 | 同上，在 Intel runner 运行测试与本机架构 publish |
+| ubuntu-24.04 | linux-x64 | 同上，ELF、tar.gz 哈希/执行位验证；不启动 GUI |
+| ubuntu-24.04-arm | linux-arm64 | 同上，原生 ARM64，尚待实际运行 |
 
-以 global.json 安装 SDK，.node-version 安装固定 Node，NuGet 使用 --locked-mode、npm 使用 npm ci。四个 job 独立完成，失败不取消其他平台；每个 job 上限 25 分钟。Core 测试必须真实执行且 TRX 不能为空，挂起测试 3 分钟后终止且不生成内存转储。没有按平台整体跳过测试。
+以 global.json 安装 SDK，.node-version 安装固定 Node，NuGet 使用 --locked-mode、npm 使用 npm ci。六个 job 独立完成，失败不取消其他平台；每个 job 上限 25 分钟。Core 测试必须真实执行且 TRX 不能为空，挂起测试 3 分钟后终止且不生成内存转储。没有按平台整体跳过测试。
 
 Git 测试使用随机专用临时仓库并设置本地作者，CI 使用全新 hosted runner；不提供用户凭据。脚本不覆盖 HOME、不编辑用户 Git 配置，也不设置会改变 Git 标准配置发现的 GIT_CONFIG_*。本地若配置自定义 hooksPath／filter 或 Git 环境覆盖，应先在独立副本审阅其影响；产品的 blame 缓存遇到未知覆盖会有意拒绝复用，不能靠跳过相关测试制造绿灯。
 
@@ -19,7 +21,7 @@ macOS 在启动测试子进程前把 TMPDIR 解析为同一临时目录的物理
 
 ## 架构与本机依赖检查
 
-四个 job 都要求 PowerShell、.NET 与 Node 的进程架构和操作系统一致；不把 x64 仿真或交叉发布计为 ARM64 原生测试。PlatformProbe 实际加载 LibGit2，Windows 还核对 apphost、LibGit2、Skia 和 HarfBuzz 的 PE 架构。结果写入 results/platform.json 和 metadata.json。
+六个 job 都要求 PowerShell、.NET 与 Node 的进程架构和操作系统一致；不把 x64 仿真或交叉发布计为 ARM64 原生测试。PlatformProbe 实际加载 LibGit2，Windows 还核对 apphost、LibGit2、Skia 和 HarfBuzz 的 PE 架构。结果写入 results/platform.json 和 metadata.json。
 
 WebView 包采用托管 WebView2 loader；探针检查发布的托管程序集是否可用于目标位数，并记录已发现的 Windows WebView2 Runtime 版本和架构。系统 WebView2 Runtime 仍是用户机器的先决条件，不由 self-contained .NET 包提供；没有发现 Runtime 不等于浏览器可用。探针不创建 WebView，不构成 ARM64 或其他平台 GUI 验收。参见 [Avalonia 平台依赖](https://docs.avaloniaui.net/docs/app-development/embedding-web-content)。
 
@@ -60,3 +62,7 @@ Mac CI 在构建后启动实际 Grove 窗口，使用临时仓库和独立配置
 迁移旧改动时先逐项比较：已经包含在上游的改动保留最新实现，独有内容单独迁移并验证；原始字节与旧仓库状态仍可从归档恢复。个人配置、截图、历史归档和构建产物不纳入源码提交。
 
 本机工作区的实际路径、恢复步骤及本地推送保护记录在不提交的 LOCAL-WORKSPACE.md。该保护会拒绝推送旧历史或混合历史，但不自动安装到其他克隆；发布前仍需核对提交范围与隐私。产物 metadata 的文件哈希清单包含隐藏构建文件。
+
+## Linux 候选
+
+CI 安装 WebKitGTK 4.1/X11 依赖；PlatformProbe 检查 apphost、LibGit2、Skia、HarfBuzz 的 ELF64/小端/机器类型并加载 LibGit2。package.ps1 生成 tar.gz 和 SHA256SUMS；test-linux-package.ps1 校验归档后在含空格路径解包，逐文件哈希、数量与执行位检查，不修改用户系统集成。新 job 未执行前不能据配置宣称通过，详见 [LINUX](LINUX.md)。

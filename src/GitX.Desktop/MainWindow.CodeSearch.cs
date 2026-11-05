@@ -49,16 +49,28 @@ public sealed partial class MainWindow
         var previousFocus = searchOwner.FocusManager?.GetFocusedElement() as Control;
         var editorFocused = _webView?.IsFocused == true || NativeKeyboardFocus.HasEmbeddedFocus(searchOwner);
         if (_codeSearchRoot != root) { _codeSearchQuery = new(""); _codeSearchRoot = root; }
+        var commandVersion = _model.DocumentVersion;
+        bool ContextCurrent() => !_closed && _model.Root == root && _model.DocumentVersion == commandVersion;
+        bool CanRunAction(ShellCommandId id) => ContextCurrent() && CanRunShellCommand(id, searchOwner);
         var window = new CodeSearchWindow(root, () => _model.RepositoryPaths, _model.RepositoryFilesTruncated, _codeSearchQuery with { FilesOnly = filesOnly }, async match =>
         {
             if (_closed || _model.Root != root) return "仓库已变化，请重新搜索。";
             var opened = await _model.OpenCodeSearchMatchAsync(root, match);
             UpdateNavigationLayout();
             return opened ? null : string.IsNullOrEmpty(_model.Error) ? "此结果已失效，请重新搜索。" : _model.Error;
-        }, quick);
+        }, quick, CanRunAction, ContextCurrent);
+        void ContextChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => window.InvalidatePreviewContext();
+        _model.PropertyChanged += ContextChanged;
         _codeSearch = window;
         try { if (quick) await window.ShowQuickAsync(searchOwner); else await window.ShowDialog(searchOwner); }
-        finally { _codeSearchQuery = window.Query; _codeSearch = null; }
+        finally { _model.PropertyChanged -= ContextChanged; _codeSearchQuery = window.Query; _codeSearch = null; }
+        if (window.RequestedCommand is { } command)
+        {
+            // The popup is gone and _codeSearch cleared before commands can open
+            // another search/dialog. Do not queue the old editor-focus restore.
+            if (CanRunAction(command)) { searchOwner.Activate(); RunShellCommand(command, searchOwner); }
+            return;
+        }
         if (window.OpenDetailedRequested) { await OpenCodeSearchAsync(false, restoreEmbeddedFocus: restoreEmbeddedFocus); return; }
         var version = _model.DocumentVersion;
         Dispatcher.UIThread.Post(() =>

@@ -1,7 +1,7 @@
 # Requires PowerShell 7, Git, Node from .node-version, and the SDK in global.json.
 [CmdletBinding()]
 param(
-    [ValidateSet('win-x64', 'win-arm64', 'osx-arm64', 'osx-x64')]
+    [ValidateSet('win-x64', 'win-arm64', 'osx-arm64', 'osx-x64', 'linux-x64', 'linux-arm64')]
     [string]$RuntimeIdentifier,
     [string]$OutputDirectory
 )
@@ -11,7 +11,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
 $osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 if ($hostArchitecture -ne $osArchitecture) { throw "Native runner process required; process $hostArchitecture, OS $osArchitecture." }
-$hostRid = if ($IsWindows) { "win-$hostArchitecture" } elseif ($IsMacOS) { "osx-$hostArchitecture" } else { throw 'This CI entry supports Windows and macOS hosts.' }
+$hostRid = if ($IsWindows) { "win-$hostArchitecture" } elseif ($IsMacOS) { "osx-$hostArchitecture" } elseif ($IsLinux) { "linux-$hostArchitecture" } else { throw 'Unsupported host.' }
 if (-not $RuntimeIdentifier) { $RuntimeIdentifier = $hostRid }
 if ($RuntimeIdentifier -ne $hostRid) { throw "Run $RuntimeIdentifier on its native host; this process is $hostRid." }
 if (-not $OutputDirectory) { $OutputDirectory = "artifacts/ci/$RuntimeIdentifier" }
@@ -83,7 +83,7 @@ try {
     $required = @($appHost, 'LICENSE.txt', 'Grove.dll', 'GitX.Core.dll', 'Avalonia.Controls.WebView.dll', 'Grove.deps.json', 'Grove.runtimeconfig.json', 'Editor/dist/index.html', 'Editor/dist/editor.js', 'Editor/dist/editor.css', 'Editor/dist/merge.html', 'Editor/dist/merge.js', 'Editor/dist/merge.css', 'Editor/dist/source-symbols.worker.js', 'Editor/dist/tree-sitter-runtime.js', 'Editor/dist/tree-sitter.wasm', 'Editor/dist/MONACO-LICENSE.txt', 'Editor/dist/MARKED-LICENSE.txt', 'Editor/dist/DOMPURIFY-LICENSE.txt', 'Editor/dist/INTER-OFL.txt', 'Editor/dist/JETBRAINS-MONO-OFL.txt', 'Editor/dist/TREE-SITTER-GRAMMAR-NOTICES.txt')
     foreach ($grammar in @('java', 'c-sharp', 'python', 'javascript', 'typescript', 'tsx')) { $required += "Editor/dist/tree-sitter-$grammar.wasm" }
     foreach ($relative in $required) { if (-not (Test-Path -LiteralPath (Join-Path $publish $relative) -PathType Leaf)) { throw "Missing published resource: $relative" } }
-    $nativePattern = if ($IsWindows) { '*git2*.dll' } else { '*git2*.dylib' }
+    $nativePattern = if ($IsWindows) { '*git2*.dll' } elseif ($IsLinux) { '*git2*.so' } else { '*git2*.dylib' }
     if (-not (Get-ChildItem -LiteralPath $publish -Recurse -File -Filter $nativePattern)) { throw 'Published LibGit2 native library is missing.' }
     $platformResult = Join-Path $results 'platform.json'
     Invoke-CiCommand dotnet @('run', '--project', 'tools/PlatformProbe/PlatformProbe.csproj', '-c', 'Release', '--no-build', '--no-restore', '--', $hostArchitecture, $publish, $platformResult) 'platform-probe.txt'
@@ -110,6 +110,8 @@ try {
     & (Join-Path $PSScriptRoot 'package.ps1') -PublishDirectory $publish -OutputDirectory $output -RuntimeIdentifier $RuntimeIdentifier
     if ($IsWindows) {
         & (Join-Path $PSScriptRoot 'test-windows-package.ps1') -PackageDirectory $output -TestShellIntegration:($env:GITHUB_ACTIONS -eq 'true')
+    } elseif ($IsLinux) {
+        & (Join-Path $PSScriptRoot 'test-linux-package.ps1') -PackageDirectory $output
     } else {
         & (Join-Path $PSScriptRoot 'test-macos-package.ps1') -PackageDirectory $output
     }

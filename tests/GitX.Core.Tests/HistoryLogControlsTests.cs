@@ -46,7 +46,8 @@ public sealed class HistoryLogControlsTests
         repo.Git("branch", "feature/a"); repo.Git("tag", "feature/a");
         using var model = new MainViewModel(); await model.OpenAsync(repo.Root);
         await model.SelectHistoryReferenceAsync("refs/heads/feature/a");
-        var notices = new List<string?>(); model.PropertyChanged += (_, e) => notices.Add(e.PropertyName);
+        // Background document completions may notify while assertions enumerate.
+        var notices = new System.Collections.Concurrent.ConcurrentQueue<string?>(); model.PropertyChanged += (_, e) => notices.Enqueue(e.PropertyName);
         model.HistoryBranchSearch = "feature/a";
         static IEnumerable<HistoryBranchNode> Flatten(IEnumerable<HistoryBranchNode> nodes) => nodes.SelectMany(n => new[] { n }.Concat(Flatten(n.Children)));
         var nodes = Flatten(model.HistoryBranches).ToArray();

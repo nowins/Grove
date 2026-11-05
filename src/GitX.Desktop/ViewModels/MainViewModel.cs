@@ -116,8 +116,13 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         && _snapshot?.Changes.Any(change => change.Path == selected.Path && change.Kind == ComparisonKind.Index) == true;
     public bool CanCommit => !IsWriting && !HasOperation && _inclusions.Count > 0 && !string.IsNullOrWhiteSpace(CommitMessage);
     public int IncludedFileCount => _inclusions.Count;
+    public DiscardRecovery? CurrentRecovery => _recovery;
     public bool CanRestoreDiscard => !IsWriting && _recovery?.Root == Root && _recovery is not null;
     public string CommitMessage { get => _commitMessage; set { if (Set(ref _commitMessage, value)) Changed(nameof(CanCommit)); } }
+    public bool HasRecovery => _recovery is not null && _recovery.Root == Root;
+    public string RecoveryNotice => _recovery is null ? "" : $"可撤销 · {_recovery.Path}";
+    private void RecoveryChanged()
+    { Changed(nameof(RecoveryDescription)); Changed(nameof(RecoveryNotice)); Changed(nameof(HasRecovery)); Changed(nameof(CanRestoreDiscard)); }
     public string RecoveryDescription => _recovery is null ? "" : $"可撤销：{_recovery.Path}\n备份：{_recovery.Directory}";
 
     public (DocumentRequest Request, RepositoryDocument Document)? CurrentWrite()
@@ -127,7 +132,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public Task WriteFileAsync(FileWriteOperation operation, DocumentRequest request, RepositoryDocument document) => ExecuteWriteAsync(request.Root, async () =>
     {
         var recovery = await _writer.FileAsync(request, document.WriteToken!, operation);
-        if (recovery is not null) { _recovery = recovery; Changed(nameof(RecoveryDescription)); }
+        if (recovery is not null) { _recovery = recovery; RecoveryChanged(); }
     });
 
     public Task StageSelectionAsync(StageSelection selection, long version)
@@ -141,7 +146,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         => ExecuteWriteAsync(request.Root, async () =>
         {
             _recovery = await _writer.RevertBlockAsync(request, document, block);
-            Changed(nameof(RecoveryDescription));
+            RecoveryChanged();
         }, "回退变更块");
 
     public async Task CommitAsync()
@@ -234,7 +239,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public Task RestoreDiscardAsync()
     {
         if (_recovery is not { } recovery) return Task.CompletedTask;
-        return ExecuteWriteAsync(recovery.Root, async () => { await _writer.RestoreAsync(recovery); _recovery = null; Changed(nameof(RecoveryDescription)); });
+        return ExecuteWriteAsync(recovery.Root, async () => { await _writer.RestoreAsync(recovery); _recovery = null; RecoveryChanged(); });
     }
 
     private async Task ExecuteWriteAsync(string root, Func<Task> action, string name = "Git 操作")
@@ -268,7 +273,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void WriteStateChanged()
     {
-        Changed(nameof(CanBlame));
+        Changed(nameof(CanBlame)); Changed(nameof(HasRecovery));
         Changed(nameof(CanStageFile)); Changed(nameof(CanUnstageFile)); Changed(nameof(CanCommit)); Changed(nameof(CanRestoreDiscard));
         Changed(nameof(HasOperation)); Changed(nameof(OperationText)); Changed(nameof(CanContinueOperation)); Changed(nameof(CanAbortOperation)); Changed(nameof(CanOpenConflict));
     }

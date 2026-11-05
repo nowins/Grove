@@ -18,13 +18,13 @@ namespace GitX.Desktop;
 internal sealed partial class CodeSearchWindow
 {
     // Dimensions and states are measured from the local IDEA screenshots.
-    private enum QuickCategory { All, Files, Text }
+    private enum QuickCategory { All, Files, Text, Actions }
     private QuickCategory _category;
     private readonly Dictionary<QuickCategory, Button> _categoryButtons = [];
     private readonly Dictionary<CodeSearchMatch, Run> _textHits = [];
     private TextBlock? _empty, _selectedPath, _commands;
-    private StackPanel? _allScope, _textScope;
-    private Button? _fileTypes, _categoryFilter;
+    private StackPanel? _textScope;
+    private Button? _fileTypes;
     private bool _closing, _dismissedOutside;
     public bool RestoreFocusOnClose => !_dismissedOutside;
     public bool OpenDetailedRequested { get; private set; }
@@ -39,6 +39,7 @@ internal sealed partial class CodeSearchWindow
         WindowStartupLocation = WindowStartupLocation.Manual;
         Position = owner.PointToScreen(new Point((owner.ClientSize.Width - Width) / 2,
             Math.Min(124, Math.Max(16, owner.ClientSize.Height - Height - 16))));
+        ConfigurePreviewOwner(owner);
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnClosed(object? sender, EventArgs e) => completion.TrySetResult();
         Closed += OnClosed;
@@ -54,29 +55,19 @@ internal sealed partial class CodeSearchWindow
         var panel = new Grid { RowDefinitions = RowDefinitions.Parse("38,37,*,26") };
         var top = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("Auto,*,Auto"), Margin = new(5, 0, 8, 0) };
         var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        foreach (var (label, width, category) in new (string, double, QuickCategory?)[]
+        foreach (var (label, width, category) in new (string, double, QuickCategory)[]
         {
-            ("All", 36, QuickCategory.All), ("Classes", 60, null), ("Files", 44, QuickCategory.Files),
-            ("Symbols", 68, null), ("Actions", 64, null), ("Text", 46, QuickCategory.Text)
+            ("All", 36, QuickCategory.All), ("Files", 44, QuickCategory.Files),
+            ("Text", 46, QuickCategory.Text), ("Actions", 64, QuickCategory.Actions)
         })
         {
             var button = QuickButton(label, width);
-            if (category is { } value) { _categoryButtons[value] = button; button.Click += (_, _) => SelectQuickCategory(value); }
-            else SetUnavailable(button, $"{label} search is not available yet");
+            _categoryButtons[category] = button; button.Click += (_, _) => SelectQuickCategory(category);
             tabs.Children.Add(button);
         }
         top.Children.Add(tabs);
         var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        _allScope = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 7, 0) };
-        var nonProject = QuickButton(new Border { Width = 14, Height = 14, BorderThickness = new(1), CornerRadius = new(2), BorderBrush = Brush("#61636A") }, 16);
-        SetUnavailable(nonProject, "Only files in the current project are indexed");
-        _allScope.Children.Add(nonProject);
-        _allScope.Children.Add(new TextBlock { Text = "Include non-project items", VerticalAlignment = VerticalAlignment.Center });
-        tools.Children.Add(_allScope);
         _textScope = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
-        var project = QuickButton("Project Files ⌄", 91);
-        SetUnavailable(project, "Search is limited to the current project's working files");
-        _textScope.Children.Add(project);
         _fileTypes = QuickButton(FileTypeContent("All file types"), 118);
         _fileTypes.Height = 22; _fileTypes.Margin = new(0, 4, 0, 0);
         _fileTypes.BorderThickness = new(1); _fileTypes.BorderBrush = Brush("#43454A");
@@ -86,12 +77,11 @@ internal sealed partial class CodeSearchWindow
         var maskFlyout = new Flyout { Content = maskPanel }; maskFlyout.FlyoutPresenterClasses.Add("shell-popup");
         _fileTypes.Click += (_, _) => { maskFlyout.ShowAt(_fileTypes); _mask.Focus(); };
         _textScope.Children.Add(_fileTypes); tools.Children.Add(_textScope);
-        var preview = QuickButton(QuickIcon("M3 2.5 H13 V13.5 H3 Z M5 5 H11 M5 8 H11 M5 10.5 H11"), 24);
-        SetUnavailable(preview, "Preview is not available yet"); tools.Children.Add(preview);
-        _categoryFilter = QuickButton(QuickIcon("M2.5 3 H13.5 L9.5 8 V12 L6.5 13 V8 Z"), 24);
-        SetUnavailable(_categoryFilter, "Class, symbol and action result filters are not available yet"); tools.Children.Add(_categoryFilter);
+        _previewToggle = QuickButton("预览", 76);
+        _previewToggle.Click += (_, _) => { _query.Focus(); _previewRequested = !_previewRequested; UpdatePreviewLayout(); };
+        tools.Children.Add(_previewToggle);
         var find = QuickButton(QuickIcon("M3 3 H13 V13 H3 Z M10 5 L6 9 M6 6 V9 H9"), 24);
-        ToolTip.SetTip(find, "Find in Files · Ctrl+Shift+F");
+        ToolTip.SetTip(find, "Find in Files · " + ShellCommands.All.Single(c => c.Id == ShellCommandId.FindText).Gesture(OperatingSystem.IsMacOS()));
         find.Click += (_, _) => { OpenDetailedRequested = true; CloseSearch(); }; tools.Children.Add(find);
         Grid.SetColumn(tools, 2); top.Children.Add(tools);
         panel.Children.Add(new Border { Child = top, BorderThickness = new(0, 0, 0, 1), BorderBrush = Brush("#333438") });
@@ -106,13 +96,18 @@ internal sealed partial class CodeSearchWindow
             { Setters = { new Setter(Border.BorderThicknessProperty, new Thickness(0)), new Setter(Border.BackgroundProperty, Brushes.Transparent) } });
         Grid.SetColumn(_query, 1); input.Children.Add(_query);
         _commands = new TextBlock { Text = "Type / to see commands", Foreground = Brush("#6F737A"), VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(_commands, "Command search is not available yet"); Grid.SetColumn(_commands, 2); input.Children.Add(_commands);
+        Grid.SetColumn(_commands, 2); input.Children.Add(_commands);
         var inputBorder = new Border { Child = input, BorderThickness = new(0, 0, 0, 1), BorderBrush = Brush("#333438") };
         Grid.SetRow(inputBorder, 1); panel.Children.Add(inputBorder);
 
         _results.Name = "IdeaSearchResults"; _results.Background = Brushes.Transparent; _results.BorderThickness = new(0);
         _results.AutoScrollToSelectedItem = true; _results.Margin = new(7, 4, 7, 0); _results.Padding = new(0);
-        _results.ItemTemplate = new FuncDataTemplate<CodeSearchMatch>((match, _) => match is null ? new Border() : QuickResultRow(match));
+        _results.ItemTemplate = new FuncDataTemplate<object>((item, _) => item switch
+        {
+            CodeSearchMatch match => QuickResultRow(match),
+            ShellCommandDefinition command => QuickActionRow(command),
+            _ => new Border()
+        });
         _results.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         { Setters = { new Setter(ListBoxItem.HeightProperty, 22d), new Setter(ListBoxItem.MinHeightProperty, 22d), new Setter(ListBoxItem.PaddingProperty, new Thickness(9, 0)), new Setter(ListBoxItem.FocusAdornerProperty, null) } });
         _results.Styles.Add(new Style(x => x.OfType<ListBox>().Name("IdeaSearchResults").Descendant().OfType<ListBoxItem>().Class(":selected").Template().OfType<ContentPresenter>())
@@ -124,12 +119,10 @@ internal sealed partial class CodeSearchWindow
         _results.AddHandler(PointerReleasedEvent, (_, _) => _query.Focus(), RoutingStrategies.Bubble, handledEventsToo: true);
         var resultArea = new Grid(); resultArea.Children.Add(_results);
         _empty = new TextBlock { Foreground = Brush("#6F737A"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        resultArea.Children.Add(_empty); Grid.SetRow(resultArea, 2); panel.Children.Add(resultArea);
+        resultArea.Children.Add(_empty); var body = BuildQuickPreview(resultArea); Grid.SetRow(body, 2); panel.Children.Add(body);
         _selectedPath = new TextBlock { Foreground = Brush("#6F737A"), FontSize = UiTypography.SecondarySize, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var footer = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,Auto"), ColumnSpacing = 12, Margin = new(19, 0, 24, 0) };
         footer.Children.Add(_selectedPath);
-        var split = new TextBlock { Text = "Open In Right Split", IsEnabled = false, Foreground = Brush("#8FB4FA"), VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(split, "Opening in a right split is not available yet"); ToolTip.SetShowOnDisabled(split, true); Grid.SetColumn(split, 1); footer.Children.Add(split);
         Grid.SetRow(footer, 3); panel.Children.Add(footer);
         _status.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) { ToolTip.SetTip(_selectedPath, _status.Text); if (_results.ItemCount == 0 && !string.IsNullOrEmpty(_query.Text)) _selectedPath.Text = _status.Text; } };
         var frame = new Border { Child = panel, Background = Brush("#27282C"), BorderThickness = new(1), BorderBrush = Brush("#393B40"), CornerRadius = new(7) };
@@ -152,7 +145,9 @@ internal sealed partial class CodeSearchWindow
     private void SelectQuickCategory(QuickCategory category)
     {
         if (_category == category) { _query.Focus(); return; }
-        _category = category; Invalidate();
+        var wasActionSearch = IsActionSearch;
+        _query.Focus(); _category = category; Invalidate();
+        if (wasActionSearch && category != QuickCategory.Actions && _query.Text?.StartsWith('/') == true) _query.Text = _query.Text[1..];
         _files.IsChecked = category != QuickCategory.Text; _content.IsChecked = category == QuickCategory.Text;
         UpdateQuickCategoryVisuals(); _query.Focus(); _delay.Start();
     }
@@ -165,13 +160,12 @@ internal sealed partial class CodeSearchWindow
             button.Background = category == _category ? Brush("#23334F") : Brushes.Transparent;
             button.BorderBrush = category == _category ? Brush("#455579") : Brushes.Transparent;
         }
-        if (_allScope is not null) _allScope.IsVisible = _category == QuickCategory.All;
-        if (_textScope is not null) _textScope.IsVisible = _category != QuickCategory.All;
+        if (_textScope is not null) _textScope.IsVisible = _category == QuickCategory.Text;
         if (_textScope is not null) _textScope.Margin = _category == QuickCategory.Text ? new Thickness(0, 0, 4, 0) : new Thickness(0);
         if (_fileTypes is not null) _fileTypes.IsVisible = _category == QuickCategory.Text;
-        if (_categoryFilter is not null) _categoryFilter.IsVisible = _category != QuickCategory.Text;
-        if (_commands is not null) _commands.IsVisible = _category != QuickCategory.Text;
-        _query.PlaceholderText = "";
+        if (_commands is not null) _commands.IsVisible = _category == QuickCategory.All && !IsActionSearch;
+        UpdatePreviewLayout();
+        _query.PlaceholderText = IsActionSearch ? "Search available actions…" : _category == QuickCategory.Text ? "Search working files…" : _category == QuickCategory.All ? "File name or path; / for actions" : "File name or path; :line to navigate";
     }
 
     private Control QuickResultRow(CodeSearchMatch match)
@@ -221,18 +215,19 @@ internal sealed partial class CodeSearchWindow
             _query.Focus(); key.Handled = true; return true;
         }
         if (choosing && key.Key == Key.Tab && key.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift)
-        { SelectQuickCategory((QuickCategory)(((int)_category + (key.KeyModifiers == KeyModifiers.Shift ? 2 : 1)) % 3)); key.Handled = true; return true; }
+        { SelectQuickCategory((QuickCategory)(((int)_category + (key.KeyModifiers == KeyModifiers.Shift ? 3 : 1)) % 4)); key.Handled = true; return true; }
         return false;
     }
 
     private void SetQuickEmpty(string text)
     {
         if (!_quick || _empty is null) return;
-        _empty.Text = string.IsNullOrEmpty(_query.Text) ? "" : text; _empty.IsVisible = _results.ItemCount == 0;
+        _empty.Text = text; _empty.IsVisible = _results.ItemCount == 0;
     }
 
     private void UpdateQuickSelection()
     {
+        QueuePreview();
         if (_selectedPath is null) return;
         foreach (var (hitMatch, hit) in _textHits)
         {
@@ -240,7 +235,7 @@ internal sealed partial class CodeSearchWindow
             hit.Background = highlighted ? Brush("#BA9955") : Brushes.Transparent;
             hit.Foreground = highlighted ? Brushes.Black : Brush("#BCBEC4");
         }
-        _selectedPath.Text = _results.SelectedItem is CodeSearchMatch match ? Path.Combine(_root, match.Path).Replace('\\', '/') : "";
+        _selectedPath.Text = _results.SelectedItem is CodeSearchMatch match ? Path.Combine(_root, match.Path).Replace('\\', '/') : _results.SelectedItem is ShellCommandDefinition command ? $"{command.Group} · {command.Header}" : "";
         ToolTip.SetTip(_selectedPath, _selectedPath.Text);
     }
 
@@ -268,9 +263,17 @@ internal sealed partial class CodeSearchWindow
         return button;
     }
 
-    private static void SetUnavailable(Button button, string reason)
+    private bool IsActionSearch => _quick && (_category == QuickCategory.Actions ||
+        _category == QuickCategory.All && _query.Text?.StartsWith('/') == true);
+
+    private static Control QuickActionRow(ShellCommandDefinition command)
     {
-        button.IsEnabled = false; button.Foreground = Brush("#868A91"); ToolTip.SetTip(button, reason); ToolTip.SetShowOnDisabled(button, true);
+        var row = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,Auto"), ColumnSpacing = 12 };
+        row.Children.Add(new TextBlock { Text = command.Header, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+        var gesture = new TextBlock { Text = command.Gesture(OperatingSystem.IsMacOS()) ?? command.Group, Classes = { "idea-result-location" }, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(gesture, 1); row.Children.Add(gesture);
+        AutomationProperties.SetName(row, $"{command.Header} {gesture.Text}");
+        return row;
     }
 
     private static Control QuickIcon(string data) => new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse(data), Width = 16, Height = 16, Stroke = Brush("#BCBEC4"), StrokeThickness = 1, VerticalAlignment = VerticalAlignment.Center };

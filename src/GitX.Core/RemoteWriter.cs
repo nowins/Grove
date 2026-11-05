@@ -17,13 +17,37 @@ public sealed class RemoteWriter
         using var repo = new Repository(root);
         return repo.Network.Remotes.Select(r => new RemoteEntry(r.Name, r.Url, r.PushUrl ?? r.Url)).ToArray();
     });
-    public static string RedactUrl(string text) => Regex.Replace(text, @"(https?://)[^/\s@]+@", "$1***@", RegexOptions.IgnoreCase);
+    public static string RedactUrl(string text)
+    {
+        // Diagnostics and target labels must not expose URL credentials, query
+        // parameters or fragments. Preserve ordinary scp-style user@host paths.
+        text = Regex.Replace(text, @"([a-z][a-z0-9+.-]*://)[^/\s@]+@", "$1***@", RegexOptions.IgnoreCase);
+        return Regex.Replace(text, @"([a-z][a-z0-9+.-]*://[^\s?#]+)[?#][^\s]*", "$1?***", RegexOptions.IgnoreCase);
+    }
 
-    public async Task<string> RemoteHeadAsync(ActionContext context, RemoteEntry remote, string branch, GitAuthentication? authentication = null, CancellationToken token = default)
+    public async Task<string> ResolvePushUrlAsync(ActionContext context, RemoteEntry remote, CancellationToken token = default)
+    {
+        try
+        {
+            await Task.Run(() => CheckRemote(context, remote), token);
+            var endpoint = (await GitReadProcess.RunAsync(context.Root, ["remote", "get-url", "--push", "--", remote.Name], token)).TrimEnd('\r', '\n');
+            if (string.IsNullOrWhiteSpace(endpoint) || endpoint.StartsWith('-') || endpoint.Contains('\n') || endpoint.Contains('\r'))
+                throw new IOException("远程推送端点无效或有多行，请使用单一明确目标。");
+            // get-url already expands Git URL rules. Reusing its result must not
+            // expand a second time, otherwise the reviewed endpoint is ambiguous.
+            var repeated = (await GitReadProcess.RunAsync(context.Root, ["ls-remote", "--get-url", "--", endpoint], token)).TrimEnd('\r', '\n');
+            if (repeated != endpoint) throw new IOException("远程 URL 存在级联 insteadOf 重写，无法绑定单一审阅目标。请配置不会再次重写的明确推送地址。");
+            return endpoint;
+        }
+        catch (IOException ex) { throw new IOException(RedactUrl(ex.Message)); }
+    }
+
+    public async Task<string> RemoteHeadAsync(ActionContext context, RemoteEntry remote, string branch, GitAuthentication? authentication = null, CancellationToken token = default, string? expectedEndpoint = null)
     {
         await ValidateBranchAsync(context.Root, branch, token);
-        await Task.Run(() => CheckRemote(context, remote), token);
-        var output = await GitReadProcess.RunAsync(context.Root, ["ls-remote", "--heads", "--", remote.PushUrl, "refs/heads/" + branch], token,
+        var endpoint = await ResolvePushUrlAsync(context, remote, token);
+        if (expectedEndpoint is not null && endpoint != expectedEndpoint) throw new IOException("实际推送地址已变化，请刷新审阅。");
+        var output = await GitReadProcess.RunAsync(context.Root, ["ls-remote", "--heads", "--", endpoint, "refs/heads/" + branch], token,
             environment: authentication?.Environment, sanitize: text => RedactUrl(authentication?.Sanitize(text) ?? text));
         var line = output.Split('\n').FirstOrDefault(l => l.TrimEnd().EndsWith("\trefs/heads/" + branch, StringComparison.Ordinal));
         var sha = line?.Split('\t')[0] ?? "";
@@ -31,14 +55,32 @@ public sealed class RemoteWriter
         return sha;
     }
 
-    public Task<string> ExecuteAsync(ActionContext context, RemoteEntry remote, RemoteAction action, string branch, string? expectedRemote = null, GitAuthentication? authentication = null)
+    public Task<string> ExecuteAsync(ActionContext context, RemoteEntry remote, RemoteAction action, string branch, string? expectedRemote = null, GitAuthentication? authentication = null, string? reviewedRemote = null, string? reviewedPushUrl = null)
         => RepositoryWriter.Locked(context.Root, async () =>
     {
         if (!Enum.IsDefined(action)) throw new ArgumentOutOfRangeException(nameof(action));
         RepositoryActions.Check(context, action == RemoteAction.Pull); CheckRemote(context, remote);
         if (action != RemoteAction.Fetch) await ValidateBranchAsync(context.Root, branch);
         var pushing = action is RemoteAction.Push or RemoteAction.ForceWithLease;
-        var tracking = pushing ? TrackingRefs(context.Root, remote, branch) : [];
+        var endpoint = pushing ? await ResolvePushUrlAsync(context, remote) : null;
+        if (reviewedPushUrl is not null && endpoint != reviewedPushUrl) throw new IOException("实际推送地址已变化，请刷新审阅。");
+        if (pushing && reviewedRemote is not null)
+        {
+            var currentRemote = await RemoteHeadAsync(context, remote, branch, authentication, expectedEndpoint: endpoint);
+            if (currentRemote != reviewedRemote) throw new IOException("远程目标已变化，请刷新推送审阅。");
+            // Credential prompts/network reads can take time; recheck the approved local snapshot.
+            RepositoryActions.Check(context); CheckRemote(context, remote);
+            if (action == RemoteAction.Push && reviewedRemote.Length != 0)
+            {
+                using var repo = new Repository(context.Root);
+                var previous = repo.Lookup<Commit>(reviewedRemote);
+                var approved = repo.Lookup<Commit>(context.Head ?? "");
+                if (previous is null || approved is null || repo.ObjectDatabase.FindMergeBase(previous, approved)?.Sha != previous.Sha)
+                    throw new IOException("普通推送必须快进已审阅的远程提交，未执行操作。");
+            }
+        }
+        var fetchEndpoint = pushing ? await ResolveFetchUrlAsync(context.Root, remote.Name) : null;
+        var tracking = pushing && fetchEndpoint == endpoint ? TrackingRefs(context.Root, remote, branch) : [];
         var args = new List<string>();
         switch (action)
         {
@@ -54,8 +96,13 @@ public sealed class RemoteWriter
                 // A command-only remote with no fetch mapping leaves tracking
                 // updates exclusively to that guarded step. Nothing is saved.
                 var pushRemote = "gitx-push-" + Guid.NewGuid().ToString("N");
-                args.AddRange(["-c", $"remote.{pushRemote}.url={remote.PushUrl}",
+                args.AddRange(["-c", $"remote.{pushRemote}.url={endpoint}", "-c", $"remote.{pushRemote}.pushurl={endpoint}",
                     "push", "--porcelain", "--no-follow-tags", "--recurse-submodules=no"]);
+                // A reviewed normal push has already been proved fast-forward above.
+                // The exact lease closes the race between the read and the server update;
+                // it does not grant permission to replace non-ancestor history.
+                if (action == RemoteAction.Push && reviewedRemote is not null)
+                    args.Add($"--force-with-lease=refs/heads/{branch}:{reviewedRemote}");
                 if (action == RemoteAction.ForceWithLease)
                 {
                     if (expectedRemote is null || expectedRemote.Length != 0 && (expectedRemote.Length != 40 || !expectedRemote.All(Uri.IsHexDigit))) throw new IOException("必须先读取并确认远程分支 SHA。");
@@ -69,6 +116,8 @@ public sealed class RemoteWriter
         try
         {
             CheckRemote(context, remote);
+            if (await ResolvePushUrlAsync(context, remote) != endpoint || await ResolveFetchUrlAsync(context.Root, remote.Name) != fetchEndpoint)
+                throw new IOException("远程实际地址已变化");
             if (!tracking.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(TrackingRefs(context.Root, remote, branch).Keys))
                 throw new IOException("远程跟踪映射已变化");
             foreach (var (reference, previous) in tracking)
@@ -83,6 +132,12 @@ public sealed class RemoteWriter
         }
         return output;
     });
+
+    private static async Task<string> ResolveFetchUrlAsync(string root, string name)
+    {
+        try { return (await GitReadProcess.RunAsync(root, ["remote", "get-url", "--", name], default)).TrimEnd('\r', '\n'); }
+        catch (IOException ex) { throw new IOException(RedactUrl(ex.Message)); }
+    }
 
     private static Dictionary<string, string> TrackingRefs(string root, RemoteEntry remote, string branch)
     {

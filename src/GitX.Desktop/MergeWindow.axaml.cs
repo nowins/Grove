@@ -87,7 +87,7 @@ public sealed partial class MergeWindow : Window
             _server.Publish(await Task.Run(() => JsonSerializer.SerializeToUtf8Bytes(new { session = _session, document = _document }, _json)));
             if (_closed) return;
             _webView = new NativeWebView();
-            _webView.EnvironmentRequested += (_, e) => { e.EnableDevTools = false; if (e is WindowsWebView2EnvironmentRequestedEventArgs windows) windows.UserDataFolder = profile; };
+            DesktopWebView.Configure(_webView, profile);
             _webView.NavigationStarted += (_, e) => { if (!_server.Owns(e.Request)) e.Cancel = true; };
             _webView.NewWindowRequested += (_, e) => e.Handled = true;
             _webView.WebMessageReceived += (_, e) => Dispatcher.UIThread.Post(() => Message(e.Body));

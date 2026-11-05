@@ -63,6 +63,24 @@ public sealed class DesktopLocationTests
         Assert.Equal("/usr/bin/x-terminal-emulator",other.Executable);Assert.Empty(other.Arguments);Assert.Equal(target.Directory,other.WorkingDirectory);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Linux_reveal_opens_the_directory_as_one_literal_argument(bool directory)
+    {
+        using var repo = new TestRepository();
+        const string folder = "目录 空格; $(not-a-command)";
+        repo.Write(folder + "/name ' [x].txt", "unchanged");
+        var target = DesktopLocations.Resolve(repo.Root, directory ? folder : folder + "/name ' [x].txt", directory);
+        var plan = DesktopLocations.Plan(target, DesktopLocationAction.Reveal, DesktopPlatform.Other);
+        Assert.Equal("/usr/bin/xdg-open", plan.Executable);
+        Assert.Equal(new[] { target.Directory }, plan.Arguments);
+        Assert.Equal(target.Directory, plan.WorkingDirectory);
+        Assert.True(plan.WaitForExit);
+        Assert.False(plan.NativeWindowsSelection);
+        Assert.Equal("unchanged", File.ReadAllText(Path.Combine(repo.Root, folder, "name ' [x].txt")));
+    }
+
     [Fact]
     public async Task Dispatcher_receives_an_exact_resolved_location_without_touching_file_bytes()
     {
