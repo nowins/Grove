@@ -64,7 +64,11 @@ public sealed class DiagnosticTests
         occupied.Prefixes.Add($"http://127.0.0.1:{occupiedPort}/"); occupied.Start();
         var attempts = 0;
         using var server = new EditorServer("index.html", () => ++attempts == 1 ? occupiedPort : Port());
-        Assert.Equal(2, attempts);
+        // The first collision is intentional. A later port may be claimed
+        // between the probe closing and HttpListener binding, so retries up
+        // to the production limit are valid even after that first collision.
+        Assert.InRange(attempts, 2, 5);
+        Assert.NotEqual(occupiedPort, server.Address.Port);
         using var client = new HttpClient();
         Assert.Equal("{}", await client.GetStringAsync(new Uri(server.Address, "document")));
         var denied = await client.GetAsync(new Uri(server.Address.GetLeftPart(UriPartial.Authority) + "/document"));

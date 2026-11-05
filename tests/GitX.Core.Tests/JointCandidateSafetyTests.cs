@@ -69,7 +69,14 @@ public sealed class JointCandidateSafetyTests
         repo.Git("config", "test.draftIdentity", "updated");
         Assert.Equal(identity, TextDraftStore.RepositoryIdentity(repo.Root));
         var old = Path.Combine(repo.Container, "old-git"); Directory.Move(git, old);
-        repo.Git("init"); repo.Write("a.txt", "new"); repo.Commit("replacement");
+        repo.Git("init", "-b", "main");
+        // The replacement .git has no fixture-local identity or signing settings.
+        // Keep this test independent of the runner's global Git configuration.
+        repo.Git("config", "user.name", "GitX Test");
+        repo.Git("config", "user.email", "gitx-test@example.invalid");
+        repo.Git("config", "commit.gpgsign", "false");
+        repo.Git("config", "core.autocrlf", "false");
+        repo.Write("a.txt", "new"); repo.Commit("replacement");
         Assert.NotEqual(identity, TextDraftStore.RepositoryIdentity(repo.Root));
         Assert.Empty(store.List(repo.Root).Drafts); Assert.Equal(1, store.List(repo.Root).Unassigned);
         Assert.Single(Directory.GetFiles(Path.Combine(repo.Container, "drafts"), "*.json"));

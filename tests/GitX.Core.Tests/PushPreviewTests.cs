@@ -70,9 +70,11 @@ public sealed class PushPreviewTests
     {
         using var repo = new TestRepository(); repo.Write("a", "base"); repo.Commit("base");
         var (remote, path) = await RemoteAsync(repo); var p = await Read(repo, remote);
-        // Updating only the remote avoids a local tracking-ref change masking the remote check.
-        repo.Git("push", path, "HEAD:refs/heads/main");
+        // Fetch from the bare target: pushing to its URL can also update the
+        // source's origin/main on newer Git, masking the remote-only check.
+        repo.Git("--git-dir=" + path, "fetch", repo.Root, "HEAD:refs/heads/main");
         var before = await RepositoryActions.ReadAsync(repo.Root);
+        Assert.Equal(p.Context.Token, before.Token);
         var error = await Assert.ThrowsAsync<IOException>(() => new PushPreviewReader().ExecuteAsync(p, false));
         Assert.Contains("远程目标已变化", error.Message);
         Assert.Equal(before.Token, (await RepositoryActions.ReadAsync(repo.Root)).Token);
