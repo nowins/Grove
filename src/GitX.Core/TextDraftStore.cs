@@ -35,8 +35,14 @@ public sealed class TextDraftStore
     public void SetEnabled(bool enabled)
     {
         using var gate = Lock(); var file = Path.Combine(_directory, "enabled");
-        if (File.Exists(file)) SafeLength(file);
-        if (enabled) { using var output = new FileStream(file, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None); }
+        var exists = File.Exists(file);
+        if (exists) SafeLength(file);
+        if (enabled)
+        {
+            using var output = exists
+                ? new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.None)
+                : CreatePrivateFile(file);
+        }
         else File.Delete(file);
     }
 
@@ -104,17 +110,17 @@ public sealed class TextDraftStore
         if (all.Length >= MaxRecords && previous is null || all.Sum(p => SafeLength(p)) - (previous is null ? 0 : SafeLength(file)) + bytes.Length > MaxStoreBytes)
             throw new IOException("草稿恢复容量已满；请审阅或清理已有草稿。不会自动驱逐未保存内容。");
         var temporary = Path.Combine(_directory, Guid.NewGuid().ToString("N") + ".pending");
+        var created = false;
         try
         {
-            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, Options = FileOptions.WriteThrough };
-            if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            using (var output = new FileStream(temporary, options)) { output.Write(bytes); output.Flush(true); }
+            using (var output = CreatePrivateFile(temporary, FileOptions.WriteThrough))
+            { created = true; output.Write(bytes); output.Flush(true); }
             _beforeInstall?.Invoke();
             CheckParents(_directory);
             File.Move(temporary, file, overwrite: true);
             return record;
         }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        finally { if (created && File.Exists(temporary)) File.Delete(temporary); }
     }
 
     public TextDraftListing List(string root)
@@ -177,10 +183,37 @@ public sealed class TextDraftStore
         if (!OperatingSystem.IsWindows() && (File.GetUnixFileMode(_directory) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != 0)
             throw new IOException("草稿目录权限不是仅当前用户可读，未访问草稿。");
         var file = Path.Combine(_directory, "store.lock");
-        if (File.Exists(file)) SafeLength(file);
-        var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        return new FileStream(file, options);
+        if (File.Exists(file))
+        {
+            SafeLength(file);
+            return new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        }
+        // A competing creator fails closed instead of reopening an unverified
+        // file. Existing files are never recreated or given new permissions.
+        return CreatePrivateFile(file);
+    }
+    private static FileStream CreatePrivateFile(string path, FileOptions options = FileOptions.None)
+    {
+        if (OperatingSystem.IsWindows()) return CreatePrivateWindowsFile(path, options);
+        return new FileStream(path, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew, Access = FileAccess.ReadWrite, Share = FileShare.None,
+            Options = options, UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite
+        });
+    }
+    [SupportedOSPlatform("windows")]
+    private static FileStream CreatePrivateWindowsFile(string path, FileOptions options)
+    {
+        var user = WindowsIdentity.GetCurrent().User ?? throw new IOException("无法验证恢复目录所有者。");
+        var security = new FileSecurity();
+        security.SetOwner(user); security.SetAccessRuleProtection(true, false);
+        security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
+        // Elevated Windows tokens may otherwise give new files an Administrators
+        // owner. Set owner and private DACL atomically, before writing any bytes.
+        var stream = new FileInfo(path).Create(FileMode.CreateNew, FileSystemRights.Read | FileSystemRights.Write,
+            FileShare.None, 4096, options, security);
+        try { CheckWindowsSecurity(stream.GetAccessControl(), user, true); return stream; }
+        catch { stream.Dispose(); throw; }
     }
     private TextDraftRecord Read(string file)
     {
@@ -214,7 +247,12 @@ public sealed class TextDraftStore
     {
         var user = WindowsIdentity.GetCurrent().User ?? throw new IOException("无法验证恢复目录所有者。");
         FileSystemSecurity security = item is DirectoryInfo directory ? directory.GetAccessControl() : ((FileInfo)item).GetAccessControl();
-        if (!user.Equals(security.GetOwner(typeof(SecurityIdentifier))) || item is DirectoryInfo && !security.AreAccessRulesProtected)
+        CheckWindowsSecurity(security, user, item is DirectoryInfo);
+    }
+    [SupportedOSPlatform("windows")]
+    private static void CheckWindowsSecurity(FileSystemSecurity security, SecurityIdentifier user, bool requireProtected)
+    {
+        if (!user.Equals(security.GetOwner(typeof(SecurityIdentifier))) || requireProtected && !security.AreAccessRulesProtected)
             throw new IOException("恢复目录权限不是仅当前用户可读，未访问草稿。");
         foreach (FileSystemAccessRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier)))
             if (rule.AccessControlType == AccessControlType.Allow && !user.Equals(rule.IdentityReference))
