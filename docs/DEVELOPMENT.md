@@ -156,3 +156,9 @@ Diff 头部保留左右双方路径。850 以下按两行展示版本及文件�
 - Linux 草稿仓库身份使用只读 libc statx 的设备、inode 与 birth time，不能使用 .NET 可退化为可变 ctime 的 CreationTime。缺 birthtime/statx 的文件系统不支持持久恢复，保留内存草稿并报告错误，不写入仓库标记。Windows/macOS 路径不变。此未发布候选不自动迁移旧 Linux 身份，保留并提示同路径未归属副本。
 - 搜索预览仍只读磁盘，搜索动作白名单不包含草稿恢复/保存/Git 写入；Push 仅发送已审阅提交，不保存或提交编辑器草稿。
 - Linux 更新仍为手动 Releases 入口，无定时/启动自动检查、自动下载安装；Windows/macOS 的更新诊断和退避保持原路径。
+
+## macOS 标题栏横向安全区
+
+主窗口原生交通灯的横向保留区不从标题栏高度推算。布局时仅在 UI 线程读取本窗口 AppKit 标准按钮，并将其坐标换算到 Avalonia 的 NSView；原生逻辑点直接对应 DIP，不乘 Retina backing scale。项目按钮与原生按钮最右边保留 8 DIP，工具栏右侧保留 12 DIP。原生几何尚不可用或处于不完整过渡时保留旧安全回退，全屏完全隐藏按钮时仅保留小边距；布局更新后重新测量，避免恢复窗口沿用全屏值。Intel NSRect 使用 stret ABI，Apple Silicon 使用常规返回 ABI，两者必须分别通过原生探针。
+
+ChromeProbe 除不重叠、点击命中和垂直对齐外，还检查项目按钮距交通灯为 8±1 DIP、右侧为 12±1 DIP，并记录实测间距。不能用单测公式或截图预估替代 AppKit 原生结果。
