@@ -74,9 +74,10 @@ public sealed record UpdateOffer(UpdateRelease Release, UpdateAsset Package, Upd
 {
     public static string DetectRid(string os, string architecture) => (os, architecture) switch
     { ("windows", "x64") => "win-x64", ("windows", "arm64") => "win-arm64", ("macos", "x64") => "osx-x64", ("macos", "arm64") => "osx-arm64", _ => throw new IOException("当前操作系统或架构暂不支持在线更新。") };
+    public static bool SupportsRid(string rid) => rid is "win-x64" or "win-arm64" or "osx-x64" or "osx-arm64";
     public static UpdateOffer? Select(IEnumerable<UpdateRelease> releases, UpdateVersion current, bool previews, string rid)
     {
-        if (rid is not ("win-x64" or "win-arm64" or "osx-x64" or "osx-arm64")) throw new IOException("不支持的安装包架构。");
+        if (!SupportsRid(rid)) throw new IOException("不支持的安装包架构。");
         var release = releases.Where(r => (previews || !r.Preview) && r.Version.CompareTo(current) >= 0).OrderByDescending(r => r.Version).FirstOrDefault();
         if (release is null) return null;
         var name = $"Grove-{release.Version}-{rid}" + (rid.StartsWith("win-", StringComparison.Ordinal) ? "-setup.exe" : ".dmg");

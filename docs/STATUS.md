@@ -1,4 +1,19 @@
+## 联合候选当前状态（2026-11-05，未合并/未发布）
+
+Linux 优先联合候选同时包含内存修复、更新诊断、搜索 S1/S2、历史/Diff 响应式 UI、Push 审阅、单块直接回退和草稿恢复。排除 Worktree 创建和 Mac 标题栏候选。下文各“独立候选”的测试计数/环境失败是历史记录，不是这份联合源码的最终结果；最新验证与限制见 [JOINT_CANDIDATE.md](JOINT_CANDIDATE.md)。未改 main，未提交或推送。
+
 # 验证范围
+
+## 当前组合候选：Linux + 内存生命周期 + 更新诊断（2026-11-05，未发布）
+
+独立分支以 205678e 为基线，组合 Linux 候选、内存提交 5d5184f9f9b6a66b0e571a0f07e34eb1a89ea61f 和更新诊断补丁；不包含搜索、标题栏或直接撤销 hunk 候选，未合并 main、提交、推送或发布。以下既有各批次记录为历史覆盖，不取代本节的当前结果。
+
+- 人工合并 DEVELOPMENT/STATUS 的追加段落，保留各自约束；Linux 更新面板、宿主守卫和 Core 请求前限制与原 Linux 候选字节一致，5 个内存实现/测试/脚本文件与 5d5184f 一致。
+- 固定 .NET SDK 10.0.401、Node 24.19.0、PowerShell 7.5.4；npm ci、locked restore、完整解决方案 Release build 零警告零错误，Editor 124/124，Core 两次完整执行均 706/706，无跳过。测试仅移除无关多行工具说明变量，未改 HOME/Git 配置；MSBuild 使用 -m:1 适配沙箱 IPC 限制。
+- 新增 8 项组合回归：Linux x64/ARM64 在无冷却或已有冷却时都保持手动模式、零网络请求；Windows/macOS 四 RID 继续经过诊断源正常检查。既有取消、冷却恢复、403/429 区分、重定向与安全验证同时通过。这不是 Windows/macOS 原生 GUI 验收。
+- 首轮 Core 705/706，未改动的 HistoryLogControlsTests 通知 List 在后台写入和断言枚举间发生竞争；仅将测试收集器改为 ConcurrentQueue，保留全部原断言，不修改产品行为。失败日志和两个最终全量结果均保存。
+- Linux x64 自包含 publish、LibGit2 实际加载、ELF 架构、归档与逐文件校验、执行位验证分别记录于交付包。原生 GUI/askpass、Linux ARM64、Win/Mac 原生安装与远端 CI 未验收；完整 ci.ps1 未取得全绿，不将分步验证等同全平台通过。当前仍无显示会话，先前 Unix socket 拒绝未绕过或通过重复尝试规避。
+- 内存测试证明旧引用被释放，不证明进程工作集降低比例。Linux 不因加入诊断层而启动自动检查、下载或安装，原更新偏好仍不读取或改写。
 
 ## 已核对的当前代码
 
@@ -163,10 +178,83 @@ Mac 分支目前仅有 DOM 逻辑/Control-click 回归和跨平台代码编译�
 
 发布审查补充：两种强制发生在原子替换后的外部 Git 变化（分支切换及 HEAD 更新）均复现了旧实现错误确认保存成功的问题。增加替换后上下文校验并保留实际备份后，相关编辑/关闭/消息桥安全回归 139/139 通过。最终 Core 数量增加为 677；以最终提交的四平台 CI 为准。首轮 Mac 保存探针曾观察错误的 worktree 文件，现已显式选择并校验其主工作树和草稿 RootKey；该超时不作为产品 Cmd+S 故障的证据。
 
-## 内存生命周期候选（2026-11-05，独立云端副本，未发布）
+## 历史：Linux 独立候选重建验证（2026-11-05）
+
+执行环境恢复后，原 /workspace/shared 中 Linux 工作树、补丁、报告与安装包不可访问，其他未提交候选工作树亦未找到。本候选从远端精确基线 205678ea396c131d11ca5f08780d97bd6f847431 在独立 rebuilt 目录重建，重新验证，不以旧结果冒充新结果；未提交、推送、合并 main 或发布。
+
+本地 Debian 13 x64，.NET SDK 10.0.401、Node 24.19.0、PowerShell 7.5.4：locked restore、Release build、自包含 linux-x64 publish 均通过，零警告零错误。沙箱限制 MSBuild 工作节点 IPC，使用 -m:1。Editor 111/111，Core 686/686，无跳过；测试子进程仅移除无关的多行工具说明环境变量，未改 HOME、Git 配置或 GIT_*，未放宽 BlameInputProof 的保守规则。
+
+PlatformProbe 实际加载 LibGit2，验证 apphost、Skia、HarfBuzz 与 LibGit2 的 ELF64 x64。便携包 259 文件在含空格目录解压，归档 SHA256、逐文件哈希、数量与执行位检查通过；错误 SHA256 在解压前被拒绝。PowerShell 解析与 git diff --check 通过。
+
+原生限制重查：DISPLAY/Wayland 均为空，WebKitGTK/WPE 缺失；实际启动最终 apphost 报 XOpenDisplay failed。已安装 Xorg dummy 在隔离配置、临时 Xauthority、TCP 关闭且保留鉴权下仍不能创建 local/unix socket，退出 1。未改走网络传输或降低安全设置。askpass 原生探针也仍因 Unix named pipe EACCES 退出 134，未标记通过。补依赖不能解决 socket 拒绝。
+
+Linux ARM64、远端 CI、完整 ci.ps1、GUI/输入法/焦点/系统位置与浏览器实际启动均未完成。只可称非 GUI 部分已验证的开发候选，不能称原生桌面全面可用。
+
+Linux 手动更新显示真实 RID，保留浏览器 Releases（含预览版）发现入口；禁用应用内检查/下载/安装及自动偏好，不启动定时器、不读取/改写其他平台旧偏好；核心网络前拒绝不支持 RID。7 项更新能力/零请求回归与2项 Linux 文件定位参数回归已包含在总测试数中，未混入独立更新诊断候选。
+
+## 历史：内存生命周期独立候选（2026-11-05，未发布）
 
 以 205678ea396c131d11ca5f08780d97bd6f847431 为基线，缩略图定位完成或文档替换时清除 pending；结构导航文档失效时同时清除 result、filtered 及旧行节点。普通结构窗口关闭仍保留同文档缓存和已热 worker，未改草稿、撤销、保存和传输格式。
 
 Linux x64 使用项目固定 Node 24.19.0、锁定 npm ci：仅缩略图候选完整 Editor 118/118；两项组合后完整 Editor 124/124，均零失败、零跳过，Editor bundle 构建成功。结构导航新增 6 项控制器/DOM 回归在旧实现有 3 项失败，修复后全部通过；缩略图 7 项回归覆盖切换、关闭、同帧合并、重入与异常。新增测试使用受控 RAF/worker，既有解析器测试仍实际使用锁定 Tree-sitter WASM。
 
 本地没有 .NET SDK，未执行 Core、Desktop build/publish；四平台验证通过独立分支的现有 CI 运行，实际结果以对应提交的运行记录为准。未运行本次改动专属的实际 WebView 交互、物理输入或进程堆/工作集基准。两项结果证明特定旧引用被释放，不证明整体内存下降比例，也不将有界缓存称为无限增长泄漏。原主工作区、main 和发布分支不因本验证而修改，本候选不合并、不发布。
+
+## 历史：更新诊断独立候选（2026-11-05，未发布）
+
+基于 205678e 重建，Linux x64/.NET SDK 10.0.401。新增 12 项测试；更新相关可移植测试 67/67 通过，编译无警告。全量 Core 686/689 通过、3 失败、无跳过：既有 Native_download_marker_is_preserved_without_running_an_installer（Linux 不支持），以及 BlameInputProofTests.Source_proof_covers_missing_ancestor_attributes_and_repository_overrides 和 Linked_worktree_sources_include_private_and_common_metadata。未执行 Windows/macOS 原生 GUI 或平台回归；不宣称全量通过。未提交、推送或发布。
+
+## 快速搜索 Actions 首版（2026-11-05，重建的独立 Linux 工作区）
+
+移除未实现分类和提示，新增 Actions 与 All 的 `/` 动作搜索。动作限于现有导航/帮助入口；保持原菜单可执行性、仓库/文档代次与关闭后分派检查，没有新增 Git 写入入口，也未引入 LSP、调试器或外部项目代码。
+
+环境重置后从同一 205678e 基线与保留的实现脚本重建；本段结果来自重建后重新执行。.NET 10.0.401 缓存依赖锁定恢复、Desktop Debug 构建通过（零警告零错误）；搜索专项 20/20（含新增动作测试 8 项），Editor 111/111。完整 Core 685 项中 682 通过、3 失败、0 跳过：Native_download_marker_is_preserved_without_running_an_installer（Linux 不支持安装更新），以及 BlameInputProofTests 的 Source_proof_covers_missing_ancestor_attributes_and_repository_overrides、Linked_worktree_sources_include_private_and_common_metadata。这三项在前次未改基线 205678e 验证中也均失败；本次未修改或跳过这些测试。
+
+本轮没有 Windows/macOS 原生 UI、WebView 焦点、IME、DPI 或物理键盘验证；编译和逻辑测试不代表这些场景已验收。未提交、推送、创建 PR 或发布。
+
+## 搜索只读预览 S2 候选（2026-11-05，独立 Linux 执行环境）
+
+基于 205678e 加已持久保存的 S1 Actions 候选继续开发，未合入 main，也未混入 Linux/更新/内存组合候选。默认关闭的原生只读预览已实现，支持文件/文本结果、有界上下文、磁盘来源标注、失败重试、过期指纹拒绝及窄窗口收起。Actions 沿用原可执行性检查，不产生文件预览。
+
+.NET 10.0.401 锁定恢复和 Desktop Debug 构建通过（零警告零错误）。搜索/预览专项 36/36，其中新增预览与生命周期测试 16 项，覆盖 100 次快速选择、取消/关闭/上下文切换、过期成功和失败、跨仓同名文件、受限文件及修改状态不变；Editor 111/111。完整 Core 701 项中 698 通过、3 失败、0 跳过，仍为 S1 基线已记录的 Linux 更新标记及两个 BlameInputProof 测试失败，没有跳过或修改这些测试。
+
+本环境无 DISPLAY/Xvfb，且不是 Windows/macOS；未运行实际搜索窗口、未截图，不把编译/纯逻辑测试表述为 GUI 验收。Windows/macOS 的宽窄布局、预览滚动定位、鼠标/键盘焦点、IME、DPI 仍待原生检查。100 次选择测试验证状态隔离与清空，不等于实测对象存活、进程内存或性能收益。
+
+## Push 审阅独立候选（205678e 基线，2026-11-05）
+
+新增 PushPreview 只读模型、提交分页／文件懒加载与统一审阅窗口；尚未合并、推送、发布。临时本地仓库和 bare remote 的 23 项专项覆盖新分支、同步、领先、落后、分叉、未知远端对象、独立 push URL、异名目标、分页、HEAD／分支／配置过期、远端过期、重复执行、拒绝推送、lease 竞态、URL 重写绑定、脱敏、读取取消及指定 PID 终止，全部通过。
+
+Linux 云端 Release Desktop 零警告／错误，npm 离线锁定安装及 Editor 111/111 通过。完整 Core 700 项执行，697 通过、3 失败、0 跳过：两个 BlameInputProof 环境证明断言、一个基线尚不支持 Linux 的更新安装标记测试。三项在干净 205678e 同环境复现，未跳过或修改以制造全绿；基线完整运行另有一次端口重试数量断言波动。日志分别保留，不能称作完整 Core 通过。
+
+未做此窗口的 Windows/macOS/Linux 原生 GUI、真实键盘／IME、辅助功能、DPI、窄窗口或凭据交互验收。没有可用显示服务，编译结果不代替 UI 验收。文件读取复用 30 秒、2 Mi 字符上限的可取消 Git 只读进程；列表最多 1000 项并明确标注；远程对象本地缺失需显式 Fetch 后刷新，不自动获取独立 push endpoint。
+
+实际推送地址由 Git 解析并在执行前重新核对；普通 insteadOf／pushInsteadOf 和显式 pushurl 优先级已有真实临时仓库测试。会再次改写解析结果的级联 insteadOf 配置明确拒绝，需要配置不再重写的最终地址。审阅窗口的终止按钮复用现有确认、操作身份和 PID 检查，不会将关闭／读取取消当作终止写入。
+
+## 历史与 Diff 响应式候选（2026-11-05，基线 205678e）
+
+- 独立候选：历史附加筛选按需展开，生效条件常显；Diff 窄窗保留文件名和版本；历史侧栏会话偏好不因变宽被覆盖。未合并 main、未推送或发布。
+- Linux 云环境：npm ci 离线锁定恢复、Editor build、Node 113/113 测试、整个解决方案 Release warnings-as-errors 构建通过。SDK 10.0.401；Node 24.22.1，与仓库声明的 24.19.0 不同，不能替代固定版本 CI。
+- Core 全量 685 项：682 通过、3 失败、0 跳过。新增 8 项布局测试通过，覆盖 600/760/1199/1200/1600 宽度、重复缩放与比较操作。失败项为 Native_download_marker_is_preserved_without_running_an_installer 及 BlameInputProofTests 的 Source_proof_covers_missing_ancestor_attributes_and_repository_overrides、Linked_worktree_sources_include_private_and_common_metadata；未改动的 205678e 独立副本在同一环境定向复跑三项，均重现失败；它们不是此候选新增失败，但完整通过状态未达成。
+- Node DOM 测试覆盖双方文件名、完整路径、版本、换行与不存在状态。不能据此声称像素布局、焦点和原生 WebView 通过。
+- Chromium headless 尝试被环境 Unix socket 权限拒绝，未获得截图或实际宽度渲染结果。Windows/macOS 原生 GUI、筛选键盘焦点、弹层取消、DPI 与完整工具栏拥挤情况待验收；原生 CI 脚本不支持本 Linux 主机，未执行打包/发布检查。
+
+## 单块直接回退（2026-11-05，独立开发工作区）
+
+单块回退取消确认弹窗；底部提供带文件路径的非模态“可撤销”入口，保留写入期间禁用、过期检查和恢复备份。未保存/正在保存的源码草稿会阻止同文件块回退，不能隐式保存或丢弃。整文件确认不变。
+
+本批真实 Windows/macOS GUI、WebView 焦点与物理键盘尚未验收；未发布，不代表已安装版本具备此行为。
+
+Linux 云工作区验证：锁定还原通过，Release 全解决方案 warnings-as-errors 构建 0 警告/错误；Editor 111/111，回退与恢复专项 27/27。最终 Core 全量 679/680，唯一失败为原有 UpdateTests.Native_download_marker_is_preserved_without_running_an_installer（该基线不支持 Linux 安装更新）。一次中间重跑额外遭遇测试监听端口占用，最终全量重跑未复现。未修改或跳过失败测试。
+
+## 2026-11-05 草稿恢复独立候选（未合并、未发布）
+
+基线 `205678ea396c131d11ca5f08780d97bd6f847431`；工作分支 `candidate/draft-recovery`。默认关闭的本机检查点、显式恢复/放弃/清理、正常退出保留副本、磁盘外部变化防覆盖链路已实现。
+
+- 锁定 NuGet restore 成功，但 NU1900 漏洞数据查询受容器只读目录限制；没有把此项报告为通过。
+- `npm ci --offline --cache /tmp/grove-npm-cache` 成功，Editor 全套 114/114。
+- Desktop Debug 构建成功，0 error，2 个同上 NU1900 warning。
+- Core 全套 702 项中 699 通过，3 失败。三项在 pristine 205678e 同环境定向运行均复现：BlameInputProof 的 Source_proof_covers_missing_ancestor_attributes_and_repository_overrides / Linked_worktree_sources_include_private_and_common_metadata；UpdateTests 的 Native_download_marker_is_preserved_without_running_an_installer（Linux 基线未支持原生更新标记）。未静默跳过或计为全套通过。
+- 新增 TextDraftStore 25 项涵盖禁用、重启序列化、原子安装前中断、CAS、仓库隔离、磁盘外部变更/删除、排除路径、容量、坏记录、过期、权限、链接、Clear 后 Keep 验证与 pending 容量。
+- 原生 Mac/Windows/Linux WebView、真实重启/崩溃/断电、IME、多窗 UI、Windows ACL 实测未验收。构建与单元测试不等于原生验收。
+
+此候选不修改 main，不包含发布、推送或其他候选合并。

@@ -1,3 +1,4 @@
+import { sideHeader } from './side-header.js';
 import { GoToLine } from './go-to-line.js';
 import './go-to-line.css';
 import { recentFilesShortcut } from './recent-files-shortcut.js';
@@ -393,21 +394,6 @@ function changedMarks(blocks, side) {
   return result;
 }
 
-function sideHeader(element, side, other) {
-  const state = !side.exists ? '不存在' : side.text.length === 0 ? '空文件' : `${side.lineEnding} · ${side.endsWithNewline ? '末尾有换行' : '末尾无换行'}`;
-  const label = document.getElementById(element);
-  const access = document.createElement('span');
-  access.className = 'side-access'; access.textContent = '只读 · ';
-  const revision = document.createElement('span');
-  revision.className = 'side-revision'; revision.textContent = side.label;
-  label.classList.add('side-revision-label'); label.replaceChildren(access, revision);
-  label.title = `${side.label}\n${side.path}\n${state}`;
-  document.getElementById(`${element}-path`).textContent = side.path;
-  const format = document.getElementById(element === 'old-label' ? 'old-format' : 'new-format');
-  format.textContent = !side.exists ? '不存在' : side.text.length === 0 ? '空文件' : side.lineEnding.startsWith('混合') ? '混合' : side.lineEnding;
-  format.title = state;
-  format.classList.toggle('attention', side.exists && (side.lineEnding.startsWith('混合') || other?.exists && other.text.length > 0 && side.text.length > 0 && side.lineEnding !== other.lineEnding));
-}
 
 const diffViews = new Map();
 let displayedDiffKey = null;
@@ -492,7 +478,7 @@ function display(doc, toolbar) {
   included = new Set((toolbar?.includedLines ?? []).map(line => `${line.side}:${line.line}`));
   fileIncluded = toolbar && 'included' in toolbar ? toolbar.included : false;
   document.querySelector('.include-file-label').hidden = !canInclude;
-  document.getElementById('new-label').style.display = canInclude ? 'none' : 'inline';
+  document.getElementById('new-label').style.display = canInclude ? 'none' : 'inline-flex';
   canRevert = (canStage || canInclude) && !!doc.diff?.old.exists && !!doc.diff?.new.exists;
   diffActions.reset();
   document.getElementById('stage-block').hidden = !canStage;
@@ -813,8 +799,8 @@ function navigate(direction) {
   queueNavigation(() => selectChange(changeFromCursor(direction)));
 }
 window.gitx = { load, navigate, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => { sourceTabs.update(toolbar);textEditing.sync(toolbar);textEditing.disposeRetired(models);updateTextEditing(); },
-  fileSessions: () => ({sessions:textEditing.metadata(),composing:composingSearch}), fileDraft:id=>textEditing.draft(id),
-  fileSaving:draft=>textEditing.saving(draft),fileSaved:result=>textEditing.saved(result),lockFiles:(ids,value)=>textEditing.lock(ids,value),
+  fileSessions: () => ({sessions:textEditing.metadata(),composing:composingSearch}), fileDraft:id=>textEditing.draft(id), fileRestore:(id,record)=>textEditing.restore(id,record),
+  fileSaving:draft=>textEditing.saving(draft),fileSaved:result=>textEditing.saved(result),lockFiles:(ids,value)=>textEditing.lock(ids,value),lockDiskWrites:value=>textEditing.lockDiskWrites(value),
   captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane, markdown: markdown.capture() }),
   restoreDockView: value => {
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch { return; } }

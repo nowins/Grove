@@ -36,13 +36,18 @@ internal sealed partial class CodeSearchWindow : Window
     private long _resultSequence = -1;
     private long? _pendingOpen;
     private readonly bool _quick;
+    private readonly Func<ShellCommandId, bool> _canRunAction;
+    public ShellCommandId? RequestedCommand { get; private set; }
     private Action? _searchOpened;
     public bool OpenedMatch { get; private set; }
-    public CodeSearchQuery Query => new(_query.Text ?? "", _files.IsChecked == true, _case.IsChecked == true, _word.IsChecked == true, _regex.IsChecked == true, _mask.Text ?? "");
+    private readonly CodeSearchQuery _initialQuery;
+    public CodeSearchQuery Query => IsActionSearch ? _initialQuery : new(_query.Text ?? "", _files.IsChecked == true, _case.IsChecked == true, _word.IsChecked == true, _regex.IsChecked == true, _mask.Text ?? "");
 
-    public CodeSearchWindow(string root, Func<IReadOnlyList<string>> paths, bool inventoryTruncated, CodeSearchQuery query, Func<CodeSearchMatch, Task<string?>> openMatch, bool quick = false)
+    public CodeSearchWindow(string root, Func<IReadOnlyList<string>> paths, bool inventoryTruncated, CodeSearchQuery query, Func<CodeSearchMatch, Task<string?>> openMatch, bool quick = false, Func<ShellCommandId, bool>? canRunAction = null, Func<bool>? previewContextCurrent = null)
     {
         _root = root; _paths = paths; _inventoryTruncated = inventoryTruncated; _openMatch = openMatch; _quick = quick;
+        _canRunAction = canRunAction ?? (_ => false); _initialQuery = query;
+        _previewContextCurrent = previewContextCurrent ?? (() => true);
         Title = quick ? "搜索 — Grove · 双击 Shift" : "查找代码 — Grove"; Width = quick ? 680 : 760; Height = quick ? 400 : 470; MinWidth = 540; MinHeight = 310;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         _results.Styles.Add(new Style(x => x.OfType<ListBoxItem>()) { Setters = { new Setter(ListBoxItem.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch) } });
@@ -92,7 +97,7 @@ internal sealed partial class CodeSearchWindow : Window
         AutomationProperties.SetName(_query, "搜索文本"); AutomationProperties.SetName(_mask, "搜索文件范围"); AutomationProperties.SetName(_results, "代码搜索结果");
         _query.Text = query.Text; _mask.Text = query.FileMask; _case.IsChecked = query.MatchCase; _word.IsChecked = query.WholeWord; _regex.IsChecked = query.RegularExpression;
         _files.IsChecked = query.FilesOnly; _content.IsChecked = !query.FilesOnly;
-        void Schedule() { if (_opening || _closed) return; Invalidate(); UpdateQuickFilters(); _status.Text = "等待搜索…"; SetQuickEmpty("正在搜索…"); _delay.Start(); }
+        void Schedule() { if (_opening || _closed) return; Invalidate(); UpdateQuickFilters(); if (quick) UpdateQuickCategoryVisuals(); _status.Text = "等待搜索…"; SetQuickEmpty("正在搜索…"); _delay.Start(); }
         void ModeChanged() { options.IsVisible = !Query.FilesOnly; _query.PlaceholderText = quick ? "" : Query.FilesOnly ? "文件名或路径；支持空格分词及 :行号" : "搜索工作区代码…"; Schedule(); }
         _query.TextChanged += (_, _) => Schedule(); _mask.TextChanged += (_, _) => Schedule();
         _files.IsCheckedChanged += (_, _) => ModeChanged(); _content.IsCheckedChanged += (_, _) => ModeChanged();
@@ -128,6 +133,7 @@ internal sealed partial class CodeSearchWindow : Window
 
     private void Invalidate()
     {
+        CancelPreview();
         ++_sequence; _resultSequence = -1; _pendingOpen = null; _delay.Stop(); _read?.Cancel(); _read?.Dispose(); _read = null;
         _results.ItemsSource = null; _open.IsEnabled = false;
         _textHits.Clear();
@@ -135,6 +141,16 @@ internal sealed partial class CodeSearchWindow : Window
     private async Task SearchAsync()
     {
         if (_closed || _opening) return;
+        if (IsActionSearch)
+        {
+            var commands = ShellCommands.SearchActions(_query.Text ?? "", OperatingSystem.IsMacOS(), _canRunAction);
+            _results.ItemsSource = commands; _results.SelectedIndex = commands.Count > 0 ? 0 : -1;
+            _resultSequence = _sequence;
+            _status.Text = $"{commands.Count} available actions";
+            SetQuickEmpty("No available actions match");
+            if (_pendingOpen == _sequence) { _pendingOpen = null; await OpenSelectedAsync(); }
+            return;
+        }
         var query = Query; var owner = _sequence; _read = new(); var token = _read.Token;
         _status.Text = query.Text.Length == 0 ? "输入搜索文本。↑ / ↓ 选择结果，Enter 打开，Esc 取消。" : "正在搜索工作区…";
         try
@@ -157,7 +173,18 @@ internal sealed partial class CodeSearchWindow : Window
     }
     private async Task OpenSelectedAsync()
     {
-        if (_opening || _closed || _results.SelectedItem is not CodeSearchMatch match) return;
+        if (_opening || _closed || _resultSequence != _sequence) return;
+        if (_results.SelectedItem is ShellCommandDefinition command)
+        {
+            if (!_canRunAction(command.Id))
+            {
+                Invalidate(); await SearchAsync();
+                _status.Text = "This action is no longer available.";
+                return;
+            }
+            RequestedCommand = command.Id; CloseSearch(); return;
+        }
+        if (_results.SelectedItem is not CodeSearchMatch match) return;
         _opening = true; _delay.Stop(); _read?.Cancel(); _open.IsEnabled = false; _query.IsEnabled = _mask.IsEnabled = false;
         try
         {

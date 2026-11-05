@@ -16,7 +16,7 @@ public sealed partial class MainWindow
     private bool _fileHistoryActive => _dock?.Visible(ToolId.FileHistory) == true;
     private bool _commitFilterVisible;
     private bool _historyWide, _historyLeftVisible, _historyRightVisible;
-    private bool? _historyBranchOverride, _historyFilesOverride;
+    private readonly HistoryPanePreferences _historyPanePreferences = new();
     private double _commitHeight = 230, _commitAppliedHeight = 230;
     private double _gitBranchWidth = 180, _gitFilesWidth = 300, _gitAppliedBranchWidth = 180, _gitAppliedFilesWidth = 300;
     private readonly string[] _toolFilters = ["", ""];
@@ -82,10 +82,10 @@ public sealed partial class MainWindow
         FilesPane.RowDefinitions[4].Height = new(_commitAppliedHeight);
         EditorDetailFooter.IsVisible = false;
         EmptyCommitHint.IsVisible = _model.NavigationEntries(1).Count == 0;
-        var wide = GitLogWorkspace.Bounds.Width >= 1200;
-        if (wide != _historyWide) { _historyBranchOverride = null; _historyFilesOverride = null; _historyWide = wide; }
-        _historyLeftVisible = _historyBranchOverride ?? wide;
-        _historyRightVisible = _historyFilesOverride ?? true;
+        var historyLayout = _historyPanePreferences.Resolve(GitLogWorkspace.Bounds.Width);
+        _historyWide = historyLayout.Wide;
+        _historyLeftVisible = historyLayout.Branches;
+        _historyRightVisible = historyLayout.Files;
         var columns = GitLogWorkspace.ColumnDefinitions;
         if (columns[0].Width.IsAbsolute && columns[0].Width.Value > 0 && columns[0].Width.Value != _gitAppliedBranchWidth) _gitBranchWidth = columns[0].Width.Value;
         if (columns[4].Width.IsAbsolute && columns[4].Width.Value > 0 && columns[4].Width.Value != _gitAppliedFilesWidth) _gitFilesWidth = columns[4].Width.Value;
@@ -99,7 +99,7 @@ public sealed partial class MainWindow
         HistoryDetailsPanel.IsVisible = HistoryDetailsSplitter.IsVisible = _historyWide;
         AuxiliaryLayout.RowDefinitions[2].Height = new(_historyWide ? 4 : 0);
         AuxiliaryLayout.RowDefinitions[3].Height = new(_historyWide ? 110 : 0);
-        var stacked = GitLogWorkspace.Bounds.Width is > 0 and < 760;
+        var stacked = historyLayout.Stacked;
         CommitList.Classes.Set("compact", stacked);
         HistoryBranchesButton.IsVisible = !stacked;
         GitLogWorkspace.RowDefinitions = stacked ? new("*,4,*") : new("*");

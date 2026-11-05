@@ -30,6 +30,10 @@ jobs:
             rid: osx-arm64
           - os: macos-15-intel
             rid: osx-x64
+          - os: ubuntu-24.04
+            rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
     defaults:
       run:
         shell: pwsh
@@ -57,6 +61,13 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: src/GitX.Desktop/Editor/package-lock.json
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-0 libfontconfig1 libx11-6 libice6 libsm6 libxrandr2 libxi6 libxcursor1 libxext6 xdg-utils
 
       - name: Restore, build, test and package
         run: ./tools/ci.ps1 -RuntimeIdentifier '${{ matrix.rid }}'

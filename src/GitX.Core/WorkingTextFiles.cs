@@ -193,7 +193,7 @@ public sealed class WorkingTextWriter
         return directory;
     }
     [SupportedOSPlatform("windows")]
-    private static void RestrictWindows(string directory)
+    internal static void RestrictWindows(string directory)
     {
         var user = WindowsIdentity.GetCurrent().User ?? throw new IOException("无法确定保存临时目录的所有者。");
         var security = new DirectorySecurity(); security.SetAccessRuleProtection(true, false); security.SetOwner(user);

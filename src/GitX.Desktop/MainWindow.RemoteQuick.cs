@@ -56,6 +56,11 @@ public sealed partial class MainWindow
     private async Task RunQuickRemoteAsync(ActionContext context, RemoteEntry remote, RemoteAction action, string branch)
     {
         if (_closed || _model.Root != context.Root || _model.IsWriting) return;
+        if (action == RemoteAction.Push)
+        {
+            await OpenPushReviewAsync(context, remote, branch, requireChoice: context.Branch != branch);
+            return;
+        }
         try
         {
             await using var askPass = new GitAskPassSession(Environment.ProcessPath!, prompt => Dispatcher.UIThread.InvokeAsync(() =>
@@ -80,4 +85,17 @@ public sealed partial class MainWindow
         }
         catch (Exception ex) { if (!_closed && _model.Root == root) _model.ReportError(ex.Message); }
     }
+    private async Task OpenPushReviewAsync(ActionContext context, RemoteEntry? remote, string? branch,
+        bool requireChoice = false, bool force = false, bool ephemeral = false)
+    {
+        var generation = _model.RepositoryGeneration;
+        var remotes = await new RemoteWriter().ReadAsync(context.Root);
+        if (_closed || _model.Root != context.Root || _model.IsWriting || generation != _model.RepositoryGeneration) return;
+        var dialog = new PushReviewWindow(context.Root, context, remotes, remote, branch, requireChoice, force, ephemeral,
+            () => !_closed && _model.Root == context.Root && generation == _model.RepositoryGeneration,
+            action => _model.ExecuteActionAsync(context.Root, action, "Push · 审阅目标"),
+            () => _model.LastGitOperation, (owner, operation) => TerminateGitTaskAsync(owner, operation));
+        await dialog.ShowDialog(this);
+    }
+
 }

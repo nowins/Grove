@@ -185,12 +185,7 @@ internal sealed class FileHistoryPanel : Border, IDisposable
         try
         {
             _server = new EditorServer(); _view = new NativeWebView();
-            _view.EnvironmentRequested += (_, e) =>
-            {
-                e.EnableDevTools = false;
-                if (e is WindowsWebView2EnvironmentRequestedEventArgs windows)
-                    windows.UserDataFolder = Environment.GetEnvironmentVariable("GITX_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GitX", "WebView2");
-            };
+            DesktopWebView.Configure(_view);
             _view.NavigationStarted += (_, e) => { if (_server is null || !_server.Owns(e.Request)) e.Cancel = true; };
             _view.NewWindowRequested += (_, e) => e.Handled = true;
             _view.WebMessageReceived += (_, e) => Dispatcher.UIThread.Post(async () => await EditorMessage.DispatchAsync(e.Body,

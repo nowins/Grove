@@ -6,6 +6,9 @@ class Model {
   constructor(text){this.value=text;this.id=String(++next);this.version=1;this.listeners=new Set();this.disposed=false;}
   getValue(){return this.value;}getAlternativeVersionId(){return this.version;}
   setValue(text){this.value=text;this.version++;for(const listener of this.listeners)listener();}
+  pushStackElement(){}
+  getFullModelRange(){return {};}
+  pushEditOperations(_,edits){this.setValue(edits[0].text);}
   undoTo(text,version){this.value=text;this.version=version;for(const listener of this.listeners)listener();}
   onDidChangeContent(listener){this.listeners.add(listener);return {dispose:()=>this.listeners.delete(listener)};}
   isDisposed(){return this.disposed;}
@@ -61,4 +64,49 @@ test('loaded counts only attached current-document models, never retained drafts
  assert.equal(renderedModelCount({},[null,cached],panes),0);
  current.isDisposed=()=>true;old.isDisposed=()=>false;cached.isDisposed=()=>false;
  assert.equal(renderedModelCount({},[null,current],panes),0);
+});
+
+
+test('explicit recovery retains original baseline and never marks changed disk clean',()=>{
+ const e=create();const model=e.prepare(doc('external','disk2'),tabs()).model;
+ assert.equal(e.restore('a',{path:'a.txt',baseline:info('disk1'),text:'recovered'}),true);
+ assert.equal(model.getValue(),'recovered');assert.equal(e.draft('a').expected,'disk1');
+ assert.equal(e.metadata()[0].conflict,true);assert.equal(e.dirty(e.active),true);
+ e.prepare(doc('external newer','disk3'),tabs());assert.equal(model.getValue(),'recovered');
+ assert.equal(e.restore('a',{path:'a.txt',baseline:info(),text:'late'}),false);e.dispose();
+});
+test('recovery rejects wrong path root inactive dirty locked or readonly model',()=>{
+ const record={path:'a.txt',baseline:info(),text:'recovered'};
+ const e=create();const model=e.prepare(doc(),tabs()).model;
+ assert.equal(e.restore('a',{...record,path:'b.txt'}),false);
+ assert.equal(e.restore('a',{...record,baseline:info('disk1','other')}),false);
+ e.lock(['a'],true);assert.equal(e.restore('a',record),false);e.lock(['a'],false);
+ e.prepare(doc('b'),tabs('b'));assert.equal(e.restore('a',record),false);
+ e.prepare(doc(),tabs());model.setValue('current');assert.equal(e.restore('a',record),false);
+ assert.equal(model.getValue(),'current');e.dispose();
+});
+test('recovered draft retains normal save checkpoint semantics',()=>{
+ const e=create();e.prepare(doc(),tabs());e.restore('a',{path:'a.txt',baseline:info(),text:'recovered'});
+ const captured=e.draft('a');assert.deepEqual(captured.baseline,info());e.saving(captured);
+ e.saved({...captured,info:info('saved')});assert.equal(e.dirty(e.active),false);e.dispose();
+});
+
+test('native recovery acknowledgement survives JSON bridge and read-only navigation',async()=>{
+ const {installNativeBridge}=await import('./native-bridge.js');const target={};installNativeBridge(target,()=>()=>{});
+ const e=create();e.prepare(doc(),tabs());
+ const ack=JSON.parse(target.groveNative.json(()=>({restored:e.restore('a',{path:'a.txt',baseline:info(),text:'private recovered'})})));
+ assert.deepEqual(ack,{restored:true});
+ e.prepare({path:'a.txt',diff:{old:{},new:{}}},{...tabs(),sourceMode:false});
+ assert.equal(e.draft('a').text,'private recovered');assert.equal(e.draft('a').dirty,true);
+ const failed=JSON.parse(target.groveNative.json(()=>({restored:e.restore('a',{path:'a.txt',baseline:info(),text:'replace'})})));
+ assert.deepEqual(failed,{restored:false});
+ e.prepare(doc('external','disk2'),tabs());assert.equal(e.draft('a').text,'private recovered');assert.equal(e.draft('a').expected,'disk1');e.dispose();
+});
+test('disk-write lease freezes existing and newly opened tabs until reconciliation',()=>{
+ const e=create();e.prepare(doc(),tabs());e.lockDiskWrites(true);assert.equal(e.editable(),false);
+ e.prepare(doc('second'),tabs('b'));assert.equal(e.editable(),false);
+ assert.equal(e.restore('b',{path:'b.txt',baseline:info(),text:'cannot race'}),false);
+ e.lockDiskWrites(true);e.lockDiskWrites(false);assert.equal(e.editable(),false);
+ e.lockDiskWrites(false);assert.equal(e.editable(),true);
+ e.prepare(doc(),tabs());assert.equal(e.editable(),true);e.dispose();
 });

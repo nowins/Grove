@@ -16,7 +16,7 @@ public sealed partial class MainViewModel
     public Task WriteHistoryFilesAsync(HistoryFileWritePlan plan) => ExecuteWriteAsync(plan.Selection.Root, async () =>
     {
         _recovery = await HistoryFileActions.ExecuteAsync(plan);
-        Changed(nameof(RecoveryDescription));
+        RecoveryChanged();
     }, plan.Operation switch { HistoryFileOperation.Revert => "撤销所选历史文件更改", HistoryFileOperation.CherryPick => "拣选所选历史文件更改", _ => "从修订获取文件" });
     private CancellationTokenSource _historyRead = new();
     private string? _historyReference;

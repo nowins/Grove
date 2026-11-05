@@ -2,6 +2,7 @@
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/GitX.Core/GitX.Core.csproj" />
+    <Compile Include="../../src/GitX.Desktop/Services/DraftWriteGuard.cs" Link="DraftWriteGuard.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/WebViewScript.cs" Link="WebViewScript.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/TitlebarMetrics.cs" Link="TitlebarMetrics.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/WindowCommandPolicy.cs" Link="WindowCommandPolicy.cs" />
@@ -9,6 +10,7 @@
     <Compile Include="../../src/GitX.Desktop/ViewModels/MainViewModel.cs" Link="MainViewModel.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/WorkspaceNavigation.cs" Link="WorkspaceNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/ToolDockLayout.cs" Link="ToolDockLayout.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryPanePreferences.cs" Link="HistoryPanePreferences.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryNavigation.cs" Link="HistoryNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/FileHistoryViewModel.cs" Link="FileHistoryViewModel.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/HistoryQueryInput.cs" Link="HistoryQueryInput.cs" />
@@ -20,6 +22,7 @@
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferenceChoices.cs" Link="HistoryReferenceChoices.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/DesktopLocations.cs" Link="DesktopLocations.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentFileStore.cs" Link="RecentFileStore.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/SearchPreviewSession.cs" Link="SearchPreviewSession.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/ShellCommands.cs" Link="ShellCommands.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentRepositoryStore.cs" Link="RecentRepositoryStore.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/BranchActionAvailability.cs" Link="BranchActionAvailability.cs" />

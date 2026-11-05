@@ -79,8 +79,21 @@ public sealed partial class MainWindow
         };
     }
 
+    private void HistoryFiltersToggled(object? sender, RoutedEventArgs e) => UpdateHistoryFilterVisibility();
+
+    private void UpdateHistoryFilterVisibility()
+    {
+        var expanded = HistoryFiltersToggle.IsChecked == true;
+        HistoryAuthorFilterButton.IsVisible = expanded || _model.HasHistoryAuthorFilter;
+        HistoryDateFilterButton.IsVisible = expanded || _model.HasHistoryDateFilter;
+        HistoryPathFilterButton.IsVisible = expanded || _model.HasHistoryPathFilter;
+        HistoryFiltersToggle.Classes.Set("active", expanded || _model.HasHistoryAuthorFilter || _model.HasHistoryDateFilter || _model.HasHistoryPathFilter);
+    }
+
     private void HistoryModelChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(MainViewModel.HasHistoryAuthorFilter) or nameof(MainViewModel.HasHistoryDateFilter) or nameof(MainViewModel.HasHistoryPathFilter))
+            UpdateHistoryFilterVisibility();
         if (e.PropertyName is nameof(MainViewModel.HistoryBranches) or nameof(MainViewModel.HistoryReferenceKey))
         {
             _syncingHistoryTree = true;
@@ -102,15 +115,13 @@ public sealed partial class MainWindow
 
     private void HistoryBranchesToggled(object? sender, RoutedEventArgs e)
     {
-        _historyBranchOverride = !_historyLeftVisible;
-        if (_historyBranchOverride == true && !_historyWide) _historyFilesOverride = false;
+        _historyPanePreferences.ToggleBranches(GitLogWorkspace.Bounds.Width);
         UpdateNavigationLayout();
     }
 
     private void HistoryFilesToggled(object? sender, RoutedEventArgs e)
     {
-        _historyFilesOverride = !_historyRightVisible;
-        if (_historyFilesOverride == true && !_historyWide) _historyBranchOverride = false;
+        _historyPanePreferences.ToggleFiles(GitLogWorkspace.Bounds.Width);
         UpdateNavigationLayout();
     }
 
@@ -148,5 +159,5 @@ public sealed partial class MainWindow
         await _model.CompareHistoryAsync(commit, null); ShowHistoryComparisonFiles();
     }
     private void ShowHistoryComparisonFiles()
-    { OpenTool(2, false, false); _historyFilesOverride = true; if (!_historyWide) _historyBranchOverride = false; UpdateNavigationLayout(); }
+    { OpenTool(2, false, false); _historyPanePreferences.ShowFiles(GitLogWorkspace.Bounds.Width); UpdateNavigationLayout(); }
 }

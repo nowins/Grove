@@ -155,6 +155,14 @@ public sealed class UpdateTests
     public async Task Native_download_marker_is_preserved_without_running_an_installer()
     {
         using var fixture = new Fixture(); var path = Path.Combine(fixture.Root, "download.bin"); await File.WriteAllTextAsync(path, "marker test");
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        {
+            await Assert.ThrowsAsync<IOException>(() => UpdateInstaller.MarkDownloadedAsync(path, default));
+            await Assert.ThrowsAsync<IOException>(() => UpdateInstaller.InspectAsync(path, default));
+            Assert.Throws<IOException>(() => UpdateInstaller.OpenInteractive(path));
+            Assert.Equal("marker test", await File.ReadAllTextAsync(path));
+            return;
+        }
         await UpdateInstaller.MarkDownloadedAsync(path, default);
         if (OperatingSystem.IsWindows()) Assert.Contains("ZoneId=3", await File.ReadAllTextAsync(path + ":Zone.Identifier"));
         else if (OperatingSystem.IsMacOS())
@@ -166,6 +174,28 @@ public sealed class UpdateTests
         }
         Assert.Equal("marker test", await File.ReadAllTextAsync(path));
     }
+    [Theory]
+    [InlineData("linux-x64")]
+    [InlineData("linux-arm64")]
+    [InlineData("unsupported")]
+    public async Task Manual_update_platforms_do_not_fetch_releases_or_packages(string rid)
+    {
+        var source = new FakeSource();
+        Assert.False(UpdateOffer.SupportsRid(rid));
+        var error = await Assert.ThrowsAsync<IOException>(() => new UpdateClient(source).CheckAsync(UpdateVersion.Parse("0.1.0-preview.5")!, true, rid, default));
+        Assert.Contains("手动更新", error.Message);
+        Assert.Equal(0, source.PageCalls);
+        Assert.Equal(0, source.PackageCalls);
+    }
+
+    [Theory]
+    [InlineData("win-x64")]
+    [InlineData("win-arm64")]
+    [InlineData("osx-x64")]
+    [InlineData("osx-arm64")]
+    public void Existing_installer_platforms_keep_in_app_update_support(string rid)
+        => Assert.True(UpdateOffer.SupportsRid(rid));
+
     private sealed class FakeSource : IUpdateSource
     {
         public List<byte[]> Pages = []; public byte[]? RepeatPage; public int PageCalls, PackageCalls;
