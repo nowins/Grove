@@ -1,6 +1,6 @@
-# Linux 开发候选
+# Linux 实验性便携包
 
-目标为 Ubuntu 24.04 x64/ARM64 的 glibc 桌面，X11 或带 XWayland 的 Wayland 会话。尚未发布，不宣称纯 Wayland、musl/Alpine 或所有发行版通过验收。
+目标为 Ubuntu 24.04 x64/ARM64 的 glibc 桌面，X11 或带 XWayland 的 Wayland 会话。Preview 6 首次提供实验性便携包，不宣称纯 Wayland、musl/Alpine 或所有发行版通过验收。
 
 ## 依赖与运行
 
@@ -21,7 +21,7 @@ pwsh ./tools/ci.ps1 -RuntimeIdentifier linux-x64
 # ARM64 主机改用 linux-arm64
 sha256sum -c SHA256SUMS.txt
 mkdir grove
-tar -xzf desktop-linux-x64.tar.gz -C grove
+tar -xzf Grove-0.1.0-preview.6-linux-x64.tar.gz -C grove
 ./grove/Grove /path/to/repository
 ```
 
@@ -35,6 +35,6 @@ tar.gz 是便携目录，不安装系统文件或桌面入口。工具要求本�
 
 ## 验证边界
 
-CI 增加 Ubuntu 24.04 x64/ARM64 的 locked restore、Editor/Core 测试、原生 LibGit2 与 ELF 检查、自包含发布、tar.gz 校验/解包/执行位验证。CI 不启动 GUI，nativeGuiTested=false。当前本地结果见 STATUS.md；配置存在不等于远端 CI 已通过。
+CI 在 Ubuntu 24.04 x64/ARM64 上执行 locked restore、Editor/Core 测试、原生 LibGit2 与 ELF 检查、自包含发布、tar.gz 校验/解包/执行位验证。CI 不启动 GUI，nativeGuiTested=false。当前结果见 STATUS.md；发行来源必须核对准确版本提交的六平台 CI，既有候选结果不能替代新版本验证。
 
 原生桌面仍需验证主编辑器、Diff、Merge、历史、Markdown、保存/取消、剪贴板、输入法、焦点、快捷键、DPI、多窗口、系统定位/终端与 askpass。虚拟显示探针不替代完整人工验收。
