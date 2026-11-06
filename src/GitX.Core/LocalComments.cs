@@ -20,7 +20,7 @@ public sealed record CommentContext(string RepositoryId, string Root, string Pat
     }
     internal static CommentContext Create(Repository repository, DocumentRequest request, string revision, DiffSide? oldSide, DiffSide newSide) =>
         new(RepositoryIdFor(repository), System.IO.Path.TrimEndingDirectorySeparator(repository.Info.WorkingDirectory), request.Path, request.Kind, revision,
-            Hash(JsonSerializer.Serialize(new { request.Kind, request.Path, oldSide, newSide, revision })));
+            Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { request.Kind, request.Path, oldSide, newSide, revision }))).ToLowerInvariant());
 }
 
 public sealed record CommentAnchor(CommentContext Context, int Side, string Path, string Label, int StartLine, int EndLine, string Code, string Language)

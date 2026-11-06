@@ -7,8 +7,27 @@ namespace GitX.Core;
 public static partial class NativeDiff
 {
     // Immutable snapshots keep the line map, text and highlighting from different reads from mixing.
-    // The app writes only its two temporary inputs, never repository objects or the index.
+    // Buffer comparisons are read-only; the fallback writes only its two temporary inputs.
     public static async Task<(string Patch, SideBySideDiff Diff)> CompareAsync(DiffSide oldSide, DiffSide newSide, CancellationToken token, DiffWhitespace whitespace = DiffWhitespace.Exact)
+    {
+        // Capture/normalization, diff generation and highlighting all stay off
+        // the UI thread. Small/medium documents never cross a process boundary.
+        return await Task.Run(async () =>
+        {
+            // Prefix normalized lines so whitespace-only EOF lines survive.
+            string Input(string text) => whitespace == DiffWhitespace.Exact ? text.Replace("\r\n", "\n") :
+                string.Join('\n', Lines(text).Select(line => "\u0001" + NormalizeText(line, whitespace))) + (text.EndsWith('\n') ? "\n" : "");
+            token.ThrowIfCancellationRequested();
+            var before = Input(oldSide.Text); var after = Input(newSide.Text);
+            var patch = BufferDiff.TryCompare(before, after, token, out var buffered)
+                ? buffered : await CompareFilesAsync(before, after, token).ConfigureAwait(false);
+            if (whitespace != DiffWhitespace.Exact)
+                patch = patch.Replace("\n-\u0001", "\n-").Replace("\n+\u0001", "\n+").Replace("\n \u0001", "\n ");
+            return (patch, Build(oldSide, newSide, patch, token, whitespace));
+        }, token).ConfigureAwait(false);
+    }
+
+    private static async Task<string> CompareFilesAsync(string before, string after, CancellationToken token)
     {
         var directory = Path.Combine(Path.GetTempPath(), "GitX", "diff", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -19,21 +38,11 @@ public static partial class NativeDiff
             // that Build and the editor display. Prefix each normalized source
             // line so a whitespace-only last line without a newline stays a
             // real line. The prefix exists only in temporary comparison input.
-            string Input(string text)
-            {
-                if (whitespace == DiffWhitespace.Exact) return text.Replace("\r\n", "\n");
-                return string.Join('\n', Lines(text).Select(line => "\u0001" + Normalize(line, whitespace).Text))
-                    + (text.EndsWith('\n') ? "\n" : "");
-            }
-            await File.WriteAllTextAsync(Path.Combine(directory, "old.txt"), Input(oldSide.Text), new UTF8Encoding(false), token);
-            await File.WriteAllTextAsync(Path.Combine(directory, "new.txt"), Input(newSide.Text), new UTF8Encoding(false), token);
-            var patch = await GitReadProcess.RunAsync(directory,
+            await File.WriteAllTextAsync(Path.Combine(directory, "old.txt"), before, new UTF8Encoding(false), token);
+            await File.WriteAllTextAsync(Path.Combine(directory, "new.txt"), after, new UTF8Encoding(false), token);
+            return await GitReadProcess.RunAsync(directory,
                 ["-c", "core.autocrlf=false", "diff", "--no-index", "--no-ext-diff", "--no-textconv", "--no-color",
                  "--diff-algorithm=myers", "--no-indent-heuristic", "--unified=0", "--", "old.txt", "new.txt"], token, allowDifferences: true);
-            if (whitespace != DiffWhitespace.Exact)
-                patch = patch.Replace("\n-\u0001", "\n-").Replace("\n+\u0001", "\n+").Replace("\n \u0001", "\n ");
-            var diff = await Task.Run(() => Build(oldSide, newSide, patch, token, whitespace), token);
-            return (patch, diff);
         }
         finally
         {
@@ -103,10 +112,19 @@ public static partial class NativeDiff
         return (new string(columns.Select(index => text[index]).ToArray()), columns);
     }
 
+    // Comparison input needs text only. Allocate column maps solely for the
+    // changed line pairs whose intraline highlights must map back to source.
+    private static string NormalizeText(string text, DiffWhitespace whitespace) => whitespace switch
+    {
+        DiffWhitespace.Trim => text.Trim(' ', '\t'),
+        DiffWhitespace.Ignore => text.Replace(" ", "").Replace("\t", ""),
+        _ => text
+    };
+
     private static void VerifyContext(string[] oldLines, string[] newLines, int oldStart, int newStart, int count, DiffWhitespace whitespace)
     {
         for (var i = 0; i < count; i++)
-            if (Normalize(oldLines[oldStart + i], whitespace).Text != Normalize(newLines[newStart + i], whitespace).Text) throw new InvalidDataException("Git diff 的未变区域与文档快照不一致。");
+            if (NormalizeText(oldLines[oldStart + i], whitespace) != NormalizeText(newLines[newStart + i], whitespace)) throw new InvalidDataException("Git diff 的未变区域与文档快照不一致。");
     }
 
     private static IReadOnlyList<DiffRow> AlignLines(string[] oldLines, string[] newLines,

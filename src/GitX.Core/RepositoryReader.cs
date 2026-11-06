@@ -69,8 +69,7 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
             repo.Head.Tip?.Sha, paths.Take(MaxFiles).Select(p => new FileEntry(p)).ToArray(),
             changes.OrderBy(c => c.Kind).ThenBy(c => c.Path, StringComparer.Ordinal).ToArray(), paths.Count > MaxFiles, indexToken, RepositoryOperation.Read(repo),
             string.Join(' ', references.Select(r => r.Sha).Distinct().Order()), string.Join('\n', references.Select(r => $"{r.CanonicalName}={r.Sha}").Order()),
-            repo.Branches.Where(b => b.Tip is not null).Select(b => new HistoryReference(b.FriendlyName, b.CanonicalName, b.Tip.Sha, b.IsRemote ? "remote" : "local", b.IsCurrentRepositoryHead))
-                .Concat(repo.Tags.Where(t => t.PeeledTarget is Commit).Select(t => new HistoryReference(t.FriendlyName, t.CanonicalName, t.PeeledTarget.Sha, "tag"))).ToArray());
+            references.Where(reference => reference.Kind != "head").ToArray());
     }, token);
 
     public Task<HistoryPage> HistoryAsync(string root, string? head, int skip = 0, CancellationToken token = default)

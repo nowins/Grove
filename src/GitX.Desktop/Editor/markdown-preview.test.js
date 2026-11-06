@@ -61,3 +61,33 @@ test('preview/source mode and scroll survive tab changes, search reveals source,
     preview.update({ ...a, isDiff: true }, 14); assert.ok(preview.controls.hidden); assert.ok(!preview.active);
   } finally { globalThis.window = previous.window; globalThis.document = previous.document; window.close(); }
 });
+
+test('source updates defer parsing until preview, using only the latest text and resource version', () => {
+  const window = new JSDOM('<div id="markdown-mode"><button id="markdown-source"></button><button id="markdown-rendered"></button></div><section id="markdown-preview"><article id="markdown-content"></article></section><div id="workspace"></div>').window;
+  const previous = { window: globalThis.window, document: globalThis.document };
+  globalThis.window = window; globalThis.document = window.document;
+  try {
+    const preview = new MarkdownPreview({ send() {}, getVersion: () => 57, onSource() {} });
+    preview.update({ path: 'a.md', language: 'markdown', text: '# Original' }, 7, 'a');
+    preview.host.scrollTop = 120; preview.sourceButton.click();
+    // Browsers clamp scrollTop when the hidden DOM has been cleared.
+    preview.host.scrollTop = 0;
+    let reads = 0;
+    for (let version = 8; version <= 57; version++) preview.update({ path: 'a.md', language: 'markdown',
+      get text() { reads++; return `# Draft ${version}\n\n![local](a.png)`; } }, version, 'a');
+    assert.equal(reads, 0); assert.equal(preview.content.childNodes.length, 0);
+    assert.equal(preview.active, false);
+    preview.previewButton.click();
+    assert.equal(preview.host.scrollTop, 120);
+    assert.equal(reads, 1); assert.equal(preview.content.querySelector('h1').textContent, 'Draft 57');
+    assert.equal(preview.content.querySelector('img').getAttribute('src'), 'markdown-image?version=57&href=a.png');
+    const heading = preview.content.querySelector('h1');
+    preview.sourceButton.click(); preview.previewButton.click();
+    assert.equal(reads, 1); assert.equal(preview.content.querySelector('h1'), heading);
+    preview.update({ path: 'b.md', language: 'markdown', text: '# B', revealLine: 1 }, 58, 'b');
+    assert.equal(preview.content.childNodes.length, 0); assert.equal(preview.active, false);
+    preview.previewButton.click(); assert.equal(preview.content.querySelector('h1').textContent, 'B');
+    preview.update({ path: 'notice', language: 'plaintext', isNotice: true }, 59);
+    preview.activate(true); assert.equal(preview.content.childNodes.length, 0); assert.equal(preview.active, false);
+  } finally { globalThis.window = previous.window; globalThis.document = previous.document; window.close(); }
+});

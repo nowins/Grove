@@ -102,9 +102,9 @@ public sealed partial class MainWindow : Window
         _watcher?.Dispose(); _watcher = null;
         try
         {
-            var watcher = await Task.Run(() => new RepositoryWatcher(root, () => Dispatcher.UIThread.Post(() =>
+            var watcher = await Task.Run(() => new RepositoryWatcher(root, changes => Dispatcher.UIThread.Post(() =>
             {
-                if (!_closed && _model.Root == root) _ = _model.RefreshAsync();
+                if (!_closed && _model.Root == root) _ = _model.RefreshAsync(changes);
             })));
             if (_closed || _watchedRoot != root) watcher.Dispose(); else _watcher = watcher;
         }
@@ -175,10 +175,15 @@ public sealed partial class MainWindow : Window
             if (_closed || sequence != _publicationSequence) return;
             var toolbar = new EditorToolbarState(_model.FileTitle, _model.CanBlame, _model.BlameLabel, _model.CurrentIncludedLines(),
                 _model.SelectedEntry is { } selected ? _model.InclusionState(selected.Path) : false, _blameView, _model.SourceTabs, _model.ActiveSourceTabId, _model.Mode == 0);
-            var payload = await Task.Run(() => EditorServer.Serialize(version, document, toolbar));
-            if (_closed || sequence != _publicationSequence) return;
-            _server.Publish(payload, !document.IsDiff && !document.IsNotice && document.Language == "markdown" && _model.Root is { } markdownRoot
-                ? new(version, markdownRoot, document.Path, document.SourceRevision) : null);
+            var markdown = !document.IsDiff && !document.IsNotice && document.Language == "markdown" && _model.Root is { } markdownRoot
+                ? new MarkdownResourceContext(version, markdownRoot, document.Path, document.SourceRevision) : null;
+            if (tabsOnly) _server.PublishDeferred(version, document, toolbar, markdown);
+            else
+            {
+                var payload = await Task.Run(() => EditorServer.Serialize(version, document, toolbar));
+                if (_closed || sequence != _publicationSequence) return;
+                _server.Publish(payload, markdown);
+            }
             _publishedDocument = document;
             _publishedVersion = version;
             if (_ready) await InvokeEditorAsync(tabsOnly

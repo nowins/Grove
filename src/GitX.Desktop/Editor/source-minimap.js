@@ -5,7 +5,7 @@ export class SourceMinimap {
     Object.assign(this, { panes, reveal });
     this.hosts = ['old-map', 'new-map'].map(id => document.getElementById(id));
     this.sizes = [null, null];
-    this.colors = [null, null];
+    this.colors = [new Map(), new Map()];
     this.colorHost = document.createElement('div'); this.colorHost.className = 'monaco-editor';
     this.colorHost.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;left:-10000px;top:0';
     document.body.append(this.colorHost);
@@ -19,7 +19,7 @@ export class SourceMinimap {
     });
     this.resize = new ResizeObserver(() => { this.draw(); this.renderViewport(); });
     this.hosts.forEach(host => this.resize.observe(host));
-    window.addEventListener('beforeunload', () => this.resize.disconnect(), { once: true });
+    window.addEventListener('beforeunload', () => { this.resize.disconnect(); this.cancelColors(); }, { once: true });
   }
   update(plan, show) {
     const changed = this.plan !== plan; this.plan = plan;
@@ -32,37 +32,53 @@ export class SourceMinimap {
     if (changed) {
       // A queued pointer target must not retain the previous document's lines.
       this.pending = null;
-      this.sizes = [null, null]; this.colors = [null, null]; this.draw(); this.scheduleColors(plan);
+      this.cancelColors(); this.sizes = [null, null]; this.colors = [new Map(), new Map()];
     }
+    this.draw(); this.renderViewport();
+  }
+  cancelColors() {
+    if (this.idle != null) {
+      if (window.requestIdleCallback) window.cancelIdleCallback(this.idle); else clearTimeout(this.idle);
+    }
+    this.idle = null; this.colorJob = null; this.colorHost.replaceChildren();
   }
   scheduleColors(owner) {
     if (!owner) return;
-    // Reuse the displayed model's public colorizer. Work in source order during
-    // idle slices so token state (including multiline comments) stays correct.
-    const idle = action => window.requestIdleCallback ? requestIdleCallback(action, { timeout: 250 }) : setTimeout(action, 16);
-    let side = 0, line = 1; const colors = [[], []], models = [];
+    // Cache only rasterized rows, not the whole document. The public colorizer
+    // advances token state to each sampled line, including multiline comments.
+    const job = this.colorJob = { side: 0, index: 0, models: [], styles: new Map() };
+    const idle = () => { this.idle = window.requestIdleCallback ? window.requestIdleCallback(step, { timeout: 250 }) : setTimeout(step, 16); };
     const step = () => {
-      if (owner !== this.plan) return;
+      if (job !== this.colorJob || owner !== this.plan) return;
+      this.idle = null;
       const deadline = performance.now() + 5;
-      while (side < 2 && performance.now() < deadline) {
+      while (job.side < 2 && performance.now() < deadline) {
+        const side = job.side, size = this.sizes[side];
+        if (!size || job.index >= size.samples.length) {
+          if (size) size.dirty = true;
+          job.side++; job.index = 0; continue;
+        }
         const model = this.panes[side].getModel();
-        if (!model || models[side] && models[side] !== model || model.isDisposed()) return;
-        models[side] = model;
-        const lines = side === 0 ? owner.oldLines : owner.newLines;
-        if (line > lines.length) { this.colors[side] = colors[side]; this.sizes[side] = null; side++; line = 1; continue; }
-        this.colorHost.innerHTML = monaco.editor.colorizeModelLine(model, line, 4);
+        if (!model || job.models[side] && job.models[side] !== model || model.isDisposed()) { this.cancelColors(); return; }
+        job.models[side] = model;
+        const index = size.samples[job.index++];
+        this.colorHost.innerHTML = monaco.editor.colorizeModelLine(model, index + 1, 4);
         const runs = []; let offset = 0;
         for (const span of this.colorHost.querySelectorAll('span.mtk1, span[class*="mtk"]')) {
-          const value = span.textContent.replaceAll('\u00a0', ' '), color = getComputedStyle(span).color;
+          if (offset >= size.columns) break;
+          const value = span.textContent.slice(0, size.columns - offset).replaceAll('\u00a0', ' ');
+          let color = job.styles.get(span.className);
+          if (!color) { color = getComputedStyle(span).color; job.styles.set(span.className, color); }
           for (const match of value.matchAll(/\S+/g)) runs.push({ offset: offset + match.index, length: match[0].length, color });
           offset += value.length;
         }
-        colors[side].push(runs); line++;
+        this.colors[side].set(index, runs);
       }
       this.draw(); this.renderViewport();
-      if (side < 2) idle(step); else this.colorHost.replaceChildren();
+      if (job !== this.colorJob) return;
+      if (job.side < 2) idle(); else { this.colorJob = null; this.colorHost.replaceChildren(); }
     };
-    idle(step);
+    if (this.sizes.some(size => size?.samples.length)) idle(); else this.colorJob = null;
   }
   seek(event, side) {
     if (!this.plan || !this.sizes[side]) return;
@@ -77,23 +93,41 @@ export class SourceMinimap {
     });
   }
   draw() {
-    if (!this.plan) return;
+    let changed = false;
     this.hosts.forEach((host, side) => {
-      const width = host.clientWidth, height = host.clientHeight;
-      if (!width || !height) return;
+      const enabled = this.plan && host.parentElement.classList.contains('with-minimap');
+      const width = enabled ? host.clientWidth : 0, height = enabled ? host.clientHeight : 0;
       const canvas = host.firstChild, ratio = devicePixelRatio || 1;
-      if (this.sizes[side]?.width === width && this.sizes[side]?.height === height) return;
+      if (!width || !height) {
+        if (this.sizes[side]) changed = true;
+        this.sizes[side] = null; this.colors[side].clear();
+        // Release the canvas backing store as well as its per-row color cache.
+        if (canvas.width || canvas.height) { canvas.width = 0; canvas.height = 0; }
+        return;
+      }
+      const lines = side === 0 ? this.plan.oldLines : this.plan.newLines;
+      let size = this.sizes[side];
+      if (size?.width !== width || size?.height !== height || size?.ratio !== ratio) {
+        const row = Math.min(2, Math.max(.05, (height - 4) / Math.max(1, lines.length)));
+        const samples = []; let previousY = -1;
+        for (let index = 0; index < lines.length; index++) {
+          const y = Math.floor(index * row);
+          if (y >= height) break;
+          if (y !== previousY) { samples.push(index); previousY = y; }
+        }
+        size = this.sizes[side] = { width, height, ratio, row, samples, columns: Math.min(220, Math.ceil((width - 3) / .65)), dirty: true };
+        this.colors[side].clear(); changed = true;
+      }
+      if (!size.dirty) return;
+      size.dirty = false;
       canvas.width = width * ratio; canvas.height = height * ratio;
       canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
       const context = canvas.getContext('2d'); context.scale(ratio, ratio);
       context.clearRect(0, 0, width, height);
-      const lines = side === 0 ? this.plan.oldLines : this.plan.newLines;
-      const row = Math.min(2, Math.max(.05, (height - 4) / Math.max(1, lines.length)));
-      this.sizes[side] = { width, height, row };
-      let previousY = -1;
-      lines.forEach((line, index) => {
-        const y = Math.floor(index * row); if (y === previousY) return; previousY = y;
-        const runs = this.colors[side]?.[index] ?? [...line.slice(0, 220).matchAll(/\S+/g)].map(match => ({ offset: match.index, length: match[0].length, color: '#787b83' }));
+      const { row } = size;
+      size.samples.forEach(index => {
+        const y = Math.floor(index * row);
+        const runs = this.colors[side].get(index) ?? [...lines[index].slice(0, size.columns).matchAll(/\S+/g)].map(match => ({ offset: match.index, length: match[0].length, color: '#787b83' }));
         for (const run of runs) {
           if (run.offset > 220) break;
           context.fillStyle = run.color;
@@ -107,6 +141,7 @@ export class SourceMinimap {
         if (count) context.fillRect(0, start * row, width, Math.max(2, count * row));
       }
     });
+    if (changed) { this.cancelColors(); this.scheduleColors(this.plan); }
   }
   renderViewport() {
     if (!this.plan) return;

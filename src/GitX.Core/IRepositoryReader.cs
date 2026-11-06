@@ -3,6 +3,8 @@ namespace GitX.Core;
 public interface IRepositoryReader
 {
     Task<RepositorySnapshot> OpenAsync(string path, CancellationToken token = default);
+    async Task<RepositoryRefreshResult> RefreshAsync(RepositorySnapshot previous, RepositoryChangeSet changes, CancellationToken token = default)
+        => new(await OpenAsync(previous.Root, token).ConfigureAwait(false), RepositoryChangeSet.Full);
     Task<HistoryPage> HistoryAsync(string root, string? head, int skip = 0, CancellationToken token = default);
     Task<HistoryPage> QueryHistoryAsync(string root, string? head, HistoryQuery query, int skip = 0, CancellationToken token = default)
         => query.IsEmpty ? HistoryAsync(root, head, skip, token) : throw new NotSupportedException("此读取器不支持历史筛选。");

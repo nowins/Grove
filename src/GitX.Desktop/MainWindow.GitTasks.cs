@@ -29,27 +29,38 @@ public sealed partial class MainWindow
         hide.Click += (_, _) => { _dock?.Hide(ToolId.Output); FocusEditor(); };
         _gitTerminate.Click += async (_, _) => await TerminateGitTaskAsync();
         var actions = DialogChrome.Buttons(_gitTerminate, hide); _gitOutputPanel.Children.Add(actions); Grid.SetRow(actions, 2);
-        _model.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(_model.LastGitOperation) or nameof(_model.LastOperationOutput)) UpdateGitOutput(); };
-        _gitTaskTimer.Tick += (_, _) =>
+        _model.PropertyChanged += (_, e) =>
         {
-            var state = _model.LastGitOperation?.Snapshot();
-            GitTaskButton.IsVisible = state is not null && state.Root == _model.Root;
-            if (state is not null)
-            {
-                GitTaskLabel.Text = state.Running ? $"{state.Name} · {(int)state.Elapsed.TotalSeconds}s" : $"{state.Name} · {state.Phase}";
-                ToolTip.SetTip(GitTaskButton, $"{state.Name} · {state.Phase}\n在主界面查看输出；隐藏面板不停止任务");
-            }
-            if (_dock?.Visible(ToolId.Output) == true) UpdateGitOutput();
+            if (e.PropertyName is nameof(_model.LastGitOperation) or nameof(_model.LastOperationOutput) or nameof(_model.Root)) RefreshGitTask();
         };
-        _gitTaskTimer.Start(); Closed += (_, _) => _gitTaskTimer.Stop();
+        _gitTaskTimer.Tick += (_, _) => RefreshGitTask();
+        Closed += (_, _) => _gitTaskTimer.Stop();
+    }
+
+    private void RefreshGitTask()
+    {
+        if (_closed) return;
+        var state = _model.LastGitOperation?.Snapshot();
+        var current = state is not null && state.Root == _model.Root;
+        GitTaskButton.IsVisible = current;
+        if (current)
+        {
+            GitTaskLabel.Text = state!.Running ? $"{state.Name} · {(int)state.Elapsed.TotalSeconds}s" : $"{state.Name} · {state.Phase}";
+            ToolTip.SetTip(GitTaskButton, $"{state.Name} · {state.Phase}\n在主界面查看输出；隐藏面板不停止任务");
+        }
+        if (_dock?.Visible(ToolId.Output) == true) UpdateGitOutput(state);
+        // Progress needs polling only during the owned write lifetime. Property
+        // notifications refresh completion/repository changes without idle wakes.
+        if (current && state!.Running) _gitTaskTimer.Start(); else _gitTaskTimer.Stop();
     }
 
     private void GitTaskClicked(object? sender, RoutedEventArgs e) => ShowGitTask();
     private void ShowGitTask() { _dock?.Show(ToolId.Output); UpdateGitOutput(); }
 
-    private void UpdateGitOutput()
+    private void UpdateGitOutput() => UpdateGitOutput(_model.LastGitOperation?.Snapshot());
+
+    private void UpdateGitOutput(GitWriteProgress? state)
     {
-        var state = _model.LastGitOperation?.Snapshot();
         var current = state is not null && state.Root == _model.Root;
         if (!_gitTerminating) _gitOutputStatus.Text = current ? $"{state!.Name} · {state.Phase} · {state.Elapsed.TotalSeconds:F0} 秒\n{state.Root}" : _model.Root ?? "尚未打开仓库";
         var text = current ? (state!.Running || _model.LastOperationOutput.Length == 0 ? state.Output : _model.LastOperationOutput) : "";

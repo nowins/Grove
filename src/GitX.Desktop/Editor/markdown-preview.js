@@ -88,22 +88,29 @@ export class MarkdownPreview {
     if (this.states.size > 32) this.states.delete(this.states.keys().next().value);
   }
   update(doc, version, tabId = null) {
-    this.remember(); this.doc = doc; this.loading = false;
+    this.remember(); this.doc = doc; this.version = version; this.loading = false; this.rendered = false; this.active = false;
     this.enabled = doc.language === 'markdown' && !doc.isDiff && !doc.isNotice;
     this.key = this.enabled ? JSON.stringify([tabId, doc.path, doc.sourceRevision ?? null]) : null;
     this.controls.hidden = !this.enabled;
     const state = this.states.get(this.key), pending = this.enabled && this.pending?.path === doc.path && this.pending.revision === (doc.sourceRevision ?? null) ? this.pending : null;
+    this.previewScrollTop = state?.scrollTop ?? 0;
     this.content.replaceChildren();
-    if (this.enabled) this.content.append(renderMarkdown(doc.text, { window, path: doc.path, version }));
     this.activate(this.enabled && (pending || !doc.revealLine && state?.active !== false), false);
-    this.host.scrollTop = state?.scrollTop ?? 0;
     if (pending) { this.pending = null; if (pending.fragment) this.reveal(pending.fragment); else this.host.focus({ preventScroll: true }); }
     else if (!doc.isNotice && this.pending?.path === doc.path) this.pending = null;
   }
   setLoading(value) { this.loading = value; this.host.setAttribute('aria-busy', String(value)); this.sourceButton.disabled = this.previewButton.disabled = value; }
   activate(value, focus = false) {
+    if (this.active) this.previewScrollTop = this.host.scrollTop;
     this.active = !!value && this.enabled;
+    // Source edits invalidate the preview without parsing Markdown or building
+    // a hidden DOM. Render the latest document once when preview is requested.
+    if (this.active && !this.rendered) {
+      this.content.append(renderMarkdown(this.doc.text, { window, path: this.doc.path, version: this.version }));
+      this.rendered = true;
+    }
     this.host.hidden = !this.active; document.getElementById('workspace').hidden = this.active || !!this.doc?.isNotice;
+    if (this.active) this.host.scrollTop = this.previewScrollTop ?? 0;
     document.body.classList.toggle('markdown-preview-mode', this.active);
     this.sourceButton.setAttribute('aria-pressed', String(!this.active)); this.previewButton.setAttribute('aria-pressed', String(this.active));
     if (focus) { if (this.active) this.host.focus(); else this.onSource(); }
@@ -112,6 +119,6 @@ export class MarkdownPreview {
     const heading = document.getElementById(`md-${fragment}`);
     if (heading && this.content.contains(heading)) { heading.scrollIntoView({ block: 'start' }); heading.focus({ preventScroll: true }); }
   }
-  capture() { return { active: !!this.active, scrollTop: this.host.scrollTop }; }
-  restore(state) { if (state && this.enabled) { this.activate(!!state.active); this.host.scrollTop = Math.max(0, Number(state.scrollTop) || 0); } }
+  capture() { return { active: !!this.active, scrollTop: this.active ? this.host.scrollTop : this.previewScrollTop ?? 0 }; }
+  restore(state) { if (state && this.enabled) { this.activate(!!state.active); this.previewScrollTop = this.host.scrollTop = Math.max(0, Number(state.scrollTop) || 0); } }
 }

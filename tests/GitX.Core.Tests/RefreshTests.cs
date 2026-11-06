@@ -89,6 +89,46 @@ public sealed class RefreshTests
         Assert.Equal("file-19999.cs", model.SelectedEntry?.Path);
     }
 
+    [Fact]
+    public async Task Watcher_preserves_content_paths_and_promotes_mixed_metadata_batches_to_full()
+    {
+        using var repo = new TestRepository();
+        repo.Write("a.txt", "base"); repo.Commit("base");
+        var changes = new System.Collections.Concurrent.ConcurrentQueue<RepositoryChangeSet>();
+        using var watcher = new RepositoryWatcher(repo.Root, change => changes.Enqueue(change));
+        repo.Write("a.txt", "content");
+        await Until(() => !changes.IsEmpty);
+        Assert.Contains(changes, change => !change.IsFull && change.Paths.Contains("a.txt"));
+        await Task.Delay(500); changes.Clear();
+        repo.Write("a.txt", "staged"); repo.Git("add", "a.txt");
+        await Until(() => changes.Any(change => change.IsFull));
+    }
+
+    [Fact]
+    public async Task Continuous_content_events_do_not_starve_refresh_until_the_writer_stops()
+    {
+        using var repo = new TestRepository();
+        repo.Write("a.txt", "base"); repo.Commit("base");
+        var count = 0;
+        using var watcher = new RepositoryWatcher(repo.Root, () => Interlocked.Increment(ref count));
+        for (var i = 0; i < 40; i++)
+        { repo.Write("a.txt", $"change {i}"); await Task.Delay(75); }
+        Assert.True(Volatile.Read(ref count) > 0);
+    }
+
+    [Theory]
+    [InlineData(".gitattributes")]
+    [InlineData(".mailmap")]
+    public async Task Watcher_rechecks_configuration_files_even_when_they_are_ignored(string path)
+    {
+        using var repo = new TestRepository();
+        repo.Write("a.txt", "base"); repo.Write(".gitignore", ".gitattributes\n.mailmap\n"); repo.Commit("base");
+        var changes = new System.Collections.Concurrent.ConcurrentQueue<RepositoryChangeSet>();
+        using var watcher = new RepositoryWatcher(repo.Root, change => changes.Enqueue(change));
+        repo.Write(path, "# configuration change\n");
+        await Until(() => changes.Any(change => change.IsFull));
+    }
+
     private sealed class ManyEntries : IRepositoryReader
     {
         public Task<RepositorySnapshot> OpenAsync(string path, CancellationToken token = default) => Task.FromResult(new RepositorySnapshot(path, "main", null,

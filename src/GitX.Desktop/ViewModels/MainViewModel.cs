@@ -27,7 +27,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IRepositoryReader _reader;
     private CancellationTokenSource _repositoryRead = new(), _documentRead = new(), _commitRead = new();
     private long _repositoryVersion, _documentVersion, _commitVersion, _historyVersion;
-    private RepositorySnapshot? _snapshot;
+    private RepositorySession? _repositorySession;
+    private RepositorySnapshot? _snapshot => _repositorySession?.Snapshot;
     private IReadOnlyList<NavigationEntry> _allEntries = [];
     private bool _closed;
     private bool _showBlame;
@@ -50,7 +51,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private CommitEntry? _selectedCommit;
     private RepositoryDocument? _document;
     private TaskCompletionSource? _refreshCompletion;
-    private bool _refreshAgain, _updatingEntries;
+    private bool _updatingEntries;
     private readonly RepositoryWriter _writer = new();
     private bool _isWriting;
     private bool _reconciling;
@@ -383,7 +384,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         var token = _repositoryRead.Token;
         Replace(ref _commitRead);
         ++_commitVersion;
-        _snapshot = null;
+        _repositorySession = null;
+        _refreshCompletion = null;
+        Changed(nameof(Root));
         _historyLoading = false; _historyLoadFailed = false; HistoryPagingChanged();
         _allEntries = []; Entries = []; Commits = []; HasMoreHistory = false;
         _selectedEntry = null; _selectedCommit = null;
@@ -397,7 +400,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var snapshot = await _reader.OpenAsync(path, token);
             if (_closed || version != _repositoryVersion) return;
-            _snapshot = snapshot;
+            _repositorySession = new(_reader, snapshot);
+            Changed(nameof(Root));
             UpdateHistoryReferences(previousRoot != snapshot.Root);
             WriteStateChanged();
             RepositoryOpened?.Invoke(snapshot.Root);
@@ -425,43 +429,48 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         finally { if (!_closed && version == _repositoryVersion) Busy = false; }
     }
 
-    public Task RefreshAsync()
+    public Task RefreshAsync() => RefreshAsync(RepositoryChangeSet.Full);
+
+    public Task RefreshAsync(RepositoryChangeSet changes)
     {
         if (_closed) return Task.CompletedTask;
-        _blameReader.ClearCache();
-        if (IsWriting && !_reconciling) { _refreshAgain = true; return Task.CompletedTask; }
-        if (_snapshot is null) return OpenAsync(RepositoryPath);
-        _refreshAgain = true;
+        if (_repositorySession is not { } session) return OpenAsync(RepositoryPath);
+        session.Invalidate(changes);
+        if (IsWriting && !_reconciling) return Task.CompletedTask;
         if (_refreshCompletion is not null) return _refreshCompletion.Task;
         var completion = _refreshCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = RefreshLoopAsync(completion);
+        _ = RefreshLoopAsync(session, completion);
         return completion.Task;
     }
 
-    private async Task RefreshLoopAsync(TaskCompletionSource completion)
+    private async Task RefreshLoopAsync(RepositorySession session, TaskCompletionSource completion)
     {
         var owner = _repositoryVersion;
         try
         {
             do
             {
-                _refreshAgain = false;
-                var snapshot = _snapshot;
+                var snapshot = session.Snapshot;
                 var repositoryVersion = _repositoryVersion;
-                if (_closed || snapshot is null) return;
-                var updated = await _reader.OpenAsync(snapshot.Root, _repositoryRead.Token);
-                if (_closed || IsWriting && !_reconciling || repositoryVersion != _repositoryVersion) return;
+                if (_closed || !ReferenceEquals(session, _repositorySession)) return;
+                var result = await session.RefreshAsync(_repositoryRead.Token);
+                if (_closed || IsWriting && !_reconciling || repositoryVersion != _repositoryVersion || !ReferenceEquals(session, _repositorySession)) return;
+                var updated = result.Snapshot;
+                if (result.Changes.IsFull) _blameReader.ClearCache();
                 var selected = _selectedEntry;
-                _snapshot = updated;
                 WriteStateChanged();
                 Branch = updated.Branch;
                 RepositoryDetail = $"{updated.Root}\n\n分支  {updated.Branch}\nHEAD  {updated.Head?[..12] ?? "尚无提交"}\n\n{updated.Files.Count:N0} 个文件\n{updated.Changes.Count:N0} 个改动项";
-                _updatingEntries = true;
-                try { BuildEntries(); } finally { _updatingEntries = false; }
-                NavigationChanged?.Invoke();
+                if (!ReferenceEquals(snapshot.Files, updated.Files) && !snapshot.Files.SequenceEqual(updated.Files) ||
+                    !ReferenceEquals(snapshot.Changes, updated.Changes) && !snapshot.Changes.SequenceEqual(updated.Changes))
+                {
+                    _updatingEntries = true;
+                    try { BuildEntries(); } finally { _updatingEntries = false; }
+                    NavigationChanged?.Invoke();
+                }
                 // Refresh the active tab, including commit-to-worktree comparisons.
                 // Preserve its identity even if a navigation filter hides its row.
-                if (selected is { } entry)
+                if (selected is { } entry && RefreshesDocument(result.Changes, entry))
                 {
                     var documentVersion = _documentVersion;
                     var document = await ReadEntryAsync(updated.Root, entry, _repositoryRead.Token);
@@ -488,11 +497,22 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (_historyCompareOld is not null && _historyCompareWorktree)
                     await CompareHistoryAsync(_historyCompareOld, null, preserve: true);
                 Status = $"已刷新 {DateTime.Now:HH:mm:ss} · {updated.Changes.Count} 个改动项 · F5 手动刷新";
-            } while (_refreshAgain && !_closed);
+            } while (session.HasPending && !_closed && ReferenceEquals(session, _repositorySession));
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { if (!_closed && owner == _repositoryVersion) ReportError(e.Message); }
-        finally { _refreshCompletion = null; completion.SetResult(); }
+        finally { if (ReferenceEquals(_refreshCompletion, completion)) _refreshCompletion = null; completion.SetResult(); }
+    }
+
+    private bool RefreshesDocument(RepositoryChangeSet changes, NavigationEntry entry)
+    {
+        if (changes.IsFull || _document is null || _document.IsNotice) return true;
+        // A pinned historical source/diff does not depend on worktree content.
+        static bool Pinned(string? revision) => revision is { Length: 40 or 64 } && revision.All(Uri.IsHexDigit);
+        if (Pinned(_document.SourceRevision) ||
+            entry.Kind is ComparisonKind.Commit or ComparisonKind.RevisionFile && Pinned(entry.Commit) ||
+            entry.Kind == ComparisonKind.RevisionRange && Pinned(entry.Commit) && Pinned(entry.BaseCommit)) return false;
+        return changes.Touches(entry.Path) || entry.OldPath is { } old && changes.Touches(old);
     }
 
     private static bool SameDocument(RepositoryDocument? a, RepositoryDocument b) => a is not null && a.Path == b.Path && a.Text == b.Text &&

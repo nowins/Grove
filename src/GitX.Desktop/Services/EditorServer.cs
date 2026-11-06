@@ -20,7 +20,8 @@ public sealed class EditorServer : IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly string _prefix = $"/{Guid.NewGuid():N}/";
     private readonly string _directory = Path.Combine(AppContext.BaseDirectory, "Editor", "dist");
-    private byte[] _document = "{}"u8.ToArray();
+    private static readonly JsonSerializerOptions DocumentJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private Lazy<byte[]> _document = new(() => "{}"u8.ToArray());
     private byte[] _layout = "{}"u8.ToArray();
     private byte[] _comments = "{}"u8.ToArray();
     private MarkdownResourceContext? _markdown;
@@ -60,12 +61,21 @@ public sealed class EditorServer : IDisposable
         return port;
     }
 
-    public static byte[] Serialize(long version, RepositoryDocument document, EditorToolbarState? toolbar = null) =>
-        JsonSerializer.SerializeToUtf8Bytes(new { version, document, toolbar },
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    public static byte[] Serialize(long version, RepositoryDocument document, EditorToolbarState? toolbar = null)
+    {
+        // Monaco renders the two sides and blocks. The native document still
+        // owns the patch for fallback display and Git actions; don't transfer
+        // a third copy of the source text to every WebView.
+        if (document is { IsDiff: true, Diff: not null, IsNotice: false }) document = document with { Text = "" };
+        return JsonSerializer.SerializeToUtf8Bytes(new { version, document, toolbar }, DocumentJson);
+    }
 
     public void Publish(byte[] document, MarkdownResourceContext? markdown = null)
-    { Volatile.Write(ref _markdown, markdown); Volatile.Write(ref _document, document); }
+    { Volatile.Write(ref _markdown, markdown); Volatile.Write(ref _document, new(() => document)); }
+    // Toolbar-only changes use the small bridge message. Retain the latest
+    // immutable snapshot for a page reload, serializing once only if requested.
+    public void PublishDeferred(long version, RepositoryDocument document, EditorToolbarState toolbar, MarkdownResourceContext? markdown = null)
+    { Volatile.Write(ref _markdown, markdown); Volatile.Write(ref _document, new(() => Serialize(version, document, toolbar))); }
     public void PublishLayout(byte[] layout) => Volatile.Write(ref _layout, layout);
     public void PublishComments(byte[] comments) => Volatile.Write(ref _comments, comments);
 
@@ -114,7 +124,7 @@ public sealed class EditorServer : IDisposable
             if (name is "document" or "layout" or "comments")
             {
                 response.ContentType = "application/json; charset=utf-8";
-                await response.OutputStream.WriteAsync(name == "document" ? Volatile.Read(ref _document) : name == "comments" ? Volatile.Read(ref _comments) : Volatile.Read(ref _layout), _lifetime.Token);
+                await response.OutputStream.WriteAsync(name == "document" ? Volatile.Read(ref _document).Value : name == "comments" ? Volatile.Read(ref _comments) : Volatile.Read(ref _layout), _lifetime.Token);
                 return;
             }
             // Build emits flat asset names. Never serve paths or files outside that allowlist.
