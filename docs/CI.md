@@ -11,7 +11,7 @@
 | macos-15 | osx-arm64 | 同上，在 Apple Silicon runner 运行测试与本机架构 publish |
 | macos-15-intel | osx-x64 | 同上，在 Intel runner 运行测试与本机架构 publish |
 | ubuntu-24.04 | linux-x64 | 同上，ELF、tar.gz 哈希/执行位验证；不启动 GUI |
-| ubuntu-24.04-arm | linux-arm64 | 同上，原生 ARM64，尚待实际运行 |
+| ubuntu-24.04-arm | linux-arm64 | 同上，原生 ARM64；GUI 尚未验收 |
 
 以 global.json 安装 SDK，.node-version 安装固定 Node，NuGet 使用 --locked-mode、npm 使用 npm ci。六个 job 独立完成，失败不取消其他平台；每个 job 上限 25 分钟。Core 测试必须真实执行且 TRX 不能为空，挂起测试 3 分钟后终止且不生成内存转储。没有按平台整体跳过测试。
 
@@ -65,4 +65,4 @@ Mac CI 在构建后启动实际 Grove 窗口，使用临时仓库和独立配置
 
 ## Linux 候选
 
-CI 安装 WebKitGTK 4.1/X11 依赖；PlatformProbe 检查 apphost、LibGit2、Skia、HarfBuzz 的 ELF64/小端/机器类型并加载 LibGit2。package.ps1 生成 tar.gz 和 SHA256SUMS；test-linux-package.ps1 校验归档后在含空格路径解包，逐文件哈希、数量与执行位检查，不修改用户系统集成。新 job 未执行前不能据配置宣称通过，详见 [LINUX](LINUX.md)。
+CI 安装 WebKitGTK 4.1/X11 依赖；PlatformProbe 检查 apphost、LibGit2、Skia、HarfBuzz 的 ELF64/小端/机器类型并加载 LibGit2。package.ps1 生成 tar.gz 和 SHA256SUMS；test-linux-package.ps1 校验归档后在含空格路径解包，逐文件哈希、数量与执行位检查，不修改用户系统集成。发布必须核对准确版本提交的实际 job 结果，不据配置宣称通过，详见 [LINUX](LINUX.md)。

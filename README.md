@@ -16,23 +16,28 @@
 
 ## 下载与安装
 
-从 [Grove 0.1.0 Preview 5](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.5) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
+从 [Grove 0.1.0 Preview 6](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.6) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
 
 | 平台 | 推荐下载 |
 | --- | --- |
-| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.5/Grove-0.1.0-preview.5-win-x64-setup.exe) |
-| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.5/Grove-0.1.0-preview.5-win-arm64-setup.exe) |
-| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.5/Grove-0.1.0-preview.5-osx-arm64.dmg) |
-| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.5/Grove-0.1.0-preview.5-osx-x64.dmg) |
+| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-win-x64-setup.exe) |
+| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-win-arm64-setup.exe) |
+| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-osx-arm64.dmg) |
+| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-osx-x64.dmg) |
+| Linux x64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-linux-x64.tar.gz) |
+| Linux ARM64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-linux-arm64.tar.gz) |
+
+Preview 6 包含已合并的搜索 Actions/只读预览、Push 审阅、历史与 Diff 响应式展示、单块回退/撤销、可选草稿恢复、更新诊断和 macOS 标题栏安全区修复。编辑器旧引用生命周期修复不代表已测得整体内存或性能收益。
 
 Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。公开 Release 可直接下载，无需 GitHub 登录；Release 包不受 Actions 的 14 天产物保留期限制。
 
 - **Windows：** 安装到当前用户的程序目录，开始菜单入口为 Grove，不要求管理员权限。便携版解压后运行 `Grove.exe`。安装程序外壳为 NSIS x86，应用本体匹配所选 x64/ARM64 架构；选错架构会拒绝安装。
 - **macOS 14+：** 打开 DMG，将 `Grove.app` 拖入 Applications。也可解压 app.tar.gz。当前只有 ad-hoc 完整性签名，没有 Apple Developer ID 签名或公证，Gatekeeper 可能阻止打开；不建议在要求受信任签名的设备部署。Mac GUI 仍待实机验收。
+- **Linux（实验性）：** 首次提供 Ubuntu 24.04 x64/ARM64 便携包，依赖 WebKitGTK 4.1 和 X11/XWayland；仅手动更新，不安装系统文件或桌面入口。完整桌面、输入法和 askpass 尚未验收，依赖及运行步骤见 [Linux 说明](docs/LINUX.md)。
 - **依赖：** 安装 Git 并确保 Grove 的进程能在 PATH 中找到它；Windows 另需 Microsoft Edge WebView2 Runtime。macOS 从 Finder 启动时的 PATH 与终端可能不同。应用已包含 .NET 运行时，不需要 .NET SDK。安装包不会静默下载这些外部依赖。
 - **现有数据：** 应用名称和可执行文件已改为 Grove；配置、评论和 WebView 数据仍使用原有 GitX 目录及 `GITX_DATA_DIR`，避免迁移丢失。卸载保留这些用户数据和安装目录内额外创建的文件。
 
-启动后选择已有仓库；也可从命令行传入路径，例如 `.\Grove.exe "C:\path\to\repo"`，或 `open -a Grove --args ~/projects/repo`。这是未做发行证书签名的预览版。四平台原生自动化检查与 Windows x64 GUI 验证范围见[状态记录](docs/STATUS.md)；CI 通过不代表四平台 GUI 已验收。发布使用普通自包含构建，Native AOT 尚未达到发布条件。
+启动后选择已有仓库；也可从命令行传入路径，例如 `.\Grove.exe "C:\path\to\repo"`，或 `open -a Grove --args ~/projects/repo`。这是未做发行证书签名的预览版。六平台原生构建/自动化检查与既有 Windows x64 GUI 验证范围见[状态记录](docs/STATUS.md)；CI 通过不代表六平台 GUI 已验收。发布使用普通自包含构建，Native AOT 尚未达到发布条件。
 
 最新开发构建可从 [CI](https://github.com/nowins/Grove/actions/workflows/ci.yml) 的 **Artifacts** 下载，保留 14 天；外层 ZIP 内是应用包与校验文件。
 
@@ -46,11 +51,11 @@ Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SH
 
 支持编辑普通工作区 UTF-8 文件，使用 Ctrl+S（macOS：Command+S）保存；标签圆点标识未保存内容。切标签及刷新保留草稿，关闭标签、窗口或切换仓库时提供保存、放弃、取消。外部改写、删除或权限变化不会被静默覆盖。
 
-保留 UTF-8 BOM、LF/CRLF 与末尾换行。单文件上限 1 MiB，单行上限 20,000 字符；混合/单独 CR 换行、其他编码、符号链接、冲突文件、历史及 Diff 保持只读。草稿位于当前窗口内存中，不提供崩溃或重启后的自动恢复。标签与项目树另提供系统文件管理器定位及终端入口。
+保留 UTF-8 BOM、LF/CRLF 与末尾换行。单文件上限 1 MiB，单行上限 20,000 字符；混合/单独 CR 换行、其他编码、符号链接、冲突文件、历史及 Diff 保持只读。默认仅在当前窗口内存中保留草稿；可显式启用本机草稿检查点，并在恢复窗口审阅后恢复到编辑器，不自动覆盖磁盘。检查点间隔内的输入可能丢失，崩溃/断电和跨平台原生行为仍有验收边界，见 [状态记录](docs/STATUS.md)。标签与项目树另提供系统文件管理器定位及终端入口。
 
 Preview 5 起提供文本编辑。历史提交与 Diff 始终只读，不会因存在本地同名文件而写入工作区。
 
-Linux 开发候选的依赖、便携包及验证边界见 [Linux 说明](docs/LINUX.md)，尚未加入已发布下载资产。
+Preview 6 首次提供 Linux 实验性便携包；依赖、手动更新及验证边界见 [Linux 说明](docs/LINUX.md)。
 
 ## 从源码运行
 
