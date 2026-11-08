@@ -8,7 +8,7 @@ public sealed partial class ConflictReader
     public async Task<ConflictDocument> ReadAsync(string root, string path, CancellationToken token = default)
     {
         var markerSize = await MarkerSizeAsync(root, path, token);
-        var document = await Task.Run(() => Capture(root, path, markerSize, token), token);
+        var document = await ReadWork.Cpu.Run(() => Capture(root, path, markerSize, token), token);
         if (!document.IsText) return document;
         if (await HasCustomAttributesAsync(root, path, token))
             return document with { Limitation = "自定义过滤器或工作区编码：请选择完整一侧，或在外部工具处理后标记解决。" };
@@ -16,7 +16,7 @@ public sealed partial class ConflictReader
         var existing = document.ExistingResult;
         if (existing) { result = document.Result!; blocks = []; }
         var layout = await LayoutAsync(document.Left.Text!, result, document.Right.Text!, token);
-        if (document.Token != await Task.Run(() => RepositoryState.Token(root, [path], token), token)) throw new IOException("冲突读取期间仓库发生变化，请重新打开。");
+        if (document.Token != await ReadWork.Cpu.Run(() => RepositoryState.Token(root, [path], token), token)) throw new IOException("冲突读取期间仓库发生变化，请重新打开。");
         return document with { Result = result, Blocks = blocks, Layout = layout };
     }
 
@@ -100,22 +100,24 @@ public sealed partial class ConflictReader
     public static async Task<MergeLayout> LayoutAsync(string left, string result, string right, CancellationToken token = default)
     {
         var middle = new DiffSide("result", "结果", result, true);
-        var a = NativeDiff.CompareAsync(new("left", "当前", left, true), middle, token);
-        var b = NativeDiff.CompareAsync(new("right", "传入", right, true), middle, token);
+        var a = NativeDiff.CompareStructureAsync(new("left", "当前", left, true), middle, token);
+        var b = NativeDiff.CompareStructureAsync(new("right", "传入", right, true), middle, token);
         await Task.WhenAll(a, b);
-        return new(a.Result.Diff, b.Result.Diff);
+        return new(a.Result, b.Result);
     }
 
     public static async Task<(string Text, IReadOnlyList<MergeBlock> Blocks)> MergeAsync(string ancestor, string left, string right, CancellationToken token = default)
     {
-        var directory = Path.Combine(Path.GetTempPath(), "GitX", "merge", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        var inputs = new TemporaryGitInputs("merge", "base", "left", "right");
+        var directory = inputs.DirectoryPath;
+        var handedOff = false;
         var label = Guid.NewGuid().ToString("N");
         try
         {
             foreach (var (name, text) in new[] { ("base", ancestor), ("left", left), ("right", right) })
                 await File.WriteAllTextAsync(Path.Combine(directory, name), text, new UTF8Encoding(false), token);
-            var merged = await GitReadProcess.RunAsync(directory, ["merge-file", "--stdout", "--diff3", "--marker-size=32", "-L", "L" + label, "-L", "B" + label, "-L", "R" + label, "left", "base", "right"], token, allowMergeConflicts: true);
+            handedOff = true;
+            var merged = await GitReadProcess.RunAsync(directory, ["merge-file", "--stdout", "--diff3", "--marker-size=32", "-L", "L" + label, "-L", "B" + label, "-L", "R" + label, "left", "base", "right"], token, allowMergeConflicts: true, afterExit: inputs.CleanupAsync);
             var open = new string('<', 32) + " L" + label + "\n";
             var middle = new string('|', 32) + " B" + label + "\n";
             var divider = new string('=', 32) + "\n";
@@ -144,8 +146,7 @@ public sealed partial class ConflictReader
         }
         finally
         {
-            foreach (var name in new[] { "base", "left", "right" }) File.Delete(Path.Combine(directory, name));
-            Directory.Delete(directory);
+            if (!handedOff) await inputs.CleanupAsync().ConfigureAwait(false);
         }
     }
 }

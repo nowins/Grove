@@ -15,6 +15,7 @@ public sealed partial class MainWindow
     private string? _codeSearchRoot;
     private CodeSearchQuery _codeSearchQuery = new("");
     private readonly DoubleShiftGesture _doubleShift = new();
+    private bool _codeSearchLoading;
 
     private bool DoubleShiftAllowed()
     {
@@ -45,21 +46,39 @@ public sealed partial class MainWindow
     {
         if (_closed || _model.Root is not { } root) return;
         if (_codeSearch is not null) { _codeSearch.ActivateSearch(); return; }
+        if (_codeSearchLoading) return;
+        var repository = _model.RepositoryGeneration;
+        IReadOnlyList<string> recentPaths = [];
+        _codeSearchLoading = true;
+        try
+        {
+            await _recentFileWrite;
+            recentPaths = (await _recentFiles.ReadAsync(root)).Where(file => file.Revision is null)
+                .Select(file => file.Path).ToArray();
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        { /* Ranking is optional; a damaged/unreadable MRU must not block search. */ }
+        finally { _codeSearchLoading = false; }
+        if (_closed || _model.Root != root || _model.RepositoryGeneration != repository) return;
         var searchOwner = InteractionWindow;
         var previousFocus = searchOwner.FocusManager?.GetFocusedElement() as Control;
         var editorFocused = _webView?.IsFocused == true || NativeKeyboardFocus.HasEmbeddedFocus(searchOwner);
         if (_codeSearchRoot != root) { _codeSearchQuery = new(""); _codeSearchRoot = root; }
         var commandVersion = _model.DocumentVersion;
-        bool ContextCurrent() => !_closed && _model.Root == root && _model.DocumentVersion == commandVersion;
+        bool ContextCurrent() => !_closed && _model.Root == root && _model.RepositoryGeneration == repository && _model.DocumentVersion == commandVersion;
         bool CanRunAction(ShellCommandId id) => ContextCurrent() && CanRunShellCommand(id, searchOwner);
         var window = new CodeSearchWindow(root, () => _model.RepositoryPaths, _model.RepositoryFilesTruncated, _codeSearchQuery with { FilesOnly = filesOnly }, async match =>
         {
-            if (_closed || _model.Root != root) return "仓库已变化，请重新搜索。";
+            if (_closed || _model.Root != root || _model.RepositoryGeneration != repository) return "仓库已变化，请重新搜索。";
             var opened = await _model.OpenCodeSearchMatchAsync(root, match);
             UpdateNavigationLayout();
             return opened ? null : string.IsNullOrEmpty(_model.Error) ? "此结果已失效，请重新搜索。" : _model.Error;
-        }, quick, CanRunAction, ContextCurrent);
-        void ContextChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => window.InvalidatePreviewContext();
+        }, quick, CanRunAction, ContextCurrent, recentPaths);
+        void ContextChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (_closed || _model.Root != root || _model.RepositoryGeneration != repository) window.InvalidateSearchContext();
+            else window.InvalidatePreviewContext();
+        }
         _model.PropertyChanged += ContextChanged;
         _codeSearch = window;
         try { if (quick) await window.ShowQuickAsync(searchOwner); else await window.ShowDialog(searchOwner); }

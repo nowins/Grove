@@ -28,13 +28,13 @@ public sealed class BlameReader
     public void ClearCache() => _cache.Clear();
     public async Task<RepositoryDocument> ReadAsync(string root, string path, CancellationToken cancellation = default)
     {
-        var before = await Task.Run(() => RepositoryState.Token(root, [path], cancellation), cancellation);
+        var before = await ReadWork.Cpu.Run(() => RepositoryState.Token(root, [path], cancellation), cancellation);
         using var reader = new RepositoryReader();
         var document = await reader.DocumentAsync(new(root, path, ComparisonKind.WorkingFile), cancellation);
         if (document.IsNotice) return document;
         var lineCount = document.Text.Length == 0 ? 0 : document.Text.Count(c => c == '\n') + (document.Text.EndsWith('\n') ? 0 : 1);
         if (lineCount > 5000) throw new IOException("注解暂限 5,000 行，请缩小文件后重试。");
-        var head = await Task.Run(() => { using var repo = new Repository(root); return repo.Head.Tip?.Tree[path] is not null ? repo.Head.Tip.Sha : null; }, cancellation);
+        var head = await ReadWork.Cpu.Run(() => { using var repo = new Repository(root); return repo.Head.Tip?.Tree[path] is not null ? repo.Head.Tip.Sha : null; }, cancellation);
         IReadOnlyList<BlameLine> lines;
         if (head is null)
             lines = Enumerable.Range(1, document.Text.Length == 0 ? 0 : document.Text.Count(c => c == '\n') + (document.Text.EndsWith('\n') ? 0 : 1))
@@ -43,7 +43,7 @@ public sealed class BlameReader
         {
             lines = await AnnotationsAsync(root, path, head, before, lineCount, working: true, cancellation);
         }
-        var after = await Task.Run(() => RepositoryState.Token(root, [path], cancellation), cancellation);
+        var after = await ReadWork.Cpu.Run(() => RepositoryState.Token(root, [path], cancellation), cancellation);
         if (before != after) throw new IOException("注解读取期间文件或 HEAD 已变化，请重试。");
         return document with { Blame = lines, Detail = $"工作区注解 · {lines.Count} 行 · 悬停查看提交 / 作者 / 日期" };
     }
@@ -80,7 +80,7 @@ public sealed class BlameReader
         if (document.IsNotice || !annotate) return document;
         var count = document.Text.Count(c => c == '\n') + (document.Text.Length > 0 && !document.Text.EndsWith('\n') ? 1 : 0);
         if (count > 5000) throw new IOException("注解暂限 5,000 行。");
-        var before = await Task.Run(() => RepositoryState.Token(root, [], cancellation), cancellation);
+        var before = await ReadWork.Cpu.Run(() => RepositoryState.Token(root, [], cancellation), cancellation);
         var lines = await AnnotationsAsync(root, revision.Path, document.SourceRevision!, before, count, working: false, cancellation);
         return document with { Blame = lines, Detail = $"修订注解 · {document.SourceRevision![..8]} · {count} 行" };
     }
@@ -99,7 +99,7 @@ public sealed class BlameReader
         var input = await keyTask.ConfigureAwait(false); var key = input.Key;
         var lines = key is not null ? _cache.Get(key) : null;
         lines ??= await (fresh ?? ReadAnnotationsAsync(root, path, revision, lineCount, working, cancellation)).ConfigureAwait(false);
-        var after = await Task.Run(() => RepositoryState.Token(root, working ? [path] : [], cancellation), cancellation).ConfigureAwait(false);
+        var after = await ReadWork.Cpu.Run(() => RepositoryState.Token(root, working ? [path] : [], cancellation), cancellation).ConfigureAwait(false);
         if (state != after) throw new IOException("注解读取期间仓库或文件已变化，请重试。");
         if (key is not null)
         {
@@ -192,10 +192,10 @@ public sealed class BlameReader
         var current = line.IsCommitted ? await reader.DocumentAsync(new(root, line.OriginalPath, ComparisonKind.RevisionFile, line.Sha), cancellation) : null;
         if (previous.IsNotice || current?.IsNotice == true) throw new IOException(previous.IsNotice ? previous.Text : current!.Text);
         var nextText = current?.Text ?? worktreeText;
-        var compared = await NativeDiff.CompareAsync(new(line.PreviousPath, "前一修订", previous.Text, true),
+        var compared = await NativeDiff.CompareStructureAsync(new(line.PreviousPath, "前一修订", previous.Text, true),
             new(line.OriginalPath, "当前修订", nextText, true), cancellation, DiffWhitespace.Exact);
         var mapped = line.OriginalLine;
-        foreach (var block in compared.Diff.Blocks)
+        foreach (var block in compared.Blocks)
         {
             if (line.OriginalLine <= block.NewStart) break;
             if (line.OriginalLine <= block.NewStart + block.NewCount)
@@ -213,7 +213,7 @@ public sealed class BlameReader
     {
         if (!line.IsCommitted) throw new IOException("此行尚未提交，没有所属提交。");
         if (string.IsNullOrEmpty(line.OriginalPath)) throw new IOException("注解缺少此修订中的原始路径，请重新打开注解。");
-        var request = await Task.Run(() =>
+        var request = await ReadWork.Cpu.Run(() =>
         {
             using var repo = new Repository(root);
             var commit = repo.Lookup<Commit>(line.Sha) ?? throw new IOException("注解所属提交已不存在，请刷新注解。");

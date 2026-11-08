@@ -21,6 +21,7 @@ public sealed record CommitEntry(string Sha, string Subject, string Author, Date
     IReadOnlyList<string>? Parents = null, string References = "", HistoryGraphRow? Graph = null, string Message = "",
     IReadOnlyList<HistoryReference>? ReferenceLabels = null)
 {
+    public bool HasFullMessage { get; init; } = true;
     public string ShortSha => Sha[..8];
     public string Detail => $"{ShortSha}  {Author}  {When.LocalDateTime:yyyy-MM-dd HH:mm}";
     public string Caption => string.IsNullOrEmpty(References) ? Subject : $"[{References}]  {Subject}";
@@ -36,6 +37,8 @@ public sealed record RepositorySnapshot(string Root, string Branch, string? Head
     string? HistoryHeads = null, string? HistoryToken = null, IReadOnlyList<HistoryReference>? References = null);
 
 public sealed record HistoryPage(IReadOnlyList<CommitEntry> Commits, bool HasMore);
+public sealed record CommitDetails(string Message, IReadOnlyList<ChangeEntry> Changes);
+public sealed record CommitComparisonDetails(string OldMessage, string? NewMessage, IReadOnlyList<ChangeEntry> Changes);
 
 public sealed record HistoryQuery(string Text = "", string Author = "", DateTimeOffset? From = null, DateTimeOffset? Until = null, string Path = "", bool MatchCase = false, bool UseRegex = false)
 {
@@ -58,9 +61,19 @@ public sealed record HistoryQuery(string Text = "", string Author = "", DateTime
 public sealed record DocumentRequest(string Root, string Path, ComparisonKind Kind,
     string? Commit = null, string? OldPath = null, DiffWhitespace Whitespace = DiffWhitespace.Exact, string? BaseCommit = null);
 
-public sealed record RepositoryDocument(string Path, string Text, string Language, string Comparison,
+public sealed record RepositoryDocument([property: System.Text.Json.Serialization.JsonPropertyOrder(-2)] string Path, string Text, string Language, string Comparison,
     string Detail, bool IsDiff = false, SideBySideDiff? Diff = null, bool PreserveView = false, string? WriteToken = null, bool CanStage = false, IReadOnlyList<BlameLine>? Blame = null, bool IsNotice = false, CommentContext? CommentContext = null, bool CanInclude = false,
-    string? SourceRevision = null, int? RevealLine = null, int? RevealColumn = null, int? RevealLength = null, WorkingTextEditInfo? Editing = null);
+    string? SourceRevision = null, int? RevealLine = null, int? RevealColumn = null, int? RevealLength = null, WorkingTextEditInfo? Editing = null)
+{
+    private readonly string _text = Text;
+    [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
+    public string Text { get => DeferredText?.Value ?? _text; init { _text = value; DeferredText = null; } }
+    // Diff text is a compatibility/fallback view. Structured consumers should
+    // not decode it; an explicit Text replacement must discard the old view.
+    internal Lazy<string>? DeferredText { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? RevealSide { get; init; }
+}
 
 public sealed record DiffSide(string Path, string Label, string Text, bool Exists)
 {

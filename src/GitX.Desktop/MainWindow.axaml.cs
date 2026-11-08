@@ -43,6 +43,7 @@ public sealed partial class MainWindow : Window
         InitializeShell();
         _blameViewReady = LoadBlameViewAsync();
         _model.ConfirmSourceTextClose = ConfirmTextCloseAsync;
+        _model.CaptureReadingPosition = CaptureReadingPositionAsync;
         _model.DocumentChanged += OnDocumentChanged;
         _model.SourceTabsChanged += OnSourceTabsChanged;
         _model.InclusionChanged += RefreshInclusion;
@@ -174,16 +175,15 @@ public sealed partial class MainWindow : Window
             await _blameViewReady;
             if (_closed || sequence != _publicationSequence) return;
             var toolbar = new EditorToolbarState(_model.FileTitle, _model.CanBlame, _model.BlameLabel, _model.CurrentIncludedLines(),
-                _model.SelectedEntry is { } selected ? _model.InclusionState(selected.Path) : false, _blameView, _model.SourceTabs, _model.ActiveSourceTabId, _model.Mode == 0);
+                _model.SelectedEntry is { } selected ? _model.InclusionState(selected.Path) : false, _blameView, _model.SourceTabs, _model.ActiveSourceTabId, _model.Mode == 0, ReadingNavigation: true,
+                ContinuousDiff: _model.ContinuousDiff?.Manifest, CanContinuousDiff: _model.CanOpenContinuousDiff);
             var markdown = !document.IsDiff && !document.IsNotice && document.Language == "markdown" && _model.Root is { } markdownRoot
                 ? new MarkdownResourceContext(version, markdownRoot, document.Path, document.SourceRevision) : null;
-            if (tabsOnly) _server.PublishDeferred(version, document, toolbar, markdown);
-            else
-            {
-                var payload = await Task.Run(() => EditorServer.Serialize(version, document, toolbar));
-                if (_closed || sequence != _publicationSequence) return;
-                _server.Publish(payload, markdown);
-            }
+            var server = _server; var repository = _model.Root;
+            var continuous = _model.ContinuousDiff;
+            var publication = await Task.Run(() => server.PreparePublication(version, document, toolbar, markdown, repository, continuous));
+            if (_closed || sequence != _publicationSequence) return;
+            server.Publish(publication);
             _publishedDocument = document;
             _publishedVersion = version;
             if (_ready) await InvokeEditorAsync(tabsOnly
@@ -230,6 +230,12 @@ public sealed partial class MainWindow : Window
                 break;
             case "project-reveal": RevealProjectFile(); break;
             case "history-back": if (_model.IsHistory) NavigateHistoryBack(); break;
+            case "reading-history": await NavigateReadingAsync(root.GetProperty("direction").GetInt32(), legacyLog: true); break;
+            case "continuous-diff":
+                if (root.GetProperty("action").GetString() == "open") await _model.OpenContinuousDiffAsync(root.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0);
+                else if (await _model.OpenContinuousDiffFileAsync(root.GetProperty("id").GetString()!, root.GetProperty("index").GetInt32(),
+                    root.GetProperty("side").GetInt32(), root.GetProperty("line").GetInt32(), version)) RequestSourceFocus();
+                break;
             case "blame": await _model.ToggleBlameAsync(); break;
             case "blame-action": await HandleBlameActionAsync(root.GetProperty("action").GetString()!, root.GetProperty("line").GetInt32(), version); break;
             case "blame-view": await HandleBlameViewAsync(root.GetProperty("field").GetString()!, root.GetProperty("value").GetBoolean(), version); break;
@@ -265,6 +271,8 @@ public sealed partial class MainWindow : Window
                     root.GetProperty("include").GetBoolean(), version);
                 break;
             case "caret":
+                _model.RecordReadingPosition(new(version, root.GetProperty("side").GetInt32(), root.GetProperty("line").GetInt32(), root.GetProperty("column").GetInt32()),
+                    root.TryGetProperty("navigation", out var readingNavigation) && readingNavigation.GetBoolean());
                 EditorPosition.Text = $"{(root.GetProperty("side").GetInt32() == 0 ? "旧侧" : "当前侧")}  {root.GetProperty("line").GetInt32()}:{root.GetProperty("column").GetInt32()}";
                 break;
             case "include-file":
@@ -350,6 +358,7 @@ public sealed partial class MainWindow : Window
         { e.Handled = true; _ = SaveTextAsync(); return; }
         if (_fileHistoryPanel?.HandleKey(e) == true) return;
         if (HistoryFileShortcut(e)) return;
+        if (ReadingKeyDown(e)) return;
         if (!OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Alt && e.Key == Key.M) { e.Handled = true; MainMenuClicked(MainMenuButton, new RoutedEventArgs()); }
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.E) { e.Handled = true; RevealProjectFile(); }
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.F && _projectPanel.IsKeyboardFocusWithin) { e.Handled = true; _projectFilterVisible = true; UpdateProjectFilter(); NativeKeyboardFocus.TryFocusControl(this, _projectFilter); }
@@ -357,7 +366,6 @@ public sealed partial class MainWindow : Window
         { e.Handled = true; _ = OpenCodeSearchAsync(e.Key == Key.N); }
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.F12)
         { e.Handled = true; _ = OpenSourceSymbolsAsync(); }
-        else if (_model.IsHistory && e.KeyModifiers == KeyModifiers.Alt && e.Key == Key.Left) { e.Handled = true; NavigateHistoryBack(); }
         else if (_model.IsHistory && e.KeyModifiers == KeyModifiers.Control && e.Key == Key.D) { e.Handled = true; OpenHistoryDiff(); }
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.F4 && _model.ActiveSourceTabId is { } sourceTab)
         { e.Handled = true; _ = _model.CloseSourceTabAsync(sourceTab, _model.DocumentVersion); }

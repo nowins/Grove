@@ -76,9 +76,22 @@ public sealed partial class MainViewModel
     public string HistoryScope => _historyReference is null ? "全部分支" : _historyReference == "HEAD" ? "HEAD · 当前分支" :
         _snapshot?.References?.FirstOrDefault(r => r.CanonicalName == _historyReference)?.Name ?? "全部分支";
     public string? HistoryReferenceKey => _historyReference;
-    public string HistoryCommitDetail => _historyCompareOld is { } old ? $"{HistoryFilesTitle}\n\n起点：{old.FullMessage}\n{old.Sha}\n\n" +
-        (_historyCompareWorktree ? "终点：当前工作区（包含未跟踪文件）" : $"终点：{_historyCompareNew!.FullMessage}\n{_historyCompareNew.Sha}") :
-        _selectedCommit is not { } c ? "选择提交查看文件和详情" : $"{(c.FullMessage.StartsWith(c.Subject, StringComparison.Ordinal) ? c.FullMessage[c.Subject.Length..].Trim() : c.FullMessage)}\n\n{c.References}\n\n父提交：\n{string.Join("\n", c.Parents ?? [])}".Trim();
+    private CommitEntry? _historyDetailOld, _historyDetailNew;
+    private string? _historyDetailError;
+    private string HistoryMessage(CommitEntry commit) => (_historyDetailOld?.Sha == commit.Sha ? _historyDetailOld :
+        _historyDetailNew?.Sha == commit.Sha ? _historyDetailNew : commit) is { HasFullMessage: true } full ? full.FullMessage :
+        _historyDetailError is not null ? "提交说明读取失败，请刷新后重试。" : "正在读取提交说明…";
+    public string HistoryCommitDetail
+    {
+        get
+        {
+            if (_historyCompareOld is { } old) return $"{HistoryFilesTitle}\n\n起点：{HistoryMessage(old)}\n{old.Sha}\n\n" +
+                (_historyCompareWorktree ? "终点：当前工作区（包含未跟踪文件）" : $"终点：{HistoryMessage(_historyCompareNew!)}\n{_historyCompareNew!.Sha}");
+            if (_selectedCommit is not { } commit) return "选择提交查看文件和详情";
+            var message = HistoryMessage(commit);
+            return $"{(message.StartsWith(commit.Subject, StringComparison.Ordinal) ? message[commit.Subject.Length..].Trim() : message)}\n\n{commit.References}\n\n父提交：\n{string.Join("\n", commit.Parents ?? [])}".Trim();
+        }
+    }
 
     private string? HistoryHeads(RepositorySnapshot snapshot) => _historyReference is null ? snapshot.HistoryHeads ?? snapshot.Head :
         _historyReference == "HEAD" ? snapshot.Head : snapshot.References?.FirstOrDefault(r => r.CanonicalName == _historyReference)?.Sha;
@@ -173,8 +186,15 @@ public sealed partial class MainViewModel
 
     private void ClearHistoryComparison()
     {
+        ResetHistoryDetails();
         _historyCompareOld = _historyCompareNew = null; _historyCompareWorktree = false;
         Changed(nameof(HistoryFilesTitle)); Changed(nameof(NavigationTitle)); Changed(nameof(HistoryCommitDetail));
+    }
+
+    private void ResetHistoryDetails()
+    {
+        if (_historyDetailError is not null && Error == _historyDetailError) Error = "";
+        _historyDetailOld = _historyDetailNew = null; _historyDetailError = null;
     }
 
     public async Task CompareHistoryAsync(CommitEntry old, CommitEntry? next, bool preserve = false)
@@ -182,16 +202,24 @@ public sealed partial class MainViewModel
         if (_closed || _snapshot is not { } snapshot) return;
         var version = ++_commitVersion; var repositoryVersion = _repositoryVersion;
         Replace(ref _commitRead); var token = _commitRead.Token;
+        ResetHistoryDetails();
         _historyCompareOld = old; _historyCompareNew = next; _historyCompareWorktree = next is null;
         Changed(nameof(HistoryFilesTitle)); Changed(nameof(NavigationTitle)); Changed(nameof(HistoryCommitDetail));
         if (!preserve) SetHistoryEntries([]);
         try
         {
-            var changes = await _reader.CompareChangesAsync(snapshot.Root, old.Sha, next?.Sha, token);
+            var details = await _reader.CompareDetailsAsync(snapshot.Root, old, next, token);
             if (_closed || repositoryVersion != _repositoryVersion || version != _commitVersion) return;
-            SetHistoryEntries(changes.Select(c => new NavigationEntry(c.Path, c.Status, c.Kind, c.OldPath, next?.Sha ?? old.Sha, c.Status, next is null ? null : old.Sha)).ToArray());
+            _historyDetailOld = old with { Message = details.OldMessage, HasFullMessage = true };
+            _historyDetailNew = next is null ? null : next with { Message = details.NewMessage!, HasFullMessage = true };
+            Changed(nameof(HistoryCommitDetail));
+            SetHistoryEntries(details.Changes.Select(c => new NavigationEntry(c.Path, c.Status, c.Kind, c.OldPath, next?.Sha ?? old.Sha, c.Status, next is null ? null : old.Sha)).ToArray());
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { if (!_closed && version == _commitVersion && repositoryVersion == _repositoryVersion) ReportError(e.Message); }
+        catch (Exception e)
+        {
+            if (!_closed && version == _commitVersion && repositoryVersion == _repositoryVersion)
+            { _historyDetailError = e.Message; Changed(nameof(HistoryCommitDetail)); ReportError(e.Message); }
+        }
     }
 }

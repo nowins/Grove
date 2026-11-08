@@ -23,10 +23,10 @@ public sealed partial class ConflictReader
         if (!document.IsText || document.ExistingResult) return document;
         var ancestor = document.Base.Text!; var left = document.Left.Text!; var right = document.Right.Text!;
         var baseline = new DiffSide(document.Path, "共同祖先", ancestor, document.Base.Exists);
-        var a = NativeDiff.CompareAsync(baseline, new(document.Path, "当前", left, true), token);
-        var b = NativeDiff.CompareAsync(baseline, new(document.Path, "传入", right, true), token);
+        var a = NativeDiff.CompareStructureAsync(baseline, new(document.Path, "当前", left, true), token);
+        var b = NativeDiff.CompareStructureAsync(baseline, new(document.Path, "传入", right, true), token);
         await Task.WhenAll(a, b);
-        var changes = a.Result.Diff.Blocks.Concat(b.Result.Diff.Blocks).OrderBy(c => c.OldStart).ToArray();
+        var changes = a.Result.Blocks.Concat(b.Result.Blocks).OrderBy(c => c.OldStart).ToArray();
         var spans = new List<(int Start, int End)>();
         foreach (var change in changes)
         {
@@ -52,7 +52,7 @@ public sealed partial class ConflictReader
         {
             cancellation.ThrowIfCancellationRequested();
             var (start, end) = spans[index];
-            var l = Project(a.Result.Diff.Blocks, start, end); var r = Project(b.Result.Diff.Blocks, start, end);
+            var l = Project(a.Result.Blocks, start, end); var r = Project(b.Result.Blocks, start, end);
             var original = ancestor[baseOffsets[start]..baseOffsets[end]];
             var ours = left[leftOffsets[l.Start]..leftOffsets[l.End]]; var theirs = right[rightOffsets[r.Start]..rightOffsets[r.End]];
             var leftChanged = ours != original; var rightChanged = theirs != original;

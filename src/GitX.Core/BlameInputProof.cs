@@ -48,7 +48,7 @@ internal sealed record BlameInputProof(string[] Files, string Fingerprint)
             // One process, without assuming an installation path or home directory.
             var defaults = defaultFiles ?? ParseDefaultFiles(await GitReadProcess.RunAsync(root, ["var", "-l"], token).ConfigureAwait(false));
             if (defaults is null) return null;
-            return await Task.Run(() =>
+            return await ReadWork.Cpu.Run(() =>
             {
                 var files = new HashSet<string>(defaults, Paths);
                 using var repo = new Repository(root);
@@ -94,7 +94,7 @@ internal sealed record BlameInputProof(string[] Files, string Fingerprint)
         return result.ToArray();
     }
 
-    public Task<bool> UnchangedAsync(CancellationToken token) => Task.Run(() => Fingerprint == HashFiles(Files, token), token);
+    public Task<bool> UnchangedAsync(CancellationToken token) => ReadWork.Cpu.Run(() => Fingerprint == HashFiles(Files, token), token);
 
     // Full bytes, presence and file kind, with strict read budgets. Never mtime-only.
     internal static string? HashFiles(IEnumerable<string> paths, CancellationToken token)

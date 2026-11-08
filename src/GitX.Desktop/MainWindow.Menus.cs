@@ -32,6 +32,9 @@ public sealed partial class MainWindow
             ShellCommandId.RestoreDiscard => _model.CanRestoreDiscard,
             ShellCommandId.RevealFile => _model.CurrentProjectFile is not null,
             ShellCommandId.GoToLine => _ready && _webView is not null && _model.Mode == 0 && _model.CurrentDocument is { IsNotice: false } && _loadedEditorVersion == _model.DocumentVersion,
+            ShellCommandId.ContinuousDiff => ReferenceEquals(owner, this) && _webView is not null && _model.CanOpenContinuousDiff,
+            ShellCommandId.ReadBack => ReferenceEquals(owner, this) && !_model.IsWriting && !ReadingCompositionActive() && _fileHistoryPanel?.IsKeyboardFocusWithin != true && _model.CanReadBack,
+            ShellCommandId.ReadForward => ReferenceEquals(owner, this) && !_model.IsWriting && !ReadingCompositionActive() && _fileHistoryPanel?.IsKeyboardFocusWithin != true && _model.CanReadForward,
             ShellCommandId.Structure => _model.Mode == 0 && _model.CurrentDocument is { IsNotice: false } document && SourceLanguage.SupportsStructure(document.Language),
             ShellCommandId.FileHistory => _model.Mode == 0 && _model.CurrentDocument is { IsNotice: false },
             ShellCommandId.HistoryBranches or ShellCommandId.HistoryFiles => _bottomOpen,
@@ -72,6 +75,9 @@ public sealed partial class MainWindow
             case ShellCommandId.FindFile: _ = OpenCodeSearchAsync(true); break;
             case ShellCommandId.FindText: _ = OpenCodeSearchAsync(false); break;
             case ShellCommandId.GoToLine: _webView?.Focus(); _ = InvokeEditorAsync("window.gitx.goToLine()"); break;
+            case ShellCommandId.ContinuousDiff: _webView?.Focus(); _ = _model.OpenContinuousDiffAsync(); break;
+            case ShellCommandId.ReadBack: _ = NavigateReadingAsync(-1); break;
+            case ShellCommandId.ReadForward: _ = NavigateReadingAsync(1); break;
             case ShellCommandId.Structure: _ = OpenSourceSymbolsAsync(); break;
             case ShellCommandId.Notes: _ = OpenLocalNotesAsync(); break;
             case ShellCommandId.FileHistory: _ = OpenSourceHistoryAsync(_model.DocumentVersion); break;

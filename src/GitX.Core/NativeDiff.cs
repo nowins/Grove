@@ -4,33 +4,65 @@ using System.Text.RegularExpressions;
 
 namespace GitX.Core;
 
+internal sealed record DiffComputation(SideBySideDiff Diff, Lazy<string> Patch, bool HasPatch);
+
 public static partial class NativeDiff
 {
+    private static readonly SharedRead<DiffInput, DiffComputation> Comparisons = new(64, 16 * 1024 * 1024);
+
     // Immutable snapshots keep the line map, text and highlighting from different reads from mixing.
     // Buffer comparisons are read-only; the fallback writes only its two temporary inputs.
     public static async Task<(string Patch, SideBySideDiff Diff)> CompareAsync(DiffSide oldSide, DiffSide newSide, CancellationToken token, DiffWhitespace whitespace = DiffWhitespace.Exact)
     {
+        var input = await ReadWork.Cpu.Run(() => new DiffInput(oldSide, newSide, whitespace), token).ConfigureAwait(false);
+        var result = await CompareInputAsync(input, token).ConfigureAwait(false);
+        return (result.Patch.Value, result.Diff);
+    }
+
+    public static async Task<SideBySideDiff> CompareStructureAsync(DiffSide oldSide, DiffSide newSide, CancellationToken token, DiffWhitespace whitespace = DiffWhitespace.Exact)
+    {
+        var input = await ReadWork.Cpu.Run(() => new DiffInput(oldSide, newSide, whitespace), token).ConfigureAwait(false);
+        return (await CompareInputAsync(input, token).ConfigureAwait(false)).Diff;
+    }
+
+    internal static Task<DiffComputation> CompareCapturedAsync(DiffSide oldSide, DiffSide newSide,
+        string identity, CancellationToken token, DiffWhitespace whitespace)
+        => CompareInputAsync(new(oldSide, newSide, whitespace, identity), token);
+
+    private static Task<DiffComputation> CompareInputAsync(DiffInput input, CancellationToken token)
+        => Comparisons.RunAsync(input, input.RetainedBytes,
+            sharedToken => CompareCoreAsync(input.Old, input.New, sharedToken, input.Whitespace), token);
+
+    private static async Task<DiffComputation> CompareCoreAsync(DiffSide oldSide, DiffSide newSide, CancellationToken token, DiffWhitespace whitespace)
+    {
         // Capture/normalization, diff generation and highlighting all stay off
         // the UI thread. Small/medium documents never cross a process boundary.
-        return await Task.Run(async () =>
+        return await ReadWork.Cpu.RunAsync(async () =>
         {
             // Prefix normalized lines so whitespace-only EOF lines survive.
             string Input(string text) => whitespace == DiffWhitespace.Exact ? text.Replace("\r\n", "\n") :
                 string.Join('\n', Lines(text).Select(line => "\u0001" + NormalizeText(line, whitespace))) + (text.EndsWith('\n') ? "\n" : "");
             token.ThrowIfCancellationRequested();
             var before = Input(oldSide.Text); var after = Input(newSide.Text);
-            var patch = BufferDiff.TryCompare(before, after, token, out var buffered)
-                ? buffered : await CompareFilesAsync(before, after, token).ConfigureAwait(false);
-            if (whitespace != DiffWhitespace.Exact)
-                patch = patch.Replace("\n-\u0001", "\n-").Replace("\n+\u0001", "\n+").Replace("\n \u0001", "\n ");
-            return (patch, Build(oldSide, newSide, patch, token, whitespace));
+            if (BufferDiff.TryCapture(before, after, token, out var captured))
+                return new DiffComputation(Build(oldSide, newSide, captured.Hunks, token, whitespace), DeferredPatch(captured.Utf8, whitespace), captured.Utf8.Length != 0);
+            var patch = CleanPatch(await CompareFilesAsync(before, after, token).ConfigureAwait(false), whitespace);
+            return new DiffComputation(Build(oldSide, newSide, patch, token, whitespace), new(() => patch), patch.Length != 0);
         }, token).ConfigureAwait(false);
     }
 
+    // The lazy factory owns only managed bytes, never a repository, native
+    // patch, cancellation source or normalized comparison inputs.
+    private static Lazy<string> DeferredPatch(byte[] bytes, DiffWhitespace whitespace)
+        => new(() => CleanPatch(Encoding.UTF8.GetString(bytes), whitespace));
+    private static string CleanPatch(string patch, DiffWhitespace whitespace) => whitespace == DiffWhitespace.Exact ? patch :
+        patch.Replace("\n-\u0001", "\n-").Replace("\n+\u0001", "\n+").Replace("\n \u0001", "\n ");
+
     private static async Task<string> CompareFilesAsync(string before, string after, CancellationToken token)
     {
-        var directory = Path.Combine(Path.GetTempPath(), "GitX", "diff", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        var inputs = new TemporaryGitInputs("diff", "old.txt", "new.txt");
+        var directory = inputs.DirectoryPath;
+        var handedOff = false;
         try
         {
             // Line separators are metadata, not changed code. Keep the captured
@@ -40,20 +72,32 @@ public static partial class NativeDiff
             // real line. The prefix exists only in temporary comparison input.
             await File.WriteAllTextAsync(Path.Combine(directory, "old.txt"), before, new UTF8Encoding(false), token);
             await File.WriteAllTextAsync(Path.Combine(directory, "new.txt"), after, new UTF8Encoding(false), token);
+            handedOff = true;
             return await GitReadProcess.RunAsync(directory,
                 ["-c", "core.autocrlf=false", "diff", "--no-index", "--no-ext-diff", "--no-textconv", "--no-color",
-                 "--diff-algorithm=myers", "--no-indent-heuristic", "--unified=0", "--", "old.txt", "new.txt"], token, allowDifferences: true);
+                 "--diff-algorithm=myers", "--no-indent-heuristic", "--unified=0", "--", "old.txt", "new.txt"], token, allowDifferences: true, afterExit: inputs.CleanupAsync);
         }
         finally
         {
-            // Delete only fixed files in the random directory created by this invocation.
-            File.Delete(Path.Combine(directory, "old.txt"));
-            File.Delete(Path.Combine(directory, "new.txt"));
-            Directory.Delete(directory);
+            if (!handedOff) await inputs.CleanupAsync().ConfigureAwait(false);
         }
     }
 
     public static SideBySideDiff Build(DiffSide oldSide, DiffSide newSide, string patch, CancellationToken token = default, DiffWhitespace whitespace = DiffWhitespace.Exact)
+        => Build(oldSide, newSide, ParseHunks(patch), token, whitespace);
+
+    private static IEnumerable<DiffHunk> ParseHunks(string patch)
+    {
+        foreach (Match match in HunkHeader().Matches(patch))
+        {
+            var oldCount = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
+            var newCount = match.Groups[4].Success ? int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture) : 1;
+            yield return new(int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) - (oldCount == 0 ? 0 : 1), oldCount,
+                int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) - (newCount == 0 ? 0 : 1), newCount);
+        }
+    }
+
+    internal static SideBySideDiff Build(DiffSide oldSide, DiffSide newSide, IEnumerable<DiffHunk> hunks, CancellationToken token = default, DiffWhitespace whitespace = DiffWhitespace.Exact)
     {
         var oldLines = Lines(oldSide.Text);
         var newLines = Lines(newSide.Text);
@@ -62,14 +106,10 @@ public static partial class NativeDiff
         var newEnd = 0;
         var budget = 2_000_000;
         var coarse = false;
-        foreach (Match match in HunkHeader().Matches(patch))
+        foreach (var (oldStart, oldCount, newStart, newCount) in hunks)
         {
             token.ThrowIfCancellationRequested();
-            var oldCount = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
-            var newCount = match.Groups[4].Success ? int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture) : 1;
-            var oldStart = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) - (oldCount == 0 ? 0 : 1);
-            var newStart = int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) - (newCount == 0 ? 0 : 1);
-            if (oldStart < oldEnd || newStart < newEnd || oldStart + oldCount > oldLines.Length || newStart + newCount > newLines.Length
+            if (oldCount < 0 || newCount < 0 || oldStart < oldEnd || newStart < newEnd || (long)oldStart + oldCount > oldLines.Length || (long)newStart + newCount > newLines.Length
                 || oldStart - oldEnd != newStart - newEnd)
                 throw new InvalidDataException("Git diff 行范围与文档快照不一致。");
             VerifyContext(oldLines, newLines, oldEnd, newEnd, oldStart - oldEnd, whitespace);
@@ -82,17 +122,17 @@ public static partial class NativeDiff
                 var a = Normalize(oldLines[oldLine - 1], whitespace); var b = Normalize(newLines[newLine - 1], whitespace);
                 var spans = Intraline(a.Text, b.Text, ref budget, ref coarse, token);
                 var words = Intraline(a.Text, b.Text, ref budget, ref coarse, token, words: true);
-                IReadOnlyList<InlineSpan> Map(IReadOnlyList<InlineSpan> source, int[] columns) => source.Select(span =>
-                    new InlineSpan(columns[span.StartColumn - 1] + 1, columns[span.EndColumn - 2] + 2)).ToArray();
+                IReadOnlyList<InlineSpan> Map(IReadOnlyList<InlineSpan> source, int[] columns) => Array.AsReadOnly(source.Select(span =>
+                    new InlineSpan(columns[span.StartColumn - 1] + 1, columns[span.EndColumn - 2] + 2)).ToArray());
                 inline.Add(new(oldLine, newLine, Map(spans.Old, a.Columns), Map(spans.New, b.Columns), Map(words.Old, a.Columns), Map(words.New, b.Columns)));
             }
-            blocks.Add(new(oldStart, oldCount, newStart, newCount, inline, rows));
+            blocks.Add(new(oldStart, oldCount, newStart, newCount, inline.AsReadOnly(), rows));
             oldEnd = oldStart + oldCount;
             newEnd = newStart + newCount;
         }
         if (oldLines.Length - oldEnd != newLines.Length - newEnd) throw new InvalidDataException("Git diff 未覆盖全部文本变化。");
         VerifyContext(oldLines, newLines, oldEnd, newEnd, oldLines.Length - oldEnd, whitespace);
-        return new(oldSide, newSide, blocks, coarse);
+        return new(oldSide, newSide, blocks.AsReadOnly(), coarse);
     }
 
     public static string[] Lines(string text)
@@ -133,8 +173,8 @@ public static partial class NativeDiff
         // Bounded sequence alignment moves filler to inserted/deleted rows inside replacements.
         // Very large blocks retain ordinal pairing rather than allocating a quadratic matrix.
         if ((long)(oldCount + 1) * (newCount + 1) > 4096 || oldCount == 0 || newCount == 0)
-            return Enumerable.Range(0, Math.Max(oldCount, newCount)).Select(i => new DiffRow(
-                i < oldCount ? oldStart + i + 1 : null, i < newCount ? newStart + i + 1 : null)).ToArray();
+            return Array.AsReadOnly(Enumerable.Range(0, Math.Max(oldCount, newCount)).Select(i => new DiffRow(
+                i < oldCount ? oldStart + i + 1 : null, i < newCount ? newStart + i + 1 : null)).ToArray());
         var oldFeatures = oldLines.Skip(oldStart).Take(oldCount).Select(LineFeatures).ToArray();
         var newFeatures = newLines.Skip(newStart).Take(newCount).Select(LineFeatures).ToArray();
         var scores = new double[oldCount + 1, newCount + 1];
@@ -168,14 +208,18 @@ public static partial class NativeDiff
             }
         }
         rows.Reverse();
-        return rows;
+        return rows.AsReadOnly();
     }
 
-    private static HashSet<string> LineFeatures(string line)
+    private static HashSet<uint> LineFeatures(string line)
     {
         var text = line.Trim();
         if (text.Length > 1024) text = text[..512] + text[^512..];
-        return Enumerable.Range(0, Math.Max(0, text.Length - 1)).Select(i => text.Substring(i, 2)).ToHashSet(StringComparer.Ordinal);
+        // Two UTF-16 code units fit losslessly in one value. Keep the exact
+        // ordinal bigram semantics without allocating a string for every pair.
+        var features = new HashSet<uint>();
+        for (var i = 1; i < text.Length; i++) features.Add((uint)text[i - 1] << 16 | text[i]);
+        return features;
     }
 
     private static (IReadOnlyList<InlineSpan> Old, IReadOnlyList<InlineSpan> New) Intraline(

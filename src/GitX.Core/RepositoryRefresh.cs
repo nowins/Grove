@@ -8,10 +8,10 @@ public sealed partial class RepositoryReader
     {
         if (!changes.IsFull && !previous.FilesTruncated && previous.IndexToken is not null && previous.Operation is null)
         {
-            var updated = await Task.Run(() => RefreshContent(previous, changes, token), token).ConfigureAwait(false);
+            var updated = await ReadWork.Cpu.Run(() => RefreshContent(previous, changes, token), token, ReadPriority.Background).ConfigureAwait(false);
             if (updated is not null) return new(updated, changes);
         }
-        return new(await OpenAsync(previous.Root, token).ConfigureAwait(false), RepositoryChangeSet.Full);
+        return new(await OpenAsync(previous.Root, token, ReadPriority.Background).ConfigureAwait(false), RepositoryChangeSet.Full);
     }
 
     private static RepositorySnapshot? RefreshContent(RepositorySnapshot previous, RepositoryChangeSet changes, CancellationToken token)

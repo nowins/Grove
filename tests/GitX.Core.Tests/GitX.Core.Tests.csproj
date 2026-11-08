@@ -2,6 +2,8 @@
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/GitX.Core/GitX.Core.csproj" />
+    <Compile Include="../../tools/PerformanceProbe/Report.cs" Link="PerformanceReport.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/SearchResultList.cs" Link="SearchResultList.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/DraftWriteGuard.cs" Link="DraftWriteGuard.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/WebViewScript.cs" Link="WebViewScript.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/TitlebarMetrics.cs" Link="TitlebarMetrics.cs" />
@@ -17,6 +19,8 @@
     <Compile Include="../../src/GitX.Desktop/ViewModels/SourceTextClose.cs" Link="SourceTextClose.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/BlameNavigation.cs" Link="BlameNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/CodeNavigation.cs" Link="CodeNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/ReadingNavigation.cs" Link="ReadingNavigation.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/ContinuousDiff.cs" Link="ContinuousDiff.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/FileNavigation.cs" Link="FileNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferencePreferences.cs" Link="HistoryReferencePreferences.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferenceChoices.cs" Link="HistoryReferenceChoices.cs" />
@@ -27,6 +31,7 @@
     <Compile Include="../../src/GitX.Desktop/Services/RecentRepositoryStore.cs" Link="RecentRepositoryStore.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/BranchActionAvailability.cs" Link="BranchActionAvailability.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/EditorServer.cs" Link="EditorServer.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/EditorPublication.cs" Link="EditorPublication.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/BlameViewStore.cs" Link="BlameViewStore.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/EditorMessage.cs" Link="EditorMessage.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/DoubleShiftGesture.cs" Link="DoubleShiftGesture.cs" />

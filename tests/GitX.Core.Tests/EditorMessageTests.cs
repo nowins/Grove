@@ -10,13 +10,14 @@ public sealed class EditorMessageTests
 {
     [Theory]
     [InlineData("project-reveal")]
+    [InlineData("reading-history")]
     public async Task Project_commands_require_the_current_published_document(string type)
     {
         var state = new EditorMessageState(false, 7, 7, "repo"); var handled = 0; var errors = new List<string>();
         Task Handle(EditorMessage _) { handled++; return Task.CompletedTask; }
-        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\",\"version\":7}}", () => state, Handle, errors.Add);
+        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\",\"version\":7,\"direction\":-1}}", () => state, Handle, errors.Add);
         Assert.Equal(1, handled);
-        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\",\"version\":6}}", () => state, Handle, errors.Add);
+        await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\",\"version\":6,\"direction\":-1}}", () => state, Handle, errors.Add);
         Assert.Equal(1, handled); Assert.Empty(errors);
         await EditorMessage.DispatchAsync($"{{\"type\":\"{type}\"}}", () => state, Handle, errors.Add);
         Assert.Equal(1, handled); Assert.Single(errors);
@@ -76,6 +77,17 @@ public sealed class EditorMessageTests
     [InlineData("""{"type":"focus-out","version":7,"direction":0}""")]
     [InlineData("""{"type":"caret","version":7,"side":1,"line":0,"column":1}""")]
     [InlineData("""{"type":"caret","version":7,"side":1,"line":1,"column":"x"}""")]
+    [InlineData("""{"type":"caret","version":7,"side":1,"line":1,"column":1,"navigation":"true"}""")]
+    [InlineData("""{"type":"reading-history","version":7,"direction":0}""")]
+    [InlineData("""{"type":"reading-history","version":7,"direction":2}""")]
+    [InlineData("""{"type":"reading-history","direction":-1}""")]
+    [InlineData("""{"type":"continuous-diff","action":"open"}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"open","offset":-1}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"file","id":"bad","index":0,"side":1,"line":1}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"file","id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","index":200,"side":1,"line":1}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"file","id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","index":0,"side":2,"line":1}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"file","id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","index":0,"side":1,"line":0}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"unknown"}""")]
     [InlineData("""{"type":"error","message":{}}""")]
     [InlineData("""{"type":"comment","action":"save","id":"draft","body":null}""")]
     [InlineData("""{"type":"comment","action":"delete","repositoryId":"r","id":"comment"}""")]
@@ -93,6 +105,8 @@ public sealed class EditorMessageTests
     [InlineData("""{"type":"loaded","version":7,"models":2,"hunks":4}""")]
     [InlineData("""{"type":"view","index":0}""")]
     [InlineData("""{"type":"refresh"}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"open","offset":200}""")]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"file","id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","index":0,"side":0,"line":3}""")]
     [InlineData("""{"type":"open"}""")]
     [InlineData("""{"type":"code-search","version":7,"filesOnly":false}""")]
     [InlineData("""{"type":"code-search","version":7,"filesOnly":true,"quick":true}""")]
@@ -138,6 +152,7 @@ public sealed class EditorMessageTests
     [InlineData("""{"type":"code-search","version":6,"filesOnly":true}""", 7, 7)]
     [InlineData("""{"type":"source-history","version":6}""", 7, 7)]
     [InlineData("""{"type":"history-back","version":7}""", 7, 8)]
+    [InlineData("""{"type":"continuous-diff","version":7,"action":"open"}""", 7, 8)]
     [InlineData("""{"type":"hide-tool","version":6}""", 7, 7)]
     [InlineData("""{"type":"reset-layout","version":6}""", 7, 7)]
     [InlineData("""{"type":"include-file","version":7}""", 6, 7)]

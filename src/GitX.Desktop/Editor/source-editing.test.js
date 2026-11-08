@@ -4,7 +4,7 @@ import { SourceEditing, renderedModelCount } from './source-editing.js';
 let next=0;
 class Model {
   constructor(text){this.value=text;this.id=String(++next);this.version=1;this.listeners=new Set();this.disposed=false;}
-  getValue(){return this.value;}getAlternativeVersionId(){return this.version;}
+  getValue(){return this.value;}getValueLength(){return this.value.length;}getAlternativeVersionId(){return this.version;}
   setValue(text){this.value=text;this.version++;for(const listener of this.listeners)listener();}
   pushStackElement(){}
   getFullModelRange(){return {};}
@@ -17,7 +17,7 @@ class Model {
 const info=(token='disk1',root='root')=>({fingerprint:token,rootKey:root,bom:false,newline:'LF',canEdit:true});
 const doc=(text='one',token='disk1',root='root')=>({path:'a.txt',text,language:'plaintext',editing:info(token,root),commentContext:{snapshot:'old'}});
 const tabs=(active='a',ids=['a','b'])=>({sourceMode:true,activeSourceTabId:active,sourceTabs:ids.map(id=>({id,path:id+'.txt',localFile:true}))});
-const create=()=>new SourceEditing({createModel:t=>new Model(t),getVersion:()=>1});
+const create=(options={})=>new SourceEditing({createModel:t=>new Model(t),getVersion:()=>1,...options});
 test('dirty model and undo survive tab switches, refresh and deleted-file notices',()=>{
  const e=create();const a=e.prepare(doc(),tabs()).model;a.setValue('draft');e.prepare(doc('two'),tabs('b'));
  const back=e.prepare(doc('external','disk2'),tabs());assert.equal(back.model,a);assert.equal(back.doc.text,'draft');assert.equal(back.doc.commentContext,null);assert.equal(e.metadata().find(s=>s.id==='a').conflict,true);
@@ -109,4 +109,46 @@ test('disk-write lease freezes existing and newly opened tabs until reconciliati
  e.lockDiskWrites(true);e.lockDiskWrites(false);assert.equal(e.editable(),false);
  e.lockDiskWrites(false);assert.equal(e.editable(),true);
  e.prepare(doc(),tabs());assert.equal(e.editable(),true);e.dispose();
+});
+
+test('untouched tabs keep lightweight sessions while resident models obey LRU count and byte budgets',()=>{
+ const e=create({pristineModels:2,pristineBytes:12}),ids=['a','b','c','d'];
+ const open=(id,text='one')=>{const model=e.prepare(doc(text),tabs(id,ids)).model;e.disposeRetired([model]);return model;};
+ const a=open('a'),b=open('b');assert.equal(open('a'),a);const c=open('c');
+ assert.equal(b.disposed,true);assert.equal(a.disposed,false);assert.equal(e.sessions.size,3);assert.equal(e.draft('b'),null);
+ assert.equal(e.metadata().find(s=>s.id==='b').dirty,false);assert.equal(e.metadata().find(s=>s.id==='b').editable,true);
+ const d=open('d','12345');assert.equal(a.disposed,true);assert.equal(c.disposed,true);assert.equal(d.disposed,false);
+ const reopened=open('b','new');assert.notEqual(reopened,b);assert.equal(reopened.getValue(),'new');assert.equal(d.disposed,true);e.dispose();
+});
+
+test('editing history remains resident after save or undo to clean, and recovered equal text stays protected',()=>{
+ const e=create({pristineModels:0,pristineBytes:0}),ids=['a','b','c','d'];
+ const open=id=>{const model=e.prepare(doc(),tabs(id,ids)).model;e.disposeRetired([model]);return model;};
+ const a=open('a');a.setValue('draft');a.undoTo('one',1);assert.equal(e.dirty(e.active),false);
+ const b=open('b');b.setValue('saved');const captured=e.draft('b');e.saving(captured);e.saved({...captured,info:info('saved')});
+ const c=open('c');assert.equal(e.restore('c',{path:'c.txt',baseline:info(),text:'one'}),true);
+ open('d');assert.equal(a.disposed,false);assert.equal(b.disposed,false);assert.equal(c.disposed,false);
+ assert.equal(e.draft('a').dirty,false);assert.equal(e.draft('b').dirty,false);assert.equal(e.draft('c').dirty,true);
+ e.sync(tabs('d',['d']));e.disposeRetired([e.active?.model]);assert.equal(a.disposed,true);assert.equal(b.disposed,true);assert.equal(c.disposed,true);e.dispose();
+});
+
+test('attached models and active save or write leases cannot be evicted under pressure',()=>{
+ const e=create({pristineModels:0,pristineBytes:0});const a=e.prepare(doc(),tabs()).model;
+ const captured=e.draft('a');e.saving(captured);const b=e.prepare(doc('two'),tabs('b')).model;
+ e.disposeRetired([a,b]);assert.equal(a.disposed,false);e.disposeRetired([b]);assert.equal(a.disposed,false);
+ e.saved({...captured,info:info()});e.lock(['a'],true);e.disposeRetired([b]);assert.equal(a.disposed,false);
+ e.lock(['a'],false);e.lockDiskWrites(true);e.disposeRetired([b]);assert.equal(a.disposed,false);
+ e.lockDiskWrites(false);e.disposeRetired([b]);assert.equal(a.disposed,true);assert.equal(b.disposed,false);e.dispose();
+});
+
+test('disk refresh stays reconstructible, while stale replies cannot mutate a rehydrated model',()=>{
+ const e=create({pristineModels:1}),ids=['a','b'];
+ const a=e.prepare(doc(),tabs()).model;const captured=e.draft('a');
+ e.prepare(doc('disk changed','disk2'),tabs());assert.equal(e.sessions.get('a').history,false);
+ const b=e.prepare(doc('two'),tabs('b')).model;e.disposeRetired([b]);assert.equal(a.disposed,true);
+ const fresh=e.prepare(doc('latest','disk3'),tabs()).model;e.disposeRetired([fresh]);
+ assert.equal(fresh.getValue(),'latest');assert.equal(e.draft('a').expected,'disk3');assert.equal(e.saving(captured),false);
+ e.saved({...captured,info:info('stale')});assert.equal(e.draft('a').expected,'disk3');
+ e.prepare({...doc(),editing:{...info(),canEdit:false}},tabs('b'));assert.equal(e.sessions.has('b'),false);
+ e.sync(tabs(null,[]));e.disposeRetired([]);assert.equal(e.sessions.size,0);e.dispose();
 });

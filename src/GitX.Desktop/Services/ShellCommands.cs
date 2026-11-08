@@ -6,7 +6,7 @@ internal enum ShellCommandId
     ProjectTool, CommitTool, GitTool, Output, RevealFile, ProjectFilter, ResetLayout, Refresh,
     HistoryBranches, HistoryFiles, QuickSearch, RecentFiles, FindFile, FindText, Structure, Notes, FileHistory,
     Branches, Sync, Stashes, Stage, Unstage, RestoreDiscard, Amend, Conflicts,
-    Shortcuts, Updates, About, Minimize, Zoom, GoToLine, SaveFile, DraftRecovery
+    Shortcuts, Updates, About, Minimize, Zoom, GoToLine, SaveFile, DraftRecovery, ReadBack, ReadForward, ContinuousDiff
 }
 
 internal sealed record ShellCommandDefinition(ShellCommandId Id, string Group, string Header,
@@ -38,11 +38,14 @@ internal static class ShellCommands
         new(ShellCommandId.Refresh, "视图", "刷新", "RefreshIcon", "F5", "F5", true),
         new(ShellCommandId.HistoryBranches, "视图", "显示 / 隐藏分支栏", "BranchIcon"),
         new(ShellCommandId.HistoryFiles, "视图", "显示 / 隐藏提交文件与详情栏", "PanelIcon"),
+        new(ShellCommandId.ContinuousDiff, "视图", "连续阅读当前范围的 Diff"),
         new(ShellCommandId.QuickSearch, "搜索", "快速搜索…（双击 Shift）", "SearchIcon"),
         new(ShellCommandId.RecentFiles, "搜索", "最近文件…", "HistoryIcon", "Ctrl+E", "Meta+E"),
         new(ShellCommandId.FindFile, "搜索", "查找文件…", "FileIcon", "Ctrl+Shift+N", "Meta+Shift+O"),
         new(ShellCommandId.FindText, "搜索", "跨文件搜索内容…", "SearchIcon", "Ctrl+Shift+F", "Meta+Shift+F"),
         new(ShellCommandId.GoToLine, "搜索", "跳转到行…", "RevealIcon", "Ctrl+G", "Meta+L"),
+        new(ShellCommandId.ReadBack, "搜索", "返回上一阅读位置", WindowsGesture: "Alt+Left", MacGesture: "Meta+Alt+Left"),
+        new(ShellCommandId.ReadForward, "搜索", "前往下一阅读位置", WindowsGesture: "Alt+Right", MacGesture: "Meta+Alt+Right"),
         new(ShellCommandId.Structure, "搜索", "当前文件结构…", "FileIcon", "Ctrl+F12", "Meta+F12"),
         new(ShellCommandId.Notes, "搜索", "本地代码笔记…", "CommentIcon"),
         new(ShellCommandId.FileHistory, "搜索", "当前文件历史…", "HistoryIcon"),
@@ -78,7 +81,7 @@ internal static class ShellCommands
         ShellCommandId.FindFile or ShellCommandId.FindText or ShellCommandId.GoToLine or
         ShellCommandId.Structure or ShellCommandId.Notes or ShellCommandId.FileHistory or
         ShellCommandId.Worktrees or ShellCommandId.RepositoryDetails or ShellCommandId.Shortcuts or
-        ShellCommandId.About;
+        ShellCommandId.About or ShellCommandId.ReadBack or ShellCommandId.ReadForward or ShellCommandId.ContinuousDiff;
 
     public static IEnumerable<ShellCommandDefinition> WindowMenu(bool mac) => All.Where(c =>
         mac ? c.Id is not (ShellCommandId.About or ShellCommandId.Updates) : c.Group != "窗口");

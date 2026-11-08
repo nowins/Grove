@@ -390,6 +390,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _historyLoading = false; _historyLoadFailed = false; HistoryPagingChanged();
         _allEntries = []; Entries = []; Commits = []; HasMoreHistory = false;
         _selectedEntry = null; _selectedCommit = null;
+        ClearHistoryComparison();
         Changed(nameof(SelectedEntry)); Changed(nameof(SelectedCommit));
         Changed(nameof(HistoryCommitDetail));
         RepositoryPath = path;
@@ -456,6 +457,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 var result = await session.RefreshAsync(_repositoryRead.Token);
                 if (_closed || IsWriting && !_reconciling || repositoryVersion != _repositoryVersion || !ReferenceEquals(session, _repositorySession)) return;
                 var updated = result.Snapshot;
+                if (_continuousDiff is not null) ClearDocument("仓库已刷新，请重新打开连续 Diff。");
                 if (result.Changes.IsFull) _blameReader.ClearCache();
                 var selected = _selectedEntry;
                 WriteStateChanged();
@@ -494,8 +496,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     await ReadHistoryPageAsync(updated, replace: true);
                     if (_closed || repositoryVersion != _repositoryVersion || generation != _historyVersion) return;
                 }
-                if (_historyCompareOld is not null && _historyCompareWorktree)
-                    await CompareHistoryAsync(_historyCompareOld, null, preserve: true);
+                if (_historyCompareOld is not null && (_historyCompareWorktree || result.Changes.IsFull && _historyDetailError is not null))
+                    await CompareHistoryAsync(_historyCompareOld, _historyCompareNew, preserve: true);
+                else if (result.Changes.IsFull && _historyDetailError is not null && _selectedCommit is { } retryCommit)
+                    await SelectCommitAsync(retryCommit);
                 Status = $"已刷新 {DateTime.Now:HH:mm:ss} · {updated.Changes.Count} 个改动项 · F5 手动刷新";
             } while (session.HasPending && !_closed && ReferenceEquals(session, _repositorySession));
         }
@@ -540,7 +544,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _historyLoading = true; _historyLoadFailed = false; HistoryPagingChanged();
         try
         {
-            var page = await _reader.QueryHistoryAsync(snapshot.Root, HistoryHeads(snapshot), _historyQuery, replace ? 0 : Commits.Count, _historyRead.Token);
+            var page = await _reader.QueryHistorySummariesAsync(snapshot.Root, HistoryHeads(snapshot), _historyQuery, replace ? 0 : Commits.Count, _historyRead.Token);
             if (_closed || version != _repositoryVersion || generation != _historyVersion) return;
             if (page.HasMore && page.Commits.Count == 0) throw new IOException("历史分页未返回提交，请重试或刷新。");
             if (replace)
@@ -577,17 +581,27 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         if (commit is null) return;
         try
         {
-            var changes = await _reader.CommitChangesAsync(snapshot.Root, commit.Sha, token);
+            var details = await _reader.CommitDetailsAsync(snapshot.Root, commit, token);
             if (_closed || version != _commitVersion || repositoryVersion != _repositoryVersion) return;
-            SetHistoryEntries(changes.Select(c => new NavigationEntry(c.Path, c.Status, c.Kind, c.OldPath, commit.Sha, c.Status)).ToArray());
+            _historyDetailOld = commit with { Message = details.Message, HasFullMessage = true }; Changed(nameof(HistoryCommitDetail));
+            SetHistoryEntries(details.Changes.Select(c => new NavigationEntry(c.Path, c.Status, c.Kind, c.OldPath, commit.Sha, c.Status)).ToArray());
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { if (!_closed && version == _commitVersion) ReportError(e.Message); }
+        catch (Exception e)
+        {
+            if (!_closed && version == _commitVersion && repositoryVersion == _repositoryVersion)
+            { _historyDetailError = e.Message; Changed(nameof(HistoryCommitDetail)); ReportError(e.Message); }
+        }
     }
 
-    private async Task SelectEntryAsync(NavigationEntry? entry, bool preserve = false, CodeSearchMatch? location = null)
+    private async Task SelectEntryAsync(NavigationEntry? entry, bool preserve = false, CodeSearchMatch? location = null, int? revealLine = null, int revealSide = 1)
     {
         if (_closed) return;
+        ResetContinuousDiff();
+        InterruptReading(); var intent = _readingIntent; var departingVersion = _documentVersion; var annotation = _annotationNavigation;
+        var departingRepository = _repositoryVersion;
+        if (!preserve) await CaptureReadingAsync();
+        if (_closed || intent != _readingIntent || departingRepository != _repositoryVersion || departingVersion != _documentVersion || annotation != _annotationNavigation) return;
         var snapshot = _snapshot;
         var repositoryVersion = _repositoryVersion;
         var version = ++_documentVersion;
@@ -609,9 +623,11 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (document.IsNotice || currentFingerprint != fingerprint) throw new IOException("搜索后文件内容已变化，请重新搜索后定位。");
             }
             if (location is not null) document = document with { RevealLine = location.Line, RevealColumn = location.Column, RevealLength = location.Length };
+            if (revealLine is not null) document = document with { RevealLine = revealLine, RevealColumn = 1, RevealLength = 0, RevealSide = revealSide };
             FileTitle = document.Path;
             Comparison = document.Comparison; Detail = document.Detail;
             _document = document = document with { PreserveView = preserve };
+            TrackReading(entry, document, preserve, explicitJump: location is not null || document.RevealLine is not null);
             WriteStateChanged();
             DocumentChanged?.Invoke(version, document);
         }
@@ -642,8 +658,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private void FilterEntries() => Entries = string.IsNullOrWhiteSpace(Filter) ? _allEntries :
         _allEntries.Where(e => e.Path.Contains(Filter, StringComparison.OrdinalIgnoreCase)).ToArray();
 
-    private void ClearDocument(string text)
+    private void ClearDocument(string text, Action<long>? beforePublish = null)
     {
+        ResetContinuousDiff();
+        InterruptReading(); _readingTarget = null;
         Replace(ref _documentRead);
         _document = null;
         WriteStateChanged();
@@ -652,7 +670,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         // nullable event invocation would otherwise skip its ++ argument and
         // allow a late read to restore a tab that was already closed.
         var version = ++_documentVersion;
+        beforePublish?.Invoke(version);
         DocumentChanged?.Invoke(version, new("", text, "plaintext", "只读", "", IsNotice: true));
+        ReadingAvailabilityChanged();
     }
 
     public void ReportError(string message) { Error = message; Status = "操作未完成 · 修正问题后可重试"; }
@@ -667,6 +687,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_closed) return;
         _closed = true;
+        ResetContinuousDiff();
+        InterruptReading(); _readingHistory.Clear(); _readingTarget = null; CaptureReadingPosition = null;
         _blameReader.ClearCache();
         foreach (var source in new[] { _repositoryRead, _documentRead, _commitRead, _historyRead, _noteRead }) { source.Cancel(); source.Dispose(); }
         (_reader as IDisposable)?.Dispose();

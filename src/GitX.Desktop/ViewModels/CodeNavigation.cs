@@ -80,11 +80,14 @@ public sealed partial class MainViewModel
             // Publish only after proving the complete original context. A changed
             // HEAD, text or worktree keeps the note on its original snapshot.
             if (!Current() || document.IsNotice || !anchor.Matches(document.CommentContext)) return false;
+            await CaptureReadingAsync();
+            if (!Current()) return false;
             SetEditorContext(0);
             var entry = NavigationEntries(0).FirstOrDefault(entry => entry.Path == anchor.Path) ?? new(anchor.Path, anchor.Path, ComparisonKind.WorkingFile);
             OpenWorkingTab(entry); _selectedEntry = entry; Changed(nameof(SelectedEntry));
             Replace(ref _documentRead);
             _document = document with { RevealLine = anchor.StartLine, RevealColumn = 1 };
+            TrackReading(entry, _document, preserve: false, explicitJump: true);
             Error = ""; FileTitle = document.Path; Comparison = document.Comparison; Detail = document.Detail;
             WriteStateChanged(); DocumentChanged?.Invoke(++_documentVersion, _document);
             return true;

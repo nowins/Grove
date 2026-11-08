@@ -65,7 +65,7 @@ internal sealed class BlameCache
             var fields = attributes.Result.Split('\0');
             for (var i = 1; i + 1 < fields.Length; i += 3)
                 if (fields[i] is "filter" or "diff" && fields[i + 1] is not ("unset" or "unspecified")) return new(null, null);
-            var metadata = await Task.Run(() => Metadata(root, token), token).ConfigureAwait(false);
+            var metadata = await ReadWork.Cpu.Run(() => Metadata(root, token), token).ConfigureAwait(false);
             if (metadata is null) return new(null, null);
             var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
                 string.Join('\0', metadata, path, revision, state, working ? "working" : "revision", TimeZoneInfo.Local.Id, config.Result, attributes.Result))));
@@ -87,7 +87,7 @@ internal sealed class BlameCache
         try
         {
             return input.Proof is not null && input.Environment == EnvironmentFingerprint() && await input.Proof.UnchangedAsync(token).ConfigureAwait(false)
-                && await Task.Run(() => Metadata(root, token), token).ConfigureAwait(false) is { } metadata && metadata == input.Metadata;
+                && await ReadWork.Cpu.Run(() => Metadata(root, token), token).ConfigureAwait(false) is { } metadata && metadata == input.Metadata;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or LibGit2SharpException or ArgumentException)
         { return false; }
@@ -97,7 +97,7 @@ internal sealed class BlameCache
     public static async Task<Sources?> ReadSourcesAsync(string root, CancellationToken token)
     {
         var environment = EnvironmentFingerprint();
-        var files = BlameInputProof.ParseDefaultFiles(await GitReadProcess.RunAsync(root, ["var", "-l"], token).ConfigureAwait(false));
+        var files = BlameInputProof.ParseDefaultFiles(await GitReadProcess.RunAsync(root, ["var", "-l"], token, priority: ReadPriority.Background).ConfigureAwait(false));
         return files is not null && environment == EnvironmentFingerprint() ? new(environment, files) : null;
     }
     private static string EnvironmentFingerprint()

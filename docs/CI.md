@@ -55,6 +55,19 @@ Mac CI 在构建后启动实际 Grove 窗口，使用临时仓库和独立配置
 
 结果保存在 `results/chrome-native.json`。`nativeChromeTested` 表示这些程序化原生场景通过；`physicalInputTested=false`，`nativeGuiTested=false` 仍表示未完成物理输入、全应用、所有 DPI/多屏和长期人工 GUI 验收。包安装检查与此探针分别报告，不能用一个替代另一个。
 
+## 后端性能回归
+
+性能探针随解决方案构建，性能采样独立运行，不混入功能测试耗时。首次建立同机基线：
+
+```powershell
+pwsh ./tools/perf.ps1 -OutputDirectory artifacts/perf/baseline
+pwsh ./tools/perf.ps1 -OutputDirectory artifacts/perf/candidate -Baseline artifacts/perf/baseline/report.json
+```
+
+可用 `-Runs 15 -Warmup 3` 改采样次数（基线和候选必须相同），或 `-Budgets <已审阅的预算文件>` 指定预算。输出目录已存在时拒绝覆盖。脚本先保存并使用本次 `budgets.json` 副本，再 locked restore、Release/warnings-as-errors 构建及串行测量，生成 `report.json`、`report.md` 和日志；缺失结果、错误指纹、绝对预算或相对阈值失败均返回非零。预算属于初始保守上限，不是各平台已达成的交互指标；应在同机负载稳定时校准，不能靠提高预算掩盖回归。
+
+首版只测后端，场景和边界见 DEVELOPMENT 的“文件搜索与性能回归”。探针通过不代表原生 GUI、完整进程树、冷启动或跨平台性能验收；未在共享 runner 上把未校准时序阈值设为发布门槛。
+
 ## 本地归档与日常开发
 
 日常工作区使用 GitHub 清理快照的历史，与远端正常 fetch、提交和 push。旧完整历史、原有索引、未提交／未跟踪内容和本机验证材料保留在独立的本机归档，不作为当前仓库的 refs 或 objects 导入，也不通过合并无共同祖先历史来同步。

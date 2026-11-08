@@ -104,7 +104,9 @@ public sealed class CommitRecoveryTests
     {
         using var repo = new TestRepository(); repo.Write("a.txt", "base"); repo.Commit("base"); repo.Write("a.txt", "selected");
         var signal = Path.Combine(repo.Root, ".git/private-index-path"); var release = Path.Combine(repo.Root, ".git/release-hook");
-        Hook(repo, "printf '%s' \"$GIT_INDEX_FILE\" > .git/private-index-path\nwhile [ ! -f .git/release-hook ]; do sleep 0.05; done");
+        // Publish readiness only after the hook closes the signal file. File
+        // existence while printf still owns it is not a completed handshake.
+        Hook(repo, "printf '%s' \"$GIT_INDEX_FILE\" > .git/private-index-path.pending\nmv .git/private-index-path.pending .git/private-index-path\nwhile [ ! -f .git/release-hook ]; do sleep 0.05; done");
         var operation = new CommitSelectionWriter().CommitAsync(repo.Root, [await Selection(repo)], "cleanup lock");
         try
         {

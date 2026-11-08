@@ -26,6 +26,7 @@ public sealed partial class MainViewModel
 
     private void SetHistoryEntries(IReadOnlyList<NavigationEntry> entries)
     {
+        if (_continuousDiff is not null && _mode == 2) ClearDocument("提交比较范围已变化，请重新打开连续 Diff。");
         _historyEntries = entries; Changed(nameof(HistoryEntries));
         if (_mode == 2) { _allEntries = entries; FilterEntries(); }
     }
@@ -41,12 +42,12 @@ public sealed partial class MainViewModel
         NavigationChanged?.Invoke(); WriteStateChanged();
     }
 
-    public Task OpenEditorEntryAsync(NavigationEntry entry)
+    public Task OpenEditorEntryAsync(NavigationEntry entry, int? line = null, int side = 1)
     {
-        if (_closed || _snapshot is null) return Task.CompletedTask;
+        if (_closed || _snapshot is null || line is < 1 || side is < 0 or > 1) return Task.CompletedTask;
         SetEditorContext(EditorContext(entry));
         OpenDocumentTab(entry); _selectedEntry = entry; Changed(nameof(SelectedEntry));
-        return SelectEntryAsync(entry);
+        return SelectEntryAsync(entry, revealLine: line, revealSide: side);
     }
 
     private static int EditorContext(NavigationEntry entry) => entry.Kind == ComparisonKind.WorkingFile ? 0 :

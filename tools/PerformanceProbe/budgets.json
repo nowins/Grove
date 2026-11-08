@@ -1,0 +1,22 @@
+{
+  "regressionTolerance": 0.30,
+  "regressionFloors": {
+    "elapsed.p50Ms": 5,
+    "elapsed.p95Ms": 10,
+    "cpu.p50Ms": 20,
+    "allocated.p50Bytes": 65536,
+    "firstFiles.p95Ms": 5
+  },
+  "scenarios": {
+    "files.exact": { "elapsed.p50Ms": 75, "elapsed.p95Ms": 150, "cpu.p50Ms": 100, "allocated.p50Bytes": 4194304 },
+    "files.abbreviation": { "elapsed.p50Ms": 75, "elapsed.p95Ms": 150, "cpu.p50Ms": 100, "allocated.p50Bytes": 4194304 },
+    "files.broad": { "elapsed.p50Ms": 75, "elapsed.p95Ms": 150, "cpu.p50Ms": 100, "allocated.p50Bytes": 4194304 },
+    "files.path": { "elapsed.p50Ms": 75, "elapsed.p95Ms": 150, "cpu.p50Ms": 100, "allocated.p50Bytes": 4194304 },
+    "search.text": { "elapsed.p50Ms": 1500, "elapsed.p95Ms": 2500, "cpu.p50Ms": 1000, "allocated.p50Bytes": 20971520 },
+    "search.all": { "elapsed.p50Ms": 1500, "elapsed.p95Ms": 2500, "cpu.p50Ms": 1000, "allocated.p50Bytes": 20971520, "firstFiles.p95Ms": 150 },
+    "repository.open": { "elapsed.p50Ms": 1500, "elapsed.p95Ms": 2500, "cpu.p50Ms": 1000, "allocated.p50Bytes": 20971520 },
+    "history.firstPage": { "elapsed.p50Ms": 250, "elapsed.p95Ms": 500, "cpu.p50Ms": 250, "allocated.p50Bytes": 8388608 },
+    "diff.structure": { "elapsed.p50Ms": 250, "elapsed.p95Ms": 500, "cpu.p50Ms": 250, "allocated.p50Bytes": 8388608 },
+    "source.read": { "elapsed.p50Ms": 250, "elapsed.p95Ms": 500, "cpu.p50Ms": 250, "allocated.p50Bytes": 10485760 }
+  }
+}

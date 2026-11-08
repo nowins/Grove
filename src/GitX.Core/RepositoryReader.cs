@@ -10,7 +10,7 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
     private volatile bool _disposed;
     public const int MaxTextBytes = 1024 * 1024;
     public const int MaxFiles = 20000;
-    public static Task<string> ResolveWorkingDirectoryAsync(string path) => Task.Run(() =>
+    public static Task<string> ResolveWorkingDirectoryAsync(string path) => ReadWork.Cpu.Run(() =>
     {
         var fullPath = Path.GetFullPath(path);
         if (!Directory.Exists(fullPath)) throw new IOException("仓库目录不存在，请检查路径或重新选择文件夹。");
@@ -19,13 +19,15 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
         using var repo = new Repository(discovered);
         if (repo.Info.IsBare) throw new IOException("暂不支持裸仓库，请选择有工作区的仓库。");
         return Path.TrimEndingDirectorySeparator(repo.Info.WorkingDirectory);
-    });
+    }, CancellationToken.None);
     private const FileStatus IndexFlags = FileStatus.NewInIndex | FileStatus.ModifiedInIndex |
         FileStatus.DeletedFromIndex | FileStatus.RenamedInIndex | FileStatus.TypeChangeInIndex;
     private const FileStatus WorkFlags = FileStatus.NewInWorkdir | FileStatus.ModifiedInWorkdir |
         FileStatus.DeletedFromWorkdir | FileStatus.RenamedInWorkdir | FileStatus.TypeChangeInWorkdir;
 
-    public Task<RepositorySnapshot> OpenAsync(string path, CancellationToken token = default) => Task.Run(() =>
+    public Task<RepositorySnapshot> OpenAsync(string path, CancellationToken token = default) => OpenAsync(path, token, ReadPriority.Foreground);
+
+    private Task<RepositorySnapshot> OpenAsync(string path, CancellationToken token, ReadPriority priority) => ReadWork.Cpu.Run(() =>
     {
         var discovered = Repository.Discover(Path.GetFullPath(path));
         if (discovered is null) throw new IOException("此目录不在 Git 仓库中，请选择含 .git 的工作目录。");
@@ -70,12 +72,18 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
             changes.OrderBy(c => c.Kind).ThenBy(c => c.Path, StringComparer.Ordinal).ToArray(), paths.Count > MaxFiles, indexToken, RepositoryOperation.Read(repo),
             string.Join(' ', references.Select(r => r.Sha).Distinct().Order()), string.Join('\n', references.Select(r => $"{r.CanonicalName}={r.Sha}").Order()),
             references.Where(reference => reference.Kind != "head").ToArray());
-    }, token);
+    }, token, priority);
 
     public Task<HistoryPage> HistoryAsync(string root, string? head, int skip = 0, CancellationToken token = default)
         => QueryHistoryAsync(root, head, new(), skip, token);
 
-    public Task<HistoryPage> QueryHistoryAsync(string root, string? head, HistoryQuery query, int skip = 0, CancellationToken token = default) => Task.Run(() =>
+    public Task<HistoryPage> QueryHistoryAsync(string root, string? head, HistoryQuery query, int skip = 0, CancellationToken token = default)
+        => ReadHistoryAsync(root, head, query, skip, true, token);
+
+    public Task<HistoryPage> QueryHistorySummariesAsync(string root, string? head, HistoryQuery query, int skip = 0, CancellationToken token = default)
+        => ReadHistoryAsync(root, head, query, skip, false, token);
+
+    private Task<HistoryPage> ReadHistoryAsync(string root, string? head, HistoryQuery query, int skip, bool includeMessages, CancellationToken token) => ReadWork.Cpu.Run(() =>
     {
         query = query.Normalize();
         query.Validate();
@@ -90,16 +98,16 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
             // a reachable tip must invalidate the cursor as well.
             using var metadata = new Repository(root);
             var references = HistoryReferences(metadata);
-            var key = metadata.Info.Path + "\n" + head + "\n" + System.Text.Json.JsonSerializer.Serialize(query) + "\n" + string.Join('\n', references.Select(r => $"{r.CanonicalName}={r.Sha}").Order());
+            var key = metadata.Info.Path + "\n" + head + "\n" + includeMessages + "\n" + System.Text.Json.JsonSerializer.Serialize(query) + "\n" + string.Join('\n', references.Select(r => $"{r.CanonicalName}={r.Sha}").Order());
             if (_history?.Key != key)
             {
                 _history?.Dispose(); _history = null;
-                _history = new(root, head, key, references.GroupBy(r => r.Sha).ToDictionary(g => g.Key, g => g.ToArray()), query);
+                _history = new(root, head, key, references.GroupBy(r => r.Sha).ToDictionary(g => g.Key, g => g.ToArray()), query, includeMessages);
             }
             try { return _history.Read(skip, token); }
             catch (IOException) { _history.Dispose(); _history = null; throw; }
         }
-    }, token);
+    }, token, ReadPriority.Background);
 
     private sealed class HistoryCursor : IDisposable
     {
@@ -110,11 +118,13 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
         private readonly HistoryGraph _graph = new();
         private readonly List<CommitEntry> _rows = [];
         private readonly HistoryQuery _query;
+        private readonly bool _includeMessages;
         private readonly bool _validPath;
         private readonly System.Text.RegularExpressions.Regex? _textPattern;
         private bool _ended;
-        public HistoryCursor(string root, string heads, string key, Dictionary<string, HistoryReference[]> labels, HistoryQuery query)
+        public HistoryCursor(string root, string heads, string key, Dictionary<string, HistoryReference[]> labels, HistoryQuery query, bool includeMessages)
         {
+            _includeMessages = includeMessages;
             Key = key; _labels = labels; _query = query; _textPattern = query.CreateTextPattern(); _repository = new Repository(root);
             _validPath = query.Path.Length == 0 || !query.Path.Contains('\0') && !query.Path.Split('/').Any(part => part is "" or "." or "..");
             try { _commits = _repository.Commits.QueryBy(new CommitFilter { IncludeReachableFrom = heads.Split(' ', StringSplitOptions.RemoveEmptyEntries),
@@ -134,7 +144,8 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
                 var parents = commit.Parents.Select(p => p.Sha).ToArray();
                 var labels = _labels.GetValueOrDefault(commit.Sha, []);
                 _rows.Add(new(commit.Sha, commit.MessageShort, commit.Author.Name, commit.Author.When, parents,
-                    string.Join(", ", labels.Select(r => r.Name)), _query.IsEmpty ? _graph.Append(commit.Sha, parents) : new(0, 0, 2, parents.Length > 1, []), commit.Message, labels));
+                    string.Join(", ", labels.Select(r => r.Name)), _query.IsEmpty ? _graph.Append(commit.Sha, parents) : new(0, 0, 2, parents.Length > 1, []),
+                    _includeMessages ? commit.Message : "", labels) { HasFullMessage = _includeMessages });
             }
             token.ThrowIfCancellationRequested();
             return new(_rows.Skip(skip).Take(100).ToArray(), _rows.Count > skip + 100);
@@ -182,6 +193,7 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _commitMessages.Dispose(); _commitChanges.Dispose();
         // UI disposal must not wait for an in-flight native MoveNext. Reads run
         // off-thread; dispose the cursor under the same gate once it returns.
         _ = Task.Run(() => { lock (_historyGate) { _history?.Dispose(); _history = null; } });
@@ -198,22 +210,21 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
         return result;
     }
 
-    public Task<IReadOnlyList<ChangeEntry>> CommitChangesAsync(string root, string sha, CancellationToken token = default) => Task.Run<IReadOnlyList<ChangeEntry>>(() =>
+    public Task<IReadOnlyList<ChangeEntry>> CommitChangesAsync(string root, string sha, CancellationToken token = default) => ReadWork.Cpu.Run<IReadOnlyList<ChangeEntry>>(() =>
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         using var repo = new Repository(root);
         var commit = repo.Lookup<Commit>(sha) ?? throw new IOException("提交已不存在，请刷新仓库。");
-        using var changes = repo.Diff.Compare<TreeChanges>(commit.Parents.FirstOrDefault()?.Tree, commit.Tree,
-            new CompareOptions { Similarity = SimilarityOptions.None });
-        return changes.Select(c => { token.ThrowIfCancellationRequested(); return new ChangeEntry(c.Path, ComparisonKind.Commit, c.Status.ToString(), c.OldPath); }).ToArray();
+        return ReadTreeChanges(repo, commit.Parents.FirstOrDefault()?.Tree, commit.Tree, ComparisonKind.Commit, token);
     }, token);
 
     public async Task<RepositoryDocument> DocumentAsync(DocumentRequest request, CancellationToken token = default)
     {
         if (request.Kind is not (ComparisonKind.Worktree or ComparisonKind.Index or ComparisonKind.LocalChanges or ComparisonKind.CommitWorktree or ComparisonKind.CommitParentWorktree)) return await ReadDocumentAsync(request, token);
         var paths = request.OldPath is { } old && old != request.Path ? new[] { request.Path, old } : [request.Path];
-        var state = await Task.Run(() => RepositoryState.Token(request.Root, paths, token), token);
+        var state = await ReadWork.Cpu.Run(() => RepositoryState.Token(request.Root, paths, token), token);
         var document = await ReadDocumentAsync(request, token);
-        var after = await Task.Run(() => RepositoryState.Token(request.Root, paths, token), token);
+        var after = await ReadWork.Cpu.Run(() => RepositoryState.Token(request.Root, paths, token), token);
         if (state != after) throw new IOException("读取期间仓库发生变化，请刷新后重试。");
         return document with { WriteToken = state, CanStage = request.Kind == ComparisonKind.Worktree && document.Diff is not null,
             CanInclude = request.Kind == ComparisonKind.LocalChanges };
@@ -222,18 +233,19 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
     private async Task<RepositoryDocument> ReadDocumentAsync(DocumentRequest request, CancellationToken token)
     {
         (RepositoryDocument? Preview, DiffSide? Old, DiffSide? New, CommentContext? Context) snapshot;
-        try { snapshot = await Task.Run(() => Capture(request, token), token).ConfigureAwait(false); }
+        try { snapshot = await ReadWork.Cpu.Run(() => Capture(request, token), token).ConfigureAwait(false); }
         catch (IOException e) when (e is PreviewLimitException or WorkingTextLimitException) { return Notice(request, e.Message); }
         if (snapshot.Preview is not null) return snapshot.Preview;
         var oldSide = snapshot.Old!;
         var newSide = snapshot.New!;
-        var (patch, diff) = await NativeDiff.CompareAsync(oldSide, newSide, token, request.Whitespace).ConfigureAwait(false);
+        var compared = await NativeDiff.CompareCapturedAsync(oldSide, newSide, snapshot.Context!.Snapshot, token, request.Whitespace).ConfigureAwait(false);
+        var diff = compared.Diff;
         token.ThrowIfCancellationRequested();
         var comparison = $"{oldSide.Label} → {newSide.Label} · 并排 diff";
         var detail = $"{diff.Blocks.Count} 个变更块 · F7 下一处 / Shift+F7 上一处 · 文件内循环";
         if (diff.CoarseInlineHighlights) detail += " · 部分长行使用范围高亮";
-        if (patch.Length == 0) patch = "没有文本差异。路径或文件属性变化见两侧标题。";
-        return new(request.Path, patch, Language(request.Path), comparison, detail, IsDiff: true, Diff: diff, CommentContext: snapshot.Context);
+        return new(request.Path, compared.HasPatch ? "" : "没有文本差异。路径或文件属性变化见两侧标题。", Language(request.Path), comparison, detail, IsDiff: true, Diff: diff, CommentContext: snapshot.Context)
+            { DeferredText = compared.HasPatch ? compared.Patch : null };
     }
 
     private static (RepositoryDocument? Preview, DiffSide? Old, DiffSide? New, CommentContext? Context) Capture(DocumentRequest request, CancellationToken token)

@@ -35,6 +35,7 @@ public sealed partial class MainViewModel
 
     private void ResetSourceTabs()
     {
+        ResetReading();
         SuspendSourceTab(); _sourceTabs.Clear(); _activeSourceTab = null; _blameReader.ClearCache();
     }
     private void SuspendSourceTab()
@@ -95,6 +96,13 @@ public sealed partial class MainViewModel
         await using var lease = ConfirmSourceTextClose is { } guard ? await guard(new("tabs", ids)) : new SourceTextCloseLease(true);
         if (!lease.Allowed || _closed || epoch != _repositoryVersion || !tabs.SequenceEqual(_sourceTabs.Select(tab => tab.Id))) return;
         var removedActive = _activeSourceTab is { } active && Remove(active);
+        if (removedActive && _sourceTabVisible)
+        {
+            var document = _documentVersion; var annotation = _annotationNavigation;
+            await CaptureReadingAsync();
+            if (_closed || epoch != _repositoryVersion || document != _documentVersion || annotation != _annotationNavigation ||
+                !tabs.SequenceEqual(_sourceTabs.Select(tab => tab.Id))) return;
+        }
         if (_sourceTabs.RemoveAll(tab => Remove(tab)) == 0) return;
         if (!removedActive || !_sourceTabVisible)
         {
@@ -106,9 +114,12 @@ public sealed partial class MainViewModel
         ClearDocument("选择文件查看内容。"); return;
     }
 
-    private async Task<RepositoryDocument> ReadSourceAsync(string root, NavigationEntry entry, CancellationToken token)
+    private Task<RepositoryDocument> ReadSourceAsync(string root, NavigationEntry entry, CancellationToken token)
+        => ReadSourceSnapshotAsync(root, entry, _annotationTarget, _showBlame, _annotationReveal, token);
+
+    private async Task<RepositoryDocument> ReadSourceSnapshotAsync(string root, NavigationEntry entry,
+        BlameRevision? target, bool annotate, int? reveal, CancellationToken token)
     {
-        var target = _annotationTarget; var annotate = _showBlame; var reveal = _annotationReveal;
         if (!annotate) _ = _blameReader.PrepareAsync(root, token);
         var document = target is not null
             ? await _blameReader.ReadRevisionAsync(root, target, annotate, token)

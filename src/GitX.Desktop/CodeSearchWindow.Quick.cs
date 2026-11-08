@@ -180,7 +180,12 @@ internal sealed partial class CodeSearchWindow
         var text = new TextBlock { LineHeight = 18, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var label = isText ? match.Preview.TrimStart() : Path.GetFileName(match.Path);
         var needle = _query.Text ?? "";
-        if (!isText && needle.LastIndexOf(':') is var colon && colon > 0 && int.TryParse(needle[(colon + 1)..], out _)) needle = needle[..colon];
+        if (!isText) for (var i = 0; i < 2; i++)
+        {
+            var colon = needle.LastIndexOf(':');
+            if (colon <= 0 || !int.TryParse(needle[(colon + 1)..], out var number) || number <= 0) break;
+            needle = needle[..colon];
+        }
         var at = needle.Length > 0 ? label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) : -1;
         if (at >= 0)
         {

@@ -25,11 +25,11 @@ public sealed class BufferDiffTests
             fixture.Write("old.txt", original); fixture.Write("new.txt", modified);
             var expected = await GitReadProcess.RunAsync(fixture.Root,
                 ["-c", "core.autocrlf=false", "diff", "--no-index", "--no-ext-diff", "--no-textconv", "--no-color", "--diff-algorithm=myers", "--no-indent-heuristic", "--unified=0", "--", "old.txt", "new.txt"], default, allowDifferences: true);
-            Assert.True(BufferDiff.TryCompare(original, modified, default, out var actual));
+            Assert.True(BufferDiff.TryCapture(original, modified, default, out var captured));
             var oldSide = new DiffSide("a.txt", "old", original, true);
             var newSide = new DiffSide("a.txt", "new", modified, true);
             Assert.Equal(JsonSerializer.Serialize(NativeDiff.Build(oldSide, newSide, expected)),
-                JsonSerializer.Serialize(NativeDiff.Build(oldSide, newSide, actual)));
+                JsonSerializer.Serialize(NativeDiff.Build(oldSide, newSide, captured.Hunks)));
         }
     }
 

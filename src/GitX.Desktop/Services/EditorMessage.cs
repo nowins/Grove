@@ -36,9 +36,9 @@ internal sealed record EditorMessage(string Type, JsonElement Payload, long? Ver
         var type = root.GetProperty("type").GetString()!;
         if (type is not ("ready" or "loaded" or "refresh" or "comment" or "open" or "view" or "blame" or
             "blame-action" or "blame-view" or "source-tab" or "source-save" or "source-edit-state" or "markdown-open" or "stage-selection" or "revert-block" or "include-line" or
-            "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out" or "recent-files" or "code-search" or "source-history" or "project-reveal" or "history-back" or "error")) return null;
+            "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out" or "recent-files" or "code-search" or "source-history" or "project-reveal" or "history-back" or "reading-history" or "continuous-diff" or "error")) return null;
 
-        var needsVersion = type is "source-save" or "source-edit-state" or "markdown-open" or "project-reveal" or "source-history" or "history-back" or "recent-files" or "code-search" or "loaded" or "blame" or "blame-action" or "blame-view" or "source-tab" or "stage-selection" or
+        var needsVersion = type is "continuous-diff" or "reading-history" or "source-save" or "source-edit-state" or "markdown-open" or "project-reveal" or "source-history" or "history-back" or "recent-files" or "code-search" or "loaded" or "blame" or "blame-action" or "blame-view" or "source-tab" or "stage-selection" or
             "revert-block" or "include-line" or "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out"
             || type == "comment" && Choice(root, "action", "begin") || type == "comment" && Choice(root, "action", "open-source");
         long? version = null;
@@ -69,7 +69,11 @@ internal sealed record EditorMessage(string Type, JsonElement Payload, long? Ver
             "revert-block" => Integer(root, "block", 0),
             "include-line" => Integer(root, "side", 0, 1) && Integer(root, "line", 1) && Boolean(root, "include"),
             "include-deletion" => Integer(root, "block", 0) && Boolean(root, "include"),
-            "caret" => Integer(root, "side", 0, 1) && Integer(root, "line", 1) && Integer(root, "column", 1),
+            "caret" => Integer(root, "side", 0, 1) && Integer(root, "line", 1) && Integer(root, "column", 1)
+                && (!root.TryGetProperty("navigation", out _) || Boolean(root, "navigation")),
+            "reading-history" => Integer(root, "direction", -1, 1) && root.GetProperty("direction").GetInt32() != 0,
+            "continuous-diff" => Choice(root, "action", "open") && (!root.TryGetProperty("offset", out _) || Integer(root, "offset", 0)) || Choice(root, "action", "file") && Text(root, "id") &&
+                root.GetProperty("id").GetString()!.Length == 32 && Integer(root, "index", 0, 199) && Integer(root, "side", 0, 1) && Integer(root, "line", 1),
             "whitespace" => Integer(root, "value", 0, 2),
             "focus-out" => Integer(root, "direction", -1, 1) && root.GetProperty("direction").GetInt32() != 0,
             "error" => Text(root, "message"),

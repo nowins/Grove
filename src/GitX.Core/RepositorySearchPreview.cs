@@ -17,7 +17,7 @@ public sealed partial class RepositoryReader
     public const int MaxSearchPreviewCharacters = 32_000;
 
     public static Task<CodeSearchPreview> SearchPreviewAsync(string root, CodeSearchMatch match,
-        CancellationToken token = default) => Task.Run(() => ReadSearchPreview(root, match, token), token);
+        CancellationToken token = default) => ReadWork.Cpu.Run(() => ReadSearchPreview(root, match, token), token);
 
     private static CodeSearchPreview ReadSearchPreview(string root, CodeSearchMatch match, CancellationToken token)
     {

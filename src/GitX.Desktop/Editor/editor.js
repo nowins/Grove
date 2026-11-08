@@ -2,6 +2,9 @@ import { sideHeader } from './side-header.js';
 import { GoToLine } from './go-to-line.js';
 import './go-to-line.css';
 import { recentFilesShortcut } from './recent-files-shortcut.js';
+import { readingDirection, readingGesture } from './reading-navigation.js';
+import { ContinuousDiff } from './continuous-diff.js';
+import './continuous-diff.css';
 import './node_modules/monaco-editor/esm/vs/nls/lang/zh-cn.js';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import './node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css';
@@ -31,6 +34,7 @@ import { positionPopup } from './popup-position.js';
 import { BlameMenu } from './blame-menu.js';
 import { defaultBlameView, blameFields, blameFieldText } from './blame-fields.js';
 import { canReuseSourceModel } from './source-update.js';
+import { DocumentTransport } from './document-transport.js';
 import { SourceTabs } from './source-tabs.js';
 import { SourceEditing, renderedModelCount } from './source-editing.js';
 import { SourceSymbols } from './source-symbols.js';
@@ -87,8 +91,11 @@ let blame = null;
 let blameView = { ...defaultBlameView };
 let showMinimap = true;
 let scrollMap = null, expectedScrollTop = [null, null];
-let sourceMode = false, sourcePath = '';
+let sourceMode = false, sourcePath = '', readingEnabled = false;
+let readingPublishedSide = -1, readingPublishedVersion = -1;
 const send = value => window.invokeCSharpAction?.(JSON.stringify(value));
+const continuousDiff = new ContinuousDiff({ host: document.getElementById('continuous-diff'), send });
+document.getElementById('continuous-open').addEventListener('click', () => send({ type: 'continuous-diff', action: 'open', version: generation }));
 installNativeBridge(window, () => {
   const version = generation;
   return error => { if (version === generation) send({ type: 'error', version, message: String(error) }); };
@@ -236,19 +243,30 @@ function updateMinimaps() {
   sourceMinimap.update(plan, showMinimap);
 }
 panes.forEach((pane, side) => {
-  let caretFrame = null;
+  let caretFrame = null, lastPosition = null, lastVersion = -1;
+  const sendCaret = (position, navigation = false, force = false) => {
+    if (!loading && position && (force || pane.hasWidgetFocus())) {
+      send({ type: 'caret', version: generation, side, line: position.lineNumber, column: position.column, navigation: readingEnabled && navigation });
+      readingPublishedSide = side; readingPublishedVersion = generation;
+    }
+  };
   const publishCaret = () => {
     if (caretFrame) return;
     const version = generation;
     caretFrame = requestAnimationFrame(() => {
       caretFrame = null;
       const position = pane.getPosition();
-      if (version === generation && !loading && position && pane.hasTextFocus()) send({ type: 'caret', version, side, line: position.lineNumber, column: position.column });
+      if (version === generation) sendCaret(position);
     });
   };
   pane.onDidFocusEditorWidget(() => { activePane = side; publishCaret(); });
   pane.onDidChangeCursorPosition(event => {
-    publishCaret();
+    if (!loading && !applying && !folding?.busy && readingGesture(event)) {
+      const force = readingEnabled && (!plan || side === activePane || event.source === 'mouse');
+      if (lastVersion === generation && readingPublishedVersion === generation && readingPublishedSide === side) sendCaret(lastPosition, false, force);
+      sendCaret(event.position, true, force);
+    } else publishCaret();
+    lastPosition = event.position; lastVersion = generation;
     if (!applying && !navigating && !folding?.busy && plan) {
       cursorRow = event.position.lineNumber - 1;
       selectedChange = -1;
@@ -429,6 +447,8 @@ function updateTextEditing() {
 }
 window.addEventListener('beforeunload',()=>textEditing.dispose());
 function display(doc, toolbar) {
+  document.getElementById('continuous-open').hidden = !toolbar?.canContinuousDiff;
+  continuousDiff.show(toolbar?.continuousDiff);
   sourcePublished=doc;
   const editing=textEditing.prepare(doc,toolbar);doc=editing.doc;
 
@@ -442,6 +462,7 @@ function display(doc, toolbar) {
   }
   const identity = doc.commentContext;
   sourceMode = !!toolbar?.sourceMode; sourcePath = doc.path ?? '';
+  readingEnabled = !!toolbar?.readingNavigation;
   document.body.classList.toggle('file-history-diff', !!toolbar?.fileHistory);
   document.getElementById('source-history').hidden = !sourceMode;
   document.getElementById('source-history').disabled = !!doc.isNotice || !sourcePath;
@@ -679,6 +700,8 @@ function updateCounter() {
   const file = document.getElementById('include-file'); file.checked = fileIncluded === true; file.indeterminate = fileIncluded === null; file.disabled = loading || inclusionBusy || !canInclude;
 }
 
+const documentTransport = new DocumentTransport();
+window.addEventListener('beforeunload', () => documentTransport.clear());
 async function load(version) {
   if (version < generation) return;
   if (version !== generation) pendingDirection = null;
@@ -694,10 +717,10 @@ async function load(version) {
   toolFeedback.begin(request); updateCounter();
   fetchController?.abort(); fetchController = new AbortController();
   try {
-    const response = await fetch(`document?v=${version}`, { cache: 'no-store', signal: fetchController.signal });
-    if (!response.ok) throw new Error('无法读取编辑器文档');
-    const payload = await response.json();
-    if (request !== loadSequence || version !== generation || payload.version !== version) return;
+    const payload = await documentTransport.read(version, { signal: fetchController.signal,
+      isCurrent: () => request === loadSequence && version === generation });
+    if (!payload) return;
+    if (continuousDiff.manifest?.id !== payload.toolbar?.continuousDiff?.id) continuousDiff.close();
     // Keep layout measurable while the replacement models/folds/viewport are
     // prepared. Never paint their temporary line-1 state, including refreshes
     // that restore a saved viewport and navigation queued during a slow load.
@@ -718,11 +741,23 @@ async function load(version) {
     await display(payload.document, payload.toolbar);
     if (request !== loadSequence || version !== generation) return;
     markdown.update(textEditing.active ? {...payload.document,...textEditing.active.header,text:textEditing.active.model.getValue(),isNotice:false} : payload.document, version, payload.toolbar?.activeSourceTabId); markdown.setLoading(false);
-    if (!plan && models[1] && !payload.document.preserveView && payload.document.revealLine) {
-      const line = Math.max(1, Math.min(models[1].getLineCount(), payload.document.revealLine));
+    const revealSide = plan && payload.document.revealSide === 0 ? 0 : 1;
+    if (models[revealSide] && !payload.document.preserveView && payload.document.revealLine) {
+      const pane = panes[revealSide], model = models[revealSide];
+      const line = Math.max(1, Math.min(model.getLineCount(), payload.document.revealLine));
+      if (folding) {
+        const desired = new Set(folding.collapsed);
+        for (const region of folding.regions) {
+          const start = folding.start(region, revealSide);
+          if (line >= start && line < start + region.count) desired.delete(region.id);
+        }
+        if (!folding.sameState(desired, folding.collapsed)) await folding.setState(desired, revealSide, false);
+      }
+      await pane.getAction('editor.unfold')?.run({ selectionLines: [line - 1], levels: 99 });
+      if (request !== loadSequence || version !== generation || models[revealSide] !== model) return;
       const column = payload.document.revealColumn ?? 1;
-      right.setSelection(models[1].validateRange({ startLineNumber: line, startColumn: column, endLineNumber: line, endColumn: column + (payload.document.revealLength ?? 0) }));
-      right.revealRangeInCenter(right.getSelection(), monaco.editor.ScrollType.Immediate);
+      pane.setSelection(model.validateRange({ startLineNumber: line, startColumn: column, endLineNumber: line, endColumn: column + (payload.document.revealLength ?? 0) }));
+      pane.revealRangeInCenter(pane.getSelection(), monaco.editor.ScrollType.Immediate); activePane = revealSide;
     }
     if (prepareSource && models[1] && !payload.document.revealLine) {
       // A newly opened source file starts at the top. Prepare only that first
@@ -746,6 +781,12 @@ async function load(version) {
     panes.forEach(pane => pane.render(true));
     workspace.classList.remove('document-preparing'); workspace.setAttribute('aria-busy', 'false');
     send({ type: 'loaded', version, models: renderedModelCount(payload.document, models, panes), hunks: plan?.blocks.length ?? 0 });
+    if (continuousDiff.manifest && document.hasFocus()) continuousDiff.focus();
+    const reading = readingPosition(version);
+    if (reading) {
+      send({ type: 'caret', version, side: reading.side, line: reading.line, column: reading.column });
+      readingPublishedSide = reading.side; readingPublishedVersion = version;
+    }
   } catch (error) {
     if (error.name !== 'AbortError' && request === loadSequence && version === generation) {
       loading = false; pendingDirection = null;
@@ -793,12 +834,13 @@ function queueNavigation(action) {
   }).catch(error => send({ type: 'error', version, message: String(error) }));
 }
 function navigate(direction) {
+  if (continuousDiff.manifest) return;
   // Transfer DOM focus synchronously even while a new document is loading.
   panes[activePane].focus();
   if (loading || !plan) { pendingDirection = direction; return; }
   queueNavigation(() => selectChange(changeFromCursor(direction)));
 }
-window.gitx = { load, navigate, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => { sourceTabs.update(toolbar);textEditing.sync(toolbar);textEditing.disposeRetired(models);updateTextEditing(); },
+window.gitx = { load, navigate, readingPosition, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => { sourceTabs.update(toolbar);textEditing.sync(toolbar);textEditing.disposeRetired(models);updateTextEditing(); },
   fileSessions: () => ({sessions:textEditing.metadata(),composing:composingSearch}), fileDraft:id=>textEditing.draft(id), fileRestore:(id,record)=>textEditing.restore(id,record),
   fileSaving:draft=>textEditing.saving(draft),fileSaved:result=>textEditing.saved(result),lockFiles:(ids,value)=>textEditing.lock(ids,value),lockDiskWrites:value=>textEditing.lockDiskWrites(value),
   captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane, markdown: markdown.capture() }),
@@ -811,7 +853,7 @@ window.gitx = { load, navigate, goToLine: () => goToLine.open(), openSymbols: ()
   },
   openNotes: () => { if (markdown.active) markdown.activate(false, true); sourceSymbols.close(false); comments.openDrawer(); },
   setInclusion: state => { if (state.version !== generation) return; included = new Set(state.lines.map(line => `${line.side}:${line.line}`)); fileIncluded = state.included; inclusionBusy = !!state.busy; updateCounter(); scheduleConnectors(); },
-  refreshComments: () => comments.refresh(), openCommentDraft: id => { if (markdown.active) markdown.activate(false, true); comments.focusDraft(id); }, focus: () => markdown.active ? markdown.host.focus() : panes[activePane].focus() };
+  refreshComments: () => comments.refresh(), openCommentDraft: id => { if (markdown.active) markdown.activate(false, true); comments.focusDraft(id); }, focus: () => continuousDiff.manifest ? continuousDiff.focus() : markdown.active ? markdown.host.focus() : panes[activePane].focus() };
 const doubleShift = new DoubleShiftGesture();
 let composingSearch = false;
 const shiftAllowed = event => !composingSearch && !event.isComposing && event.keyCode !== 229 && !event.ctrlKey && !event.altKey && !event.metaKey
@@ -873,8 +915,20 @@ window.addEventListener('keydown', event => {
   if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key === 'F12') {
     event.preventDefault(); event.stopImmediatePropagation(); sourceSymbols.open(); return;
   }
-  if (event.altKey && !event.ctrlKey && !event.shiftKey && event.key === 'ArrowLeft' && !sourceMode) {
+  const reading = readingDirection(event, /Mac|iPhone|iPad/.test(navigator.platform));
+  if (readingEnabled && reading && !document.activeElement?.closest('.find-widget input, .find-widget textarea')) {
+    event.preventDefault(); event.stopImmediatePropagation(); send({ type: 'reading-history', version: generation, direction: reading }); return;
+  }
+  if (!readingEnabled && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowLeft' && !sourceMode) {
     event.preventDefault(); event.stopImmediatePropagation(); send({ type: 'history-back', version: generation }); return;
+  }
+  if (continuousDiff.manifest) {
+    if (event.key === 'F5') { event.preventDefault(); send({ type: 'refresh' }); }
+    else if (event.key === 'Escape') { event.preventDefault(); send({ type: 'focus-navigation', version: generation }); }
+    // Find, folding and change navigation belong to the complete Monaco Diff.
+    // Never run them against the detached editor underneath this read view.
+    else if (event.key === 'F7' || event.ctrlKey && ['f', 'g'].includes(event.key.toLowerCase())) event.preventDefault();
+    return;
   }
   if (event.key === 'F7') { event.preventDefault(); event.stopImmediatePropagation(); navigate(event.shiftKey ? -1 : 1); }
   else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'r') { event.preventDefault(); event.stopImmediatePropagation(); revertCurrentBlock(); }
@@ -900,6 +954,15 @@ window.addEventListener('keydown', event => {
   }
 }, true);
 installFocusBoundary(direction => send({ type: 'focus-out', direction, version: generation }));
-window.addEventListener('beforeunload', () => { goToLine.dispose(); sourceSymbols.dispose(); fetchController?.abort(); folding?.dispose(); diffFolding.registration.dispose(); panes.forEach(pane => pane.dispose()); models.forEach(model => model?.dispose()); });
+window.addEventListener('beforeunload', () => { continuousDiff.dispose(); goToLine.dispose(); sourceSymbols.dispose(); fetchController?.abort(); folding?.dispose(); diffFolding.registration.dispose(); panes.forEach(pane => pane.dispose()); models.forEach(model => model?.dispose()); });
 display({ text: '打开本地 Git 仓库，然后选择文件。\n\n代码浏览 · 本地改动 · 提交历史\n\nCtrl+O 打开仓库    F5 刷新    F7 下一变更块', language: 'plaintext', isNotice: true });
+
+function readingPosition(version) {
+  const side = plan ? activePane : 1, pane = panes[side];
+  if (!readingEnabled || loading || version !== generation || !models[side] || models[side].isDisposed() ||
+      panes.some(editor => editor.inComposition) || goToLine.opened || sourceSymbols.opened ||
+      document.activeElement?.closest('.comment-ui textarea, .comment-ui input, .find-widget input, .find-widget textarea')) return null;
+  const position = pane.getPosition();
+  return position ? { version, side, line: position.lineNumber, column: position.column } : null;
+}
 send({ type: 'ready' });

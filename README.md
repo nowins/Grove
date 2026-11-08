@@ -9,6 +9,8 @@
 - 远端分支一键 Checkout；New Branch 可编辑名称和选择创建后检出，保留跟踪关系并检查 worktree 占用。
 - 文件树、按需筛选、当前文件定位；Git 输出和 worktree 列表使用非模态工具页。
 - macOS 使用系统原生菜单；最近文件 Ctrl+E（Mac：Command+E），跳转行 Ctrl+G（Mac 另有 Command+L）。
+- 开发版支持阅读位置前进／后退：Alt+Left／Right（Mac：Command+Option+Left／Right），保留文件、修订和 Diff 侧的行列位置。
+- 开发版可连续阅读本地改动或历史比较范围的多文件 Diff，按需加载；行号可定位完整 Diff 的对应侧。
 - 历史分支筛选提供最近使用、收藏，以及本地/远端分支和标签分组；筛选不会执行 Checkout。
 - 文件标签右键关闭当前/其他/全部；文件与文件夹支持系统定位及终端入口。
 - Java、C#、Python、JavaScript／TypeScript 高亮与文件内结构导航，以及本地代码评论。

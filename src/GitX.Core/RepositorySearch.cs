@@ -18,36 +18,49 @@ public sealed partial class RepositoryReader
     // Use the same file inventory and text limits as source browsing, including
     // untracked files and Git's ignore rules. Never scan directories on the UI thread.
     public static Task<CodeSearchPage> SearchAsync(string root, IReadOnlyList<string> paths, CodeSearchQuery query, CancellationToken token = default)
-        => Task.Run(() => Search(root, paths, query, token), token);
+        => SearchAsync(root, paths, query, null, token);
+
+    public static Task<CodeSearchPage> SearchAsync(string root, IReadOnlyList<string> paths, CodeSearchQuery query,
+        IReadOnlyList<string>? recentPaths, CancellationToken token = default)
+        => ReadWork.Cpu.Run(() => Search(root, paths, query, recentPaths, token), token, ReadPriority.Background);
 
     public static async Task<CodeSearchPage> SearchEverywhereAsync(string root, IReadOnlyList<string> paths, CodeSearchQuery query, CancellationToken token = default)
+        => await SearchEverywhereAsync(root, paths, query, null, null, token).ConfigureAwait(false);
+
+    // Files become usable while the independently bounded text read continues.
+    // The publisher must marshal to its UI and reject its superseded generation.
+    public static async Task<CodeSearchPage> SearchEverywhereAsync(string root, IReadOnlyList<string> paths, CodeSearchQuery query,
+        IReadOnlyList<string>? recentPaths, Func<CodeSearchPage, Task>? filesReady, CancellationToken token = default)
     {
-        var files = SearchAsync(root, paths, query with { FilesOnly = true }, token);
-        var text = SearchAsync(root, paths, query with { FilesOnly = false }, token);
-        await Task.WhenAll(files, text);
-        token.ThrowIfCancellationRequested();
-        return new(files.Result.Matches.Concat(text.Result.Matches).Take(MaxSearchResults).ToArray(), text.Result.SearchedFiles, text.Result.SkippedFiles,
-            files.Result.Truncated || text.Result.Truncated || files.Result.Matches.Count + text.Result.Matches.Count > MaxSearchResults);
+        using var read = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var files = SearchAsync(root, paths, query with { FilesOnly = true }, recentPaths, read.Token);
+        var text = SearchAsync(root, paths, query with { FilesOnly = false }, read.Token);
+        try
+        {
+            var page = await files.ConfigureAwait(false);
+            read.Token.ThrowIfCancellationRequested();
+            if (filesReady is not null) await filesReady(page).ConfigureAwait(false);
+            var content = await text.ConfigureAwait(false);
+            read.Token.ThrowIfCancellationRequested();
+            return new(page.Matches.Concat(content.Matches).Take(MaxSearchResults).ToArray(), content.SearchedFiles, content.SkippedFiles,
+                page.Truncated || content.Truncated || page.Matches.Count + content.Matches.Count > MaxSearchResults);
+        }
+        finally
+        {
+            read.Cancel();
+            // Observe both readers, including publisher failures and cancellation.
+            try { await Task.WhenAll(files, text).ConfigureAwait(false); } catch { }
+        }
     }
 
-    private static CodeSearchPage Search(string root, IReadOnlyList<string> paths, CodeSearchQuery query, CancellationToken token)
+    private static CodeSearchPage Search(string root, IReadOnlyList<string> paths, CodeSearchQuery query, IReadOnlyList<string>? recentPaths, CancellationToken token)
     {
         var text = query.FilesOnly ? query.Text.Trim().Replace('\\', '/') : query.Text;
         if (text.Length == 0) return new([], 0, 0, false);
         if (text.Length > 1024 || query.FileMask.Length > 1024) throw new IOException("搜索文本和文件范围最多 1,024 字符。");
+        if (query.FilesOnly) return FileSearch.Find(paths, query, recentPaths, token);
         var masks = query.FileMask.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         bool Included(string path) => masks.Length == 0 || masks.Any(mask => FileSystemName.MatchesSimpleExpression(mask.Replace('\\', '/'), mask.Contains('/') || mask.Contains('\\') ? path : System.IO.Path.GetFileName(path), true));
-        if (query.FilesOnly)
-        {
-            var line = 1;
-            var colon = text.LastIndexOf(':');
-            if (colon > 0 && int.TryParse(text[(colon + 1)..], out var requested) && requested > 0) { line = requested; text = text[..colon]; }
-            var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var matches = paths.Where(path => { token.ThrowIfCancellationRequested(); return Included(path) && parts.All(part => path.Contains(part, StringComparison.OrdinalIgnoreCase)); })
-                .OrderBy(path => System.IO.Path.GetFileName(path).Equals(text, StringComparison.OrdinalIgnoreCase) ? 0 : System.IO.Path.GetFileName(path).StartsWith(text, StringComparison.OrdinalIgnoreCase) ? 1 : 2)
-                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase).Take(MaxSearchResults + 1).ToArray();
-            return new(matches.Take(MaxSearchResults).Select(path => new CodeSearchMatch(path, line, 1, 0, "")).ToArray(), paths.Count, 0, matches.Length > MaxSearchResults);
-        }
 
         Regex? expression = null;
         if (query.RegularExpression || query.WholeWord)

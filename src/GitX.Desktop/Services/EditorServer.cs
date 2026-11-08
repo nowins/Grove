@@ -8,7 +8,10 @@ using GitX.Desktop.ViewModels;
 namespace GitX.Desktop.Services;
 
 public sealed record EditorToolbarState(string Path, bool CanBlame, string BlameLabel, IReadOnlyList<ChangeLine>? IncludedLines = null, bool? Included = false,
-    BlameViewSettings? BlameView = null, IReadOnlyList<SourceTabInfo>? SourceTabs = null, string? ActiveSourceTabId = null, bool SourceMode = false, bool FileHistory = false);
+    BlameViewSettings? BlameView = null, IReadOnlyList<SourceTabInfo>? SourceTabs = null, string? ActiveSourceTabId = null, bool SourceMode = false, bool FileHistory = false,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool ReadingNavigation = false,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] ContinuousDiffManifest? ContinuousDiff = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool CanContinuousDiff = false);
 
 public sealed record MarkdownResourceContext(long Version, string Root, string Path, string? Revision);
 
@@ -21,10 +24,9 @@ public sealed class EditorServer : IDisposable
     private readonly string _prefix = $"/{Guid.NewGuid():N}/";
     private readonly string _directory = Path.Combine(AppContext.BaseDirectory, "Editor", "dist");
     private static readonly JsonSerializerOptions DocumentJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-    private Lazy<byte[]> _document = new(() => "{}"u8.ToArray());
+    private EditorPublication _publication = new("{}"u8.ToArray());
     private byte[] _layout = "{}"u8.ToArray();
     private byte[] _comments = "{}"u8.ToArray();
-    private MarkdownResourceContext? _markdown;
     public Uri Address { get; }
 
     public EditorServer(string page = "index.html") : this(page, ReservePort) { }
@@ -71,11 +73,15 @@ public sealed class EditorServer : IDisposable
     }
 
     public void Publish(byte[] document, MarkdownResourceContext? markdown = null)
-    { Volatile.Write(ref _markdown, markdown); Volatile.Write(ref _document, new(() => document)); }
+        => Publish(new EditorPublication(document, markdown));
+    public EditorPublication PreparePublication(long version, RepositoryDocument document, EditorToolbarState toolbar,
+        MarkdownResourceContext? markdown = null, string? repository = null, ContinuousDiffSession? continuous = null)
+        => new(version, document, toolbar, markdown, repository, Volatile.Read(ref _publication), continuous);
+    public void Publish(EditorPublication publication) => Volatile.Write(ref _publication, publication);
     // Toolbar-only changes use the small bridge message. Retain the latest
     // immutable snapshot for a page reload, serializing once only if requested.
     public void PublishDeferred(long version, RepositoryDocument document, EditorToolbarState toolbar, MarkdownResourceContext? markdown = null)
-    { Volatile.Write(ref _markdown, markdown); Volatile.Write(ref _document, new(() => Serialize(version, document, toolbar))); }
+        => Publish(PreparePublication(version, document, toolbar, markdown));
     public void PublishLayout(byte[] layout) => Volatile.Write(ref _layout, layout);
     public void PublishComments(byte[] comments) => Volatile.Write(ref _comments, comments);
 
@@ -105,15 +111,35 @@ public sealed class EditorServer : IDisposable
             response.Headers["X-Content-Type-Options"] = "nosniff";
             if (request.HttpMethod != "GET" || !Owns(request.Url)) { response.StatusCode = 404; return; }
             var name = Uri.UnescapeDataString(request.Url!.AbsolutePath[_prefix.Length..]);
+            if (name == "continuous-diff")
+            {
+                var owner = Volatile.Read(ref _publication).Continuous;
+                if (owner is null || request.QueryString["id"] != owner.Manifest.Id ||
+                    !long.TryParse(request.QueryString["version"], out var version) || version != owner.Manifest.Version ||
+                    !int.TryParse(request.QueryString["index"], out var index) || index < 0 || index >= owner.Manifest.Files.Count)
+                { response.StatusCode = 404; return; }
+                ContinuousDiffFile? comparedFile;
+                try { comparedFile = await owner.ReadAsync(index, _lifetime.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { response.StatusCode = 404; return; }
+                catch (ContinuousDiffBusyException) { response.StatusCode = 429; response.Headers["Retry-After"] = "1"; return; }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or LibGit2Sharp.LibGit2SharpException)
+                { comparedFile = new(owner.Manifest.Id, index, null, null, [], e.Message, false); }
+                if (comparedFile is null || !owner.IsCurrent || !ReferenceEquals(owner, Volatile.Read(ref _publication).Continuous)) { response.StatusCode = 404; return; }
+                var bytes = await Task.Run(() => JsonSerializer.SerializeToUtf8Bytes(comparedFile, DocumentJson), _lifetime.Token).ConfigureAwait(false);
+                if (!owner.IsCurrent || !ReferenceEquals(owner, Volatile.Read(ref _publication).Continuous)) { response.StatusCode = 404; return; }
+                response.ContentType = "application/json; charset=utf-8";
+                await response.OutputStream.WriteAsync(bytes, _lifetime.Token);
+                return;
+            }
             if (name == "markdown-image")
             {
-                var owner = Volatile.Read(ref _markdown);
+                var owner = Volatile.Read(ref _publication).Markdown;
                 if (owner is null || !long.TryParse(request.QueryString["version"], out var version) || version != owner.Version
                     || request.QueryString["href"] is not { } href) { response.StatusCode = 404; return; }
                 try
                 {
                     var asset = await MarkdownResources.ReadImageAsync(owner.Root, owner.Path, owner.Revision, href, _lifetime.Token);
-                    if (!ReferenceEquals(owner, Volatile.Read(ref _markdown))) { response.StatusCode = 404; return; }
+                    if (!ReferenceEquals(owner, Volatile.Read(ref _publication).Markdown)) { response.StatusCode = 404; return; }
                     response.ContentType = asset.ContentType;
                     await response.OutputStream.WriteAsync(asset.Bytes, _lifetime.Token);
                 }
@@ -124,7 +150,7 @@ public sealed class EditorServer : IDisposable
             if (name is "document" or "layout" or "comments")
             {
                 response.ContentType = "application/json; charset=utf-8";
-                await response.OutputStream.WriteAsync(name == "document" ? Volatile.Read(ref _document).Value : name == "comments" ? Volatile.Read(ref _comments) : Volatile.Read(ref _layout), _lifetime.Token);
+                await response.OutputStream.WriteAsync(name == "document" ? Volatile.Read(ref _publication).Response(request.QueryString["content"]) : name == "comments" ? Volatile.Read(ref _comments) : Volatile.Read(ref _layout), _lifetime.Token);
                 return;
             }
             // Build emits flat asset names. Never serve paths or files outside that allowlist.
@@ -148,6 +174,7 @@ public sealed class EditorServer : IDisposable
     {
         _lifetime.Cancel();
         _listener.Close();
+        Volatile.Write(ref _publication, new("{}"u8.ToArray()));
         _lifetime.Dispose();
     }
 }
