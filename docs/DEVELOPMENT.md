@@ -2,6 +2,8 @@
 
 Grove 当前是个人本地 Git 与代码查看器。核心在 src/GitX.Core，Avalonia 桌面壳在 src/GitX.Desktop，离线 Monaco／Tree-sitter 在 Editor 子目录，真实 Git 集成测试在 tests/GitX.Core.Tests。包版本和运行时图由项目及锁文件维护。
 
+文件监听集成测试先以一次可观察写入完成启动握手并排空首批通知，再断言稳定期的按路径增量通知；不能把夹具创建／提交期间的首批通知当成单一内容事件。macOS 的 [FSEvents 会合并相邻事件](https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/TechnologyOverview/TechnologyOverview.html)，不确定、结构与元数据变化仍必须允许产品完整刷新；普通内容与索引变化的原断言继续执行，不按平台跳过。
+
 ## 连续 Diff 阅读（2026-11-07）
 
 主编辑区的“连续 Diff”、视图菜单和 Actions 打开当前本地改动或历史比较范围。复用同一 WebView、字体、行高及深色颜色；按文件排列两侧文本、真实行号、比较标签、换行和存在状态。未变区只保留两端各 3 行并标明省略；只做按行差异高亮。每文件可打开完整 Monaco Diff，双击行号定位对应侧与行；查找、F7、折叠、暂存和评论继续在完整 Diff 操作，不在连续阅读视图创建第二套编辑能力。

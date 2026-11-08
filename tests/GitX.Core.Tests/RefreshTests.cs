@@ -96,8 +96,13 @@ public sealed class RefreshTests
         repo.Write("a.txt", "base"); repo.Commit("base");
         var changes = new System.Collections.Concurrent.ConcurrentQueue<RepositoryChangeSet>();
         using var watcher = new RepositoryWatcher(repo.Root, change => changes.Enqueue(change));
-        repo.Write("a.txt", "content");
+        // FSEvents can coalesce the fixture's creation/commit with the first
+        // write. Drain that startup batch before testing content-only hints.
+        repo.Write("a.txt", "watcher ready");
         await Until(() => !changes.IsEmpty);
+        await Task.Delay(500); changes.Clear();
+        repo.Write("a.txt", "content");
+        await Until(() => changes.Any(change => !change.IsFull && change.Paths.Contains("a.txt")));
         Assert.Contains(changes, change => !change.IsFull && change.Paths.Contains("a.txt"));
         await Task.Delay(500); changes.Clear();
         repo.Write("a.txt", "staged"); repo.Git("add", "a.txt");
