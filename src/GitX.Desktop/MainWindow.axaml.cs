@@ -152,6 +152,7 @@ public sealed partial class MainWindow : Window
     {
         _loadedEditorVersion = -1;
         EditorPosition.Text = "";
+        EditorFormat.Text = "";
         await PublishEditorDocumentAsync(version, document);
     }
 
@@ -176,7 +177,7 @@ public sealed partial class MainWindow : Window
             if (_closed || sequence != _publicationSequence) return;
             var toolbar = new EditorToolbarState(_model.FileTitle, _model.CanBlame, _model.BlameLabel, _model.CurrentIncludedLines(),
                 _model.SelectedEntry is { } selected ? _model.InclusionState(selected.Path) : false, _blameView, _model.SourceTabs, _model.ActiveSourceTabId, _model.Mode == 0, ReadingNavigation: true,
-                ContinuousDiff: _model.ContinuousDiff?.Manifest, CanContinuousDiff: _model.CanOpenContinuousDiff, WorkspaceActions: _model.Root is not null);
+                ContinuousDiff: _model.ContinuousDiff?.Manifest, CanContinuousDiff: _model.CanOpenContinuousDiff, WorkspaceActions: _model.Root is not null, EmptyWorkspace: _model.EmptyWorkspace);
             var markdown = !document.IsDiff && !document.IsNotice && document.Language == "markdown" && _model.Root is { } markdownRoot
                 ? new MarkdownResourceContext(version, markdownRoot, document.Path, document.SourceRevision) : null;
             var server = _server; var repository = _model.Root;
@@ -274,6 +275,10 @@ public sealed partial class MainWindow : Window
                 _model.RecordReadingPosition(new(version, root.GetProperty("side").GetInt32(), root.GetProperty("line").GetInt32(), root.GetProperty("column").GetInt32()),
                     root.TryGetProperty("navigation", out var readingNavigation) && readingNavigation.GetBoolean());
                 EditorPosition.Text = $"{(root.GetProperty("side").GetInt32() == 0 ? "旧侧" : "当前侧")}  {root.GetProperty("line").GetInt32()}:{root.GetProperty("column").GetInt32()}";
+                break;
+            case "editor-status":
+                EditorFormat.Text = root.GetProperty("text").GetString();
+                ToolTip.SetTip(EditorFormat, EditorFormat.Text);
                 break;
             case "include-file":
                 if (_model.SelectedEntry is { } includeEntry)

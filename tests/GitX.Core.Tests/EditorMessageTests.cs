@@ -8,6 +8,18 @@ namespace GitX.Core.Tests;
 
 public sealed class EditorMessageTests
 {
+    [Fact]
+    public async Task Editor_status_accepts_current_text_and_clear_but_rejects_stale_or_malformed_updates()
+    {
+        var received = new List<string>(); var errors = new List<string>();
+        Task Handle(EditorMessage message) { received.Add(message.Payload.GetProperty("text").GetString()!); return Task.CompletedTask; }
+        await EditorMessage.DispatchAsync("{\"type\":\"editor-status\",\"version\":7,\"text\":\"UTF-8 · LF\"}", () => Current, Handle, errors.Add);
+        await EditorMessage.DispatchAsync("{\"type\":\"editor-status\",\"version\":6,\"text\":\"old\"}", () => Current, Handle, errors.Add);
+        await EditorMessage.DispatchAsync("{\"type\":\"editor-status\",\"version\":7,\"text\":\"\"}", () => Current, Handle, errors.Add);
+        await EditorMessage.DispatchAsync("{\"type\":\"editor-status\",\"version\":7,\"text\":3}", () => Current, Handle, errors.Add);
+        await EditorMessage.DispatchAsync(JsonSerializer.Serialize(new { type = "editor-status", version = 7, text = new string('x', 1025) }), () => Current, Handle, errors.Add);
+        Assert.Equal(new[] { "UTF-8 · LF", "" }, received); Assert.Equal(2, errors.Count);
+    }
     [Theory]
     [InlineData("project-reveal")]
     [InlineData("reading-history")]

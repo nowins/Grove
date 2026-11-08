@@ -111,7 +111,7 @@ public sealed partial class MainViewModel
         }
         if (_sourceTabs.Count > 0) { await ActivateSourceTabAsync(_sourceTabs[Math.Min(index, _sourceTabs.Count - 1)]); return; }
         SuspendSourceTab(); _activeSourceTab = null; _selectedEntry = null; Changed(nameof(SelectedEntry));
-        ClearDocument("选择文件查看内容。"); return;
+        ClearDocument("选择文件查看内容。", emptyWorkspace: true); return;
     }
 
     private Task<RepositoryDocument> ReadSourceAsync(string root, NavigationEntry entry, CancellationToken token)

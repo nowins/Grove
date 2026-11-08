@@ -27,7 +27,8 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
     private sealed class Region
     {
         public Border Frame { get; } = new();
-        public StackPanel Tabs { get; } = new() { Orientation = Orientation.Horizontal };
+        public TextBlock Title { get; } = new() { Classes = { "tool-title" }, TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new(10, 0) };
         public Grid Contents { get; } = new();
         public ToolId? Active;
     }
@@ -63,6 +64,8 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
         _owner = owner; _store = new(layoutPath); Child = _outer;
         Detach(editor); _site.Children.Add(editor); Grid.SetColumn(editor, 2); Grid.SetRow(editor, 2);
         _outer.Children.Add(_site); Grid.SetColumn(_site, 1); Grid.SetRow(_site, 1);
+        var leftRail = new Grid { RowDefinitions = new("Auto,Auto,*,Auto"), Background = Brush("PanelBrush") };
+        _outer.Children.Add(leftRail); Grid.SetRow(leftRail, 1); Grid.SetColumn(leftRail, 0);
         foreach (var edge in Enum.GetValues<ToolEdge>())
         {
             var region = _regions[edge] = CreateRegion(edge);
@@ -76,13 +79,13 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
             Grid.SetColumn(splitter, edge switch { ToolEdge.Left => 1, ToolEdge.Right => 3, _ => 0 });
             if (edge is ToolEdge.Top or ToolEdge.Bottom) Grid.SetColumnSpan(splitter, 5);
             splitter.PointerReleased += (_, _) => { CaptureSizes(); ScheduleSave(); };
-            var bar = _bars[edge] = new StackPanel { Orientation = edge is ToolEdge.Left or ToolEdge.Right ? Orientation.Vertical : Orientation.Horizontal,
-                Spacing = 2, Margin = edge is ToolEdge.Left or ToolEdge.Right ? new(2) : new(4, 1, 4, 2) };
+            var bar = _bars[edge] = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2, Margin = new(2) };
             var frame = new Border { Child = bar, Background = Brush("PanelBrush"), BorderBrush = Brush("SubtleBorderBrush"),
-                BorderThickness = edge switch { ToolEdge.Left => new(0, 0, 1, 0), ToolEdge.Right => new(1, 0, 0, 0), ToolEdge.Top => new(0, 0, 0, 1), _ => new(0, 1, 0, 0) } };
-            _outer.Children.Add(frame);
-            Grid.SetRow(frame, edge switch { ToolEdge.Top => 0, ToolEdge.Bottom => 2, _ => 1 });
-            Grid.SetColumn(frame, edge switch { ToolEdge.Left => 0, ToolEdge.Right => 2, _ => 1 });
+                BorderThickness = edge == ToolEdge.Right ? new(1, 0, 0, 0) : new(0, 0, 1, 0) };
+            if (edge == ToolEdge.Right)
+            { _outer.Children.Add(frame); Grid.SetRow(frame, 1); Grid.SetColumn(frame, 2); }
+            else
+            { leftRail.Children.Add(frame); Grid.SetRow(frame, edge switch { ToolEdge.Top => 0, ToolEdge.Left => 1, _ => 3 }); }
         }
         SizeChanged += (_, _) => ResizeRegions();
         _saveTimer.Tick += async (_, _) => { _saveTimer.Stop(); await PersistAsync(); };
@@ -104,8 +107,7 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
         }
         Action("MoreIcon", "工具窗口选项", button => { if (region.Active is { } id) ShowMenu(id, button, false); });
         Action("MinusIcon", "隐藏工具窗口 · Shift+Esc", _ => { if (region.Active is { } id) Hide(id); });
-        var scroll = new ScrollViewer { Content = region.Tabs, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
-        headerLayout.Children.Add(scroll); grid.Children.Add(header); grid.Children.Add(region.Contents); Grid.SetRow(region.Contents, 1);
+        headerLayout.Children.Add(region.Title); grid.Children.Add(header); grid.Children.Add(region.Contents); Grid.SetRow(region.Contents, 1);
         region.Frame.Child = grid; region.Frame.Background = Brush("PanelBrush");
         AttachDrag(header, () => region.Active, false);
         header.ContextRequested += (_, e) =>
@@ -209,36 +211,26 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
                 var assigned = _layout.Tools.Where(t => t.Edge == edge && _tools.TryGetValue(t.Id, out var item) && item.Available).ToArray();
                 var active = assigned.FirstOrDefault(t => t.Visible && !t.Floating);
                 var region = _regions[edge]; region.Active = active?.Id;
-                region.Tabs.Children.Clear(); _bars[edge].Children.Clear();
+                region.Title.Text = active is null ? "" : _tools[active.Id].Title;
+                ToolTip.SetTip(region.Title, region.Title.Text); _bars[edge].Children.Clear();
                 foreach (var state in assigned)
                 {
                     var tool = _tools[state.Id];
-                    var horizontal = edge is ToolEdge.Top or ToolEdge.Bottom;
                     var icon = new Button { Height = 28, MinHeight = 28, Classes = { "toolbar", "tool-stripe" }, Content = IconContent.Icon(tool.Icon), Tag = tool.Id };
-                    if (horizontal) icon.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
-                        Children = { IconContent.Icon(tool.Icon), new TextBlock { Text = tool.Title, MaxWidth = 160, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center } } };
-                    if (!horizontal) icon.Width = 28;
+                    icon.Width = 28;
                     ToolTip.SetTip(icon, tool.Title + (tool.Id switch { ToolId.Project => " · Ctrl+1", ToolId.Commit => " · Ctrl+2", ToolId.GitLog => " · Ctrl+3", _ => "" }));
                     AutomationProperties.SetName(icon, tool.Title + "工具窗口");
                     icon.Classes.Set("active", state.Visible);
                     icon.Click += (_, _) => Show(tool.Id, true); AttachDrag(icon, () => tool.Id, true);
                     icon.ContextRequested += (_, e) => { e.Handled = true; ShowMenu(tool.Id, icon, true); }; _bars[edge].Children.Add(icon);
-                    if (!state.Floating)
-                    {
-                        var tab = new Button { Classes = { "dock-tab" },
-                            Content = new TextBlock { Classes = { "tool-title" }, Text = tool.Title, MaxWidth = 210, TextTrimming = TextTrimming.CharacterEllipsis }, Tag = tool.Id };
-                        ToolTip.SetTip(tab, tool.Title);
-                        tab.Classes.Set("active", active?.Id == state.Id);
-                        tab.Click += (_, _) => Show(tool.Id); region.Tabs.Children.Add(tab);
-                    }
                 }
                 region.Frame.IsVisible = active is not null;
                 _bars[edge].IsVisible = assigned.Length > 0;
             }
-            _outer.ColumnDefinitions[0].Width = new(_bars[ToolEdge.Left].Children.Count > 0 ? 34 : 0);
+            _outer.ColumnDefinitions[0].Width = new(new[] { ToolEdge.Left, ToolEdge.Top, ToolEdge.Bottom }.Any(edge => _bars[edge].Children.Count > 0) ? 34 : 0);
             _outer.ColumnDefinitions[2].Width = new(_bars[ToolEdge.Right].Children.Count > 0 ? 34 : 0);
-            _outer.RowDefinitions[0].Height = new(_bars[ToolEdge.Top].Children.Count > 0 ? 32 : 0);
-            _outer.RowDefinitions[2].Height = new(_bars[ToolEdge.Bottom].Children.Count > 0 ? 32 : 0);
+            _outer.RowDefinitions[0].Height = new(0);
+            _outer.RowDefinitions[2].Height = new(0);
             ResizeRegions();
         }
         finally { _reconciling = false; }
@@ -380,11 +372,12 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
             int? before = null;
             if (edge is { } side)
             {
-                var tabs = _regions[side].Tabs;
-                if (TopLevel.GetTopLevel(tabs) is not null)
+                var bar = _bars[side];
+                if (TopLevel.GetTopLevel(bar) is not null)
                 {
-                    var local = tabs.PointToClient(screen);
-                    if (local.Y is >= 0 and <= 28) before = tabs.Children.TakeWhile(c => c.Bounds.Right < local.X).Count(c => c.Tag is ToolId id && id != drag.Id);
+                    var local = bar.PointToClient(screen);
+                    if (local.X >= 0 && local.X <= bar.Bounds.Width && local.Y >= 0 && local.Y <= bar.Bounds.Height)
+                        before = bar.Children.TakeWhile(c => c.Bounds.Bottom < local.Y).Count(c => c.Tag is ToolId id && id != drag.Id);
                 }
             }
             _ = MoveAsync(drag.Id, edge, edge is null ? new(screen.X - 60, screen.Y - 40) : null, before);
@@ -402,6 +395,12 @@ internal sealed class ToolDockWorkspace : Border, IDisposable
     }
     private ToolEdge? Target(PixelPoint screen)
     {
+        foreach (var (edge, bar) in _bars)
+        {
+            if (!bar.IsVisible || TopLevel.GetTopLevel(bar) is null) continue;
+            var point = bar.PointToClient(screen);
+            if (point.X >= 0 && point.Y >= 0 && point.X <= bar.Bounds.Width && point.Y <= bar.Bounds.Height) return edge;
+        }
         // Existing headers take priority over the outer edge hit zones, so
         // reordering a side tab cannot accidentally move it to the top edge.
         foreach (var (edge, region) in _regions)

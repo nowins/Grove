@@ -35,10 +35,10 @@ internal sealed record EditorMessage(string Type, JsonElement Payload, long? Ver
         if (root.ValueKind != JsonValueKind.Object || !Text(root, "type")) throw new JsonException();
         var type = root.GetProperty("type").GetString()!;
         if (type is not ("ready" or "loaded" or "refresh" or "comment" or "open" or "view" or "blame" or
-            "blame-action" or "blame-view" or "source-tab" or "source-save" or "source-edit-state" or "markdown-open" or "stage-selection" or "revert-block" or "include-line" or
+            "blame-action" or "blame-view" or "source-tab" or "source-save" or "source-edit-state" or "editor-status" or "markdown-open" or "stage-selection" or "revert-block" or "include-line" or
             "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out" or "recent-files" or "code-search" or "source-history" or "project-reveal" or "history-back" or "reading-history" or "continuous-diff" or "error")) return null;
 
-        var needsVersion = type is "continuous-diff" or "reading-history" or "source-save" or "source-edit-state" or "markdown-open" or "project-reveal" or "source-history" or "history-back" or "recent-files" or "code-search" or "loaded" or "blame" or "blame-action" or "blame-view" or "source-tab" or "stage-selection" or
+        var needsVersion = type is "editor-status" or "continuous-diff" or "reading-history" or "source-save" or "source-edit-state" or "markdown-open" or "project-reveal" or "source-history" or "history-back" or "recent-files" or "code-search" or "loaded" or "blame" or "blame-action" or "blame-view" or "source-tab" or "stage-selection" or
             "revert-block" or "include-line" or "include-file" or "include-deletion" or "caret" or "whitespace" or "close-document" or "hide-tool" or "reset-layout" or "focus-navigation" or "focus-out"
             || type == "comment" && Choice(root, "action", "begin") || type == "comment" && Choice(root, "action", "open-source");
         long? version = null;
@@ -60,6 +60,7 @@ internal sealed record EditorMessage(string Type, JsonElement Payload, long? Ver
             "code-search" => Boolean(root, "filesOnly") && (!root.TryGetProperty("quick", out _) || Boolean(root, "quick")),
             "source-save" => Text(root, "id"),
             "source-edit-state" => Text(root, "id") && Boolean(root, "editable") && Boolean(root, "dirty"),
+            "editor-status" => root.TryGetProperty("text", out var statusText) && statusText.ValueKind == JsonValueKind.String && statusText.GetString()!.Length <= 1024,
             "source-tab" => Choice(root, "action", "select", "close", "close-others", "close-all", "reveal", "terminal") && Text(root, "id"),
             "markdown-open" => Text(root, "href") && root.GetProperty("href").GetString()!.Length <= 4096,
             "blame-action" => Choice(root, "action", "close", "previous", "copy", "diff", "history") && Integer(root, "line", 1),

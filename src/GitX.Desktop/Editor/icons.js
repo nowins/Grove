@@ -1,6 +1,7 @@
 // 16-unit paths shared visually with Resources/Icons.axaml and the prototype.
 const paths = {
   blank: '',
+  file: 'M3.5 2H9L12.5 5.5V14H3.5ZM9 2V5.5H12.5M6 8H10M6 10.5H10',
   structure: 'M2 3H5V6H2ZM9 7H12V10H9ZM9 12H12V15H9ZM3.5 6V13.5H9M3.5 8.5H9',
   'chevrons-right': 'M3 4L7 8L3 12M8 4L12 8L8 12',
   up: 'M8 13V3M4 7L8 3L12 7', down: 'M8 3V13M4 9L8 13L12 9',

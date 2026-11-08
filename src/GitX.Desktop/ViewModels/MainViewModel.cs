@@ -413,7 +413,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
             RepositoryDetail = $"{snapshot.Root}\n\n分支  {snapshot.Branch}\nHEAD  {snapshot.Head?[..12] ?? "尚无提交"}\n\n{snapshot.Files.Count:N0} 个文件\n{snapshot.Changes.Count:N0} 个改动项";
             Status = snapshot.FilesTruncated ? "仅显示前 20,000 个文件" : $"已读取 {snapshot.Files.Count:N0} 个文件 · 自动刷新 · F5 手动刷新";
             BuildEntries();
-            ClearDocument(_mode == 2 ? "选择提交查看改动。" : "选择文件查看内容。");
+            ClearDocument(_mode == 2 ? "选择提交查看改动。" : "选择文件查看内容。", emptyWorkspace: true);
             if (previousRoot == snapshot.Root && previousSelection is not null && _mode != 2)
                 SelectedEntry = Entries.FirstOrDefault(e => e.Path == previousSelection.Path && e.Kind == previousSelection.Kind);
             await LoadHistoryAsync();
@@ -608,7 +608,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _document = null; WriteStateChanged();
         Replace(ref _documentRead);
         var token = _documentRead.Token;
-        if (entry is null) { ClearDocument("选择文件查看内容。"); return; }
+        if (entry is null) { ClearDocument("选择文件查看内容。", emptyWorkspace: true); return; }
         if (_closed || snapshot is null) return;
         Error = ""; FileTitle = entry.Path; Comparison = "正在读取…"; Detail = "";
         if (!preserve) DocumentChanged?.Invoke(version, new(entry.Path, "正在读取…", "plaintext", Comparison, "", IsNotice: true));
@@ -658,12 +658,15 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private void FilterEntries() => Entries = string.IsNullOrWhiteSpace(Filter) ? _allEntries :
         _allEntries.Where(e => e.Path.Contains(Filter, StringComparison.OrdinalIgnoreCase)).ToArray();
 
-    private void ClearDocument(string text, Action<long>? beforePublish = null)
+    private bool _emptyWorkspaceNotice;
+    public bool EmptyWorkspace => _emptyWorkspaceNotice && _document is null && _continuousDiff is null;
+    private void ClearDocument(string text, Action<long>? beforePublish = null, bool emptyWorkspace = false)
     {
         ResetContinuousDiff();
         InterruptReading(); _readingTarget = null;
         Replace(ref _documentRead);
         _document = null;
+        _emptyWorkspaceNotice = emptyWorkspace;
         WriteStateChanged();
         FileTitle = "选择文件"; Comparison = "只读"; Detail = "";
         // Invalidation is model state, independent of event subscribers. A

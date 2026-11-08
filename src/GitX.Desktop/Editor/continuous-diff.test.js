@@ -106,15 +106,18 @@ test('manual reread aborts an in-flight request and refuses its late body',async
     assert.equal(t.control.items[0].data,accepted);assert.equal(t.control.active,0);
   }finally{t.dispose();}
 });
-test('temporary server saturation retries without caching the busy response and close clears retry timers',async()=>{
+test('temporary server saturation retries without caching the busy response and close clears retry timers',async context=>{
+  context.mock.timers.enable({apis:['setTimeout']});
+  let now=0;context.mock.method(performance,'now',()=>now);
   let attempts=0;const t=fixture((owner,index)=>++attempts===1?{ok:false,status:429}:{ok:true,json:async()=>file(owner,index)});
   try {
     t.control.retryDelay=5;t.show(manifest('scope',1));await t.flush(2);
     assert.equal(t.control.items[0].data,null);assert.equal(t.control.items[0].error,'');assert.match(t.host.textContent,/自动重试/);
-    await new Promise(resolve=>setTimeout(resolve,10));await t.flush();assert.ok(t.control.items[0].data);assert.equal(attempts,2);
+    now+=5;context.mock.timers.tick(5);await t.flush();assert.ok(t.control.items[0].data);assert.equal(attempts,2);
     t.control.retryDelay=1000;t.control.fetchFile=async()=>({ok:false,status:429});t.host.querySelector('.cd-footer button').click();await t.flush(2);
     assert.equal(t.control.timers.size,1);t.host.querySelector('.cd-footer button').click();assert.equal(t.control.timers.size,0);
     await t.flush(2);assert.equal(t.control.timers.size,1);t.control.close();assert.equal(t.control.timers.size,0);
+    const reads=t.calls.length;now+=1000;context.mock.timers.tick(1000);await t.flush();assert.equal(t.calls.length,reads);
   }finally{t.dispose();}
 });
 test('complete-Diff and old-side row links use exact captured identity and stale controls do nothing',async()=>{

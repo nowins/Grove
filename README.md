@@ -9,8 +9,8 @@
 - 远端分支一键 Checkout；New Branch 可编辑名称和选择创建后检出，保留跟踪关系并检查 worktree 占用。
 - 文件树、按需筛选、当前文件定位；Git 输出和 worktree 列表使用非模态工具页。
 - macOS 使用系统原生菜单；最近文件 Ctrl+E（Mac：Command+E），跳转行 Ctrl+G（Mac 另有 Command+L）。
-- 开发版支持阅读位置前进／后退：Alt+Left／Right（Mac：Command+Option+Left／Right），保留文件、修订和 Diff 侧的行列位置。
-- 开发版可连续阅读本地改动或历史比较范围的多文件 Diff，按需加载；行号可定位完整 Diff 的对应侧。
+- 阅读位置前进／后退：Alt+Left／Right（Mac：Command+Option+Left／Right），保留文件、修订和 Diff 侧的行列位置。
+- 连续阅读本地改动或历史比较范围的多文件 Diff，按需加载；行号可定位完整 Diff 的对应侧。
 - 历史分支筛选提供最近使用、收藏，以及本地/远端分支和标签分组；筛选不会执行 Checkout。
 - 文件标签右键关闭当前/其他/全部；文件与文件夹支持系统定位及终端入口。
 - Java、C#、Python、JavaScript／TypeScript 高亮与文件内结构导航，以及本地代码评论。
@@ -29,7 +29,7 @@
 | Linux x64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-linux-x64.tar.gz) |
 | Linux ARM64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-linux-arm64.tar.gz) |
 
-Preview 6 包含已合并的搜索 Actions/只读预览、Push 审阅、历史与 Diff 响应式展示、单块回退/撤销、可选草稿恢复、更新诊断和 macOS 标题栏安全区修复。编辑器旧引用生命周期修复不代表已测得整体内存或性能收益。
+Preview 6 包含文件／内容搜索、阅读位置导航、连续 Diff、阅读区与工具侧栏简化，以及 Windows ARM64 路径状态修正；另包含 Push 审阅、单块回退／撤销、可选草稿恢复、更新诊断和 macOS 标题栏安全区修复。编辑器旧引用生命周期修复不代表已测得整体内存或性能收益。
 
 Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。公开 Release 可直接下载，无需 GitHub 登录；Release 包不受 Actions 的 14 天产物保留期限制。
 
@@ -45,7 +45,7 @@ Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SH
 
 ## 阅读 Markdown
 
-打开 Markdown 文件后默认显示预览，可在工具栏切换到源码；两种视图分别保留滚动位置。Esc 返回源码，Ctrl+F 切到源码搜索。支持 `.md`、`.markdown`、`.mdown` 和 `.mkd`。
+打开 Markdown 文件后默认显示预览，右键可切换源码／预览；两种视图分别保留滚动位置。Esc 返回源码，Ctrl+F 切到源码搜索。支持 `.md`、`.markdown`、`.mdown` 和 `.mkd`。
 
 相对链接在当前文件目录解析；网页链接点击后交给系统浏览器。原始 HTML 按文本显示，远程图片不会自动加载；暂不支持渲染 Diff、SVG、数学图表或代码块语法着色。
 
@@ -80,6 +80,7 @@ pwsh ./tools/ci.ps1
 - 固定深色主题；文件内结构导航不包含 LSP 或跨文件语义分析。
 - Worktree 支持发现、打开和带脏文件/锁定检查的删除；主工作树不能删除，尚无创建或 prune 管理界面。
 - 文件历史工具页仍是单会话；`.gitignore` 遵循 Git 规则，尚无忽略项管理界面。
+- 连续 Diff 在仓库刷新后需要重新打开；完整 Diff 的 F7／上一处差异仍在当前文件内循环。
 - 评论和界面设置保存在本机，不是团队云端评审服务。`GITX_DATA_DIR` 可用于指定独立数据目录。
 
 版本发布准备与平台打包限制见 [Release 方案](docs/RELEASING.md)。

@@ -15,15 +15,15 @@ function fixture(mac = false) {
 for (const mac of [false, true]) test(`${mac ? 'Mac' : 'Windows'} empty workspace has real search and recent actions with current publication identity`, () => {
   const t = fixture(mac);
   try {
-    t.view.update({ path: '', isNotice: true, text: '选择文件查看内容。' }, { workspaceActions: true });
+    t.view.update({ path: '', isNotice: true, text: '选择文件查看内容。' }, { workspaceActions: true, emptyWorkspace: true });
     assert.equal(t.tools.hidden, true); assert.equal(t.host.hidden, false);
     assert.equal(t.host.querySelectorAll('[role=tab]').length, 0);
     const buttons = t.host.querySelectorAll('button');
-    assert.equal(buttons.length, 2);
-    assert.equal(buttons[1].querySelector('kbd').textContent, mac ? '⌘E' : 'Ctrl+E');
-    t.view.focus(); assert.equal(document.activeElement, buttons[0]);
-    buttons[0].click(); buttons[1].click();
-    assert.deepEqual(t.sent, [{ type: 'code-search', filesOnly: true, quick: true, version: 7 }, { type: 'recent-files', version: 7 }]);
+    assert.equal(buttons.length, 3); assert.equal(t.host.querySelector('p'), null);
+    assert.equal(buttons[2].querySelector('kbd').textContent, mac ? '⌘E' : 'Ctrl+E');
+    t.view.focus(); assert.equal(document.activeElement, t.host);
+    buttons[0].click(); buttons[1].click(); buttons[2].click();
+    assert.deepEqual(t.sent, [{ type: 'code-search', filesOnly: true, quick: true, version: 7 }, { type: 'code-search', filesOnly: false, version: 7 }, { type: 'recent-files', version: 7 }]);
   } finally { t.close(); }
 });
 
@@ -48,7 +48,7 @@ test('standalone notices have no unsupported workspace actions and file notices 
     t.view.update({ path: '', isNotice: true, text: '<img src=x onerror=alert(1)>' }, {});
     assert.equal(t.host.querySelectorAll('button, img').length, 0);
     assert.equal(t.host.textContent, '<img src=x onerror=alert(1)>');
-    t.view.update({ path: 'image.png', isNotice: true, text: '二进制文件' }, { workspaceActions: true });
+    t.view.update({ path: 'image.png', isNotice: true, text: '二进制文件' }, { workspaceActions: true, emptyWorkspace: true });
     assert.equal(t.tools.hidden, false); assert.equal(t.host.querySelectorAll('button').length, 0);
     assert.equal(t.host.classList.contains('workspace-empty'), false);
     assert.equal(t.host.textContent, '二进制文件');
@@ -61,5 +61,13 @@ test('continuous Diff uses its own view without an empty workspace or notice', (
     t.view.update({ path: '', isNotice: true, text: '连续 Diff' }, { workspaceActions: true, continuousDiff: { id: 'scope' } });
     assert.equal(t.view.active, false); assert.equal(t.host.hidden, true); assert.equal(t.tools.hidden, true);
     assert.equal(t.host.children.length, 0);
+  } finally { t.close(); }
+});
+
+test('actual notices remain visible instead of being mistaken for the neutral empty state', () => {
+  const t = fixture();
+  try {
+    t.view.update({ path: '', isNotice: true, text: '仓库已刷新，请重新打开连续 Diff。' }, { workspaceActions: true });
+    assert.equal(t.host.querySelector('p').textContent, '仓库已刷新，请重新打开连续 Diff。');
   } finally { t.close(); }
 });

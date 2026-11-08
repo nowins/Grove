@@ -108,6 +108,7 @@ public sealed class SourceTabTests
         Assert.Equal(current, Assert.Single(model.SourceTabs).Id); Assert.Equal("next\n", model.CurrentDocument!.Text);
         await model.CloseSourceTabsAsync(current, version, SourceTabCloseScope.All);
         Assert.Empty(model.SourceTabs); Assert.Null(model.CurrentDocument); Assert.Null(model.SelectedEntry); Assert.Null(model.ActiveSourceTabId);
+        Assert.True(model.EmptyWorkspace);
         var cleared = model.DocumentVersion;
         await model.CloseSourceTabsAsync(current, cleared, SourceTabCloseScope.All);
         Assert.Equal(cleared, model.DocumentVersion);

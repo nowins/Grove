@@ -11,11 +11,12 @@ export class WorkspaceNotice {
     this.host.replaceChildren();
     if (this.host.hidden) return;
     const message = document.createElement('p'); message.textContent = doc.text ?? '';
-    this.host.append(message);
+    if (!this.active || !toolbar?.emptyWorkspace || !toolbar?.workspaceActions) this.host.append(message);
     if (!this.active || !toolbar?.workspaceActions) return;
     const version = this.getVersion(), actions = document.createElement('div'); actions.className = 'workspace-empty-actions';
     for (const [label, shortcut, command] of [
       ['搜索文件', '双击 Shift', { type: 'code-search', filesOnly: true, quick: true }],
+      ['查找内容', this.isMac ? '⌃⇧F' : 'Ctrl+Shift+F', { type: 'code-search', filesOnly: false }],
       ['最近文件', this.isMac ? '⌘E' : 'Ctrl+E', { type: 'recent-files' }]
     ]) {
       const button = document.createElement('button'); button.type = 'button';
@@ -30,6 +31,6 @@ export class WorkspaceNotice {
     this.host.append(actions);
   }
   focus() {
-    if (this.active && !this.host.hidden) (this.host.querySelector('button') ?? this.host).focus({ preventScroll: true });
+    if (this.active && !this.host.hidden) this.host.focus({ preventScroll: true });
   }
 }

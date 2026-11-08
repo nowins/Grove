@@ -187,11 +187,28 @@ panes.forEach((pane, side) => pane.onContextMenu(event => {
   if (!selection || line < selection.startLineNumber || line > selection.endLineNumber)
     pane.setPosition(event.target.position);
   const actions = [];
+  if (sourceMode && !plan) {
+    if (!sourceSymbols.button.disabled) actions.push({ label: '文件结构', icon: 'structure', run: () => sourceSymbols.open() });
+    actions.push({ label: '文件历史', icon: 'history', run: () => send({ type: 'source-history', version: generation }) });
+  }
+  if (markdown.enabled && !markdown.active) actions.push({ label: 'Markdown 预览', icon: 'file', run: () => markdown.activate(true, true) });
   if (gutter && canAnnotate && side === 1) actions.push({ label: blame ? '关闭 Git Blame 注解' : '使用 Git Blame 注解', icon: 'history',
     run: () => send({ type: 'blame', version: generation }) });
   if (comments.doc?.commentContext) actions.push({ label: '添加本地笔记', icon: 'comment', run: () => comments.begin(side) });
-  blameMenu.showEditor(actions, { left: event.event.posx, right: event.event.posx, top: event.event.posy, bottom: event.event.posy });
+  if (comments.doc?.commentContext) actions.push({ label: '查看本地笔记', icon: 'comment', run: () => comments.openDrawer() });
+  const menuVersion = generation;
+  blameMenu.showEditor(actions.map(action => ({ ...action, run: () => { if (menuVersion === generation && !loading) action.run(); } })),
+    { left: event.event.posx, right: event.event.posx, top: event.event.posy, bottom: event.event.posy });
 }));
+markdown.host.addEventListener('contextmenu', event => {
+  if (!markdown.active || loading) return;
+  event.preventDefault(); event.stopPropagation();
+  const menuVersion = generation;
+  blameMenu.showEditor([{ label: '查看 Markdown 源码', icon: 'file', run: () => markdown.activate(false, true) },
+    { label: '文件历史', icon: 'history', run: () => send({ type: 'source-history', version: menuVersion }) }]
+    .map(action => ({ ...action, run: () => { if (menuVersion === generation && !loading && markdown.active) action.run(); } })),
+    { left: event.clientX, right: event.clientX, top: event.clientY, bottom: event.clientY });
+});
 
 function blockRanges(block) {
   return panes.map((pane, side) => {
@@ -421,7 +438,7 @@ let displayedDiffKey = null;
 let displayedSource = null, displayedSourceTab = null, sourcePublished = null;
 const textEditing = new SourceEditing({createModel: (text, language) => monaco.editor.createModel(text,language), getVersion: () => generation, changed: updateTextEditing});
 const saveButton = document.getElementById('source-save'), saveStatus = document.getElementById('source-save-state');
-let markdownEditTimer;
+let markdownEditTimer, editorStatusVersion = -2, editorStatusText;
 function requestTextSave() {
   const s=textEditing.active;if(loading || !s || !s.info.canEdit || s.busy || composingSearch)return;
   send({type:'source-save',id:s.id,version:generation});
@@ -436,6 +453,11 @@ function updateTextEditing() {
   saveButton.title=/Mac/.test(navigator.platform)?'保存文件 · ⌘S':'保存文件 · Ctrl+S';
   saveStatus.textContent=s?(s.error || s.readOnlyReason || (s.busy?'正在保存…':s.info.fingerprint!==s.disk?'磁盘已变化 · 草稿保留':dirty?'未保存':'已保存')+` · UTF-8${s.info.bom?' BOM':''} · ${s.info.newline}`):(sourcePublished?.editing?.reason??'');
   saveStatus.title=saveStatus.textContent;saveStatus.classList.toggle('attention',!!s&&(dirty||!!s.error||s.info.fingerprint!==s.disk));
+  const statusText=saveStatus.textContent.slice(0,1024);
+  if(generation>=0 && (editorStatusVersion!==generation || editorStatusText!==statusText)) {
+    editorStatusVersion=generation;editorStatusText=statusText;
+    send({type:'editor-status',version:generation,text:editorStatusText});
+  }
   if(s)send({type:'source-edit-state',id:s.id,version:generation,editable:!!s.info.canEdit&&!s.readOnlyReason,dirty});
   if(s && textEditing.unsafe(s)) {
     canAnnotate=false;blame=null;document.body.classList.remove('blame-mode');blameMenu.close();renderBlame();
