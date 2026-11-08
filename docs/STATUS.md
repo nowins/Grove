@@ -1,6 +1,10 @@
-# Preview 6 发布准备（2026-11-08）
+# Preview 6 已发布（2026-11-08）
 
-用户已授权发布 GitHub Release。远端已核对：Preview 5 为最新预发布，Preview 6 尚无标签或 Release；当前版本元数据为 `0.1.0-preview.6`、MacBundleVersion 6。因此提交本次界面修订并以该版本重新运行六平台 CI，核对同一准确提交的测试、包与 SHA-256 后发布，保留此前版本。当前本地构建与自动化结果如下，尚不能作为六平台新版本已通过的证据。
+已按用户授权发布 [Grove 0.1.0 Preview 6](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.6)，准确标签和全部二进制来源为 `e725943262251d8669beba8dccbed7f230c997b3`，包含下述界面修订。该提交的 [CI 42467241304](https://github.com/nowins/Grove/actions/runs/42467241304) 六平台全部通过：每平台 Core **974/974**、Editor **169/169**，零跳过，构建零警告／错误；Windows 安装、重装、卸载及用户文件保留，Mac DMG／签名／复制检查，Linux 归档／执行位检查均成功。Mac 原生引擎和合成 AppKit 探针仍不等同于人工 GUI 验收。
+
+六份应用归档的 **1,558** 个清单文件已逐一核对哈希、许可证与资源，程序集内均含上述准确提交；Mac 的 239 个 AppleDouble 元数据文件在各自归档内保留。发布共 **12** 个资产，包括六平台应用包、SHA256SUMS.txt 和 BUILD-INFO.json；上传后逐项核对 GitHub 服务端摘要，再以不带认证的请求重新下载全部资产，哈希和大小全部一致。首轮部分普通下载 URL 返回网络 504，Apple Silicon DMG／app 直接链接已通过；其余改用公开 asset API 的二进制响应完成匿名核验，不把首次网络失败计为通过。
+
+该版本为预发布，未标为稳定 Latest，Preview 1–5 的标签／资产保留。来源、签名和已知阅读限制写入 Release 说明与 BUILD-INFO；完整材料在忽略的 `validation/2026-11-08-release-preview6/`。此后发布状态提交只改文档，Release 标签和二进制继续指向上述已验证提交；Windows／Mac 物理输入、IME、Retina／多屏及新侧栏／底部状态栏完整实机绘制仍待验收。
 
 # 阅读区简化与空态调整（2026-11-08，本地验证通过）
 

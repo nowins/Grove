@@ -2,7 +2,7 @@
 
 ## 0.1.0 Preview 6
 
-发布目标为 `v0.1.0-preview.6`，仅使用同一准确提交、六平台成功 CI 的普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1`、`v0.1.0-preview.2` 、`v0.1.0-preview.3` 、`v0.1.0-preview.4` 和 `v0.1.0-preview.5` 保留，不覆盖其标签或资产。
+已发布 [`v0.1.0-preview.6`](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.6)，来源为 `e725943262251d8669beba8dccbed7f230c997b3`，仅使用该准确提交的 [六平台成功 CI 42467241304](https://github.com/nowins/Grove/actions/runs/42467241304) 普通 self-contained 构建。安装包和 apphost 均使用 Grove；内部命名空间、Core 程序集及已有用户数据目录仍保留兼容标识。此前 `v0.1.0-preview.1`、`v0.1.0-preview.2` 、`v0.1.0-preview.3` 、`v0.1.0-preview.4` 和 `v0.1.0-preview.5` 保留，不覆盖其标签或资产。
 
 | 平台 | 分发内容 | 自动验证 |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ macOS 包标识为 `io.github.nowins.grove`，CFBundleExecutable 为 Grove，内
 
 外部依赖仍为 Git，Windows 另需 WebView2 Runtime；安装包不静默安装这些依赖。macOS Finder 的 PATH 可能与终端不同。Preview 4 提供匿名更新检查与可取消后台下载，默认关闭自动检查和后台下载，安装始终需要确认；macOS 确认后只打开 DMG，由用户自行替换。仍未提供受信任发行证书签名或完整六平台人工 GUI 验收。
 
-本次从当前 main 提交已完成的阅读区与工具侧栏简化，连同文件／内容搜索、阅读位置导航、连续 Diff、Windows ARM64 路径状态修正和既有联合功能发布。Preview 6 此前仅准备版本号，尚无已发布标签／资产，因此使用现有 `preview.6`／Mac 构建号 6，不覆盖 Preview 1–5。发布提交必须包含本次界面源码及文档，等它自身的六平台 CI 全部通过后再建准确标签，不能复用较早开发包冒充新界面。后端性能回归工具属于开发验证，不宣称 GUI 提速；旧引用释放也不能宣称为整体内存或工作集收益。
+本次发布已完成的阅读区与工具侧栏简化，连同文件／内容搜索、阅读位置导航、连续 Diff、Windows ARM64 路径状态修正和既有联合功能。使用此前准备的 `preview.6`／Mac 构建号 6，准确标签指向上述六平台验证提交，未复用较早开发包冒充新界面。每平台 Core 974/974、Editor 169/169，零跳过；六份归档的 1,558 个清单文件、12 个发布资产的服务端摘要和匿名重下载均已核对，详见 STATUS。后端性能回归工具属于开发验证，不宣称 GUI 提速；旧引用释放也不能宣称为整体内存或工作集收益。
 
 已知阅读边界保留在发布说明：仓库刷新使连续 Diff 失效，需要重新打开；F7／上一处差异仍仅在当前完整文件内循环。当前 Windows 原生截图捕获失败，新工具侧栏／底部状态栏完整绘制和用户 Mac 实机布局仍待验收，不能用浏览器截图替代。上述限制不扩大成 IDE 能力。
 
