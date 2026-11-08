@@ -2,6 +2,12 @@
 
 Grove 当前是个人本地 Git 与代码查看器。核心在 src/GitX.Core，Avalonia 桌面壳在 src/GitX.Desktop，离线 Monaco／Tree-sitter 在 Editor 子目录，真实 Git 集成测试在 tests/GitX.Core.Tests。包版本和运行时图由项目及锁文件维护。
 
+## 空工作区与状态提示
+
+关闭最后一个文件或全部标签后，进入无文件标签的空工作区；不显示“文件：选择文件”及其关闭按钮，也不保留文件工具栏。中央保留当前提示，并提供当前已打开仓库的文件搜索／最近文件入口，使用已有命令与平台快捷键。入口通过主窗口的 WorkspaceActions 能力启用，独立 Diff／历史窗口不提供不支持的工作区操作；按钮核对文档代次、加载状态与 DOM 所有权，过期元素不发送命令。
+
+标签栏的回退文件标题只用于有实际文档路径且没有正式标签的窗口；没有文档路径的通知和连续 Diff 不伪装成文件。仍有真实文件标签时继续保留标签，重新打开文件恢复原工具栏。空工作区的焦点进入可用入口，不转移到已经无模型的编辑器；提示使用文本节点，继续沿用现有字号、主题与版本校验。
+
 文件监听分两层验证：原生测试要求实际写入路径被失效，并以通知刷新真实 Git 状态；不假定原位写入只有 Changed 通知。macOS 的 [FSEvents 会合并相邻事件](https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/TechnologyOverview/TechnologyOverview.html)，runner 已观测到 `FileMode.Open` 写入同时收到 Changed 与 Created，完整刷新是正确回退。失败附带原生事件与刷新批次。增量路径、混合元数据与结构事件的批次规则另用 internal 事件输入验证，仅关闭原生事件源，保留真实定时器、Git 索引和忽略规则；严格断言纯内容保留路径、元数据／结构事件完整刷新。不按平台跳过，也不把允许安全回退表述为 Mac 增量性能已验收。
 
 ## 全量／增量状态一致性

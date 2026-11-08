@@ -33,6 +33,7 @@ export class SourceTabs {
   }
   begin(toolbar, doc, capture) {
     if (this.displayedId) { const state = capture(); if (state) this.views.set(this.displayedId, state); }
+    this.hasDocument = !!doc.path;
     this.update(toolbar);
     this.displayedId = doc.isNotice ? null : this.activeId;
     return !doc.preserveView && !doc.revealLine ? this.views.get(this.displayedId) : null;
@@ -74,7 +75,9 @@ export class SourceTabs {
     this.activeId = toolbar?.activeSourceTabId;
     const focused = document.activeElement.closest('[role=tab]')?.dataset.id;
     const focusInTabs = this.host.contains(document.activeElement);
-    this.host.hidden = !tabs.length; this.fallback.hidden = !this.host.hidden;
+    this.host.hidden = !tabs.length; this.fallback.hidden = !!tabs.length || !this.hasDocument;
+    const bar = document.getElementById('editor-tab');
+    if (bar) bar.hidden = !tabs.length && !this.hasDocument;
     this.host.replaceChildren();
     for (const tab of tabs) {
       const title = tab.path.slice(tab.path.lastIndexOf('/') + 1) + (tab.label ? ` (${tab.label}${tab.revision ? ' · ' + tab.revision.slice(0, 8) : ''})` : tab.revision ? ` (${tab.revision.slice(0, 8)})` : '');

@@ -36,6 +36,8 @@ import { defaultBlameView, blameFields, blameFieldText } from './blame-fields.js
 import { canReuseSourceModel } from './source-update.js';
 import { DocumentTransport } from './document-transport.js';
 import { SourceTabs } from './source-tabs.js';
+import { WorkspaceNotice } from './workspace-notice.js';
+import './workspace-notice.css';
 import { SourceEditing, renderedModelCount } from './source-editing.js';
 import { SourceSymbols } from './source-symbols.js';
 
@@ -94,6 +96,7 @@ let scrollMap = null, expectedScrollTop = [null, null];
 let sourceMode = false, sourcePath = '', readingEnabled = false;
 let readingPublishedSide = -1, readingPublishedVersion = -1;
 const send = value => window.invokeCSharpAction?.(JSON.stringify(value));
+const workspaceNotice = new WorkspaceNotice({ host: document.getElementById('document-notice'), tools: document.getElementById('editor-tools'), getVersion: () => generation, send, isReady: () => !loading });
 const continuousDiff = new ContinuousDiff({ host: document.getElementById('continuous-diff'), send });
 document.getElementById('continuous-open').addEventListener('click', () => send({ type: 'continuous-diff', action: 'open', version: generation }));
 installNativeBridge(window, () => {
@@ -520,8 +523,7 @@ function display(doc, toolbar) {
   scrollMap = plan ? new DiffScrollMap(plan, lineHeight, topPadding) : null; expectedScrollTop = [null, null];
   updateMinimaps();
   const notice = !!doc.isNotice;
-  document.getElementById('document-notice').hidden = !notice;
-  document.getElementById('document-notice').textContent = notice ? doc.text : '';
+  workspaceNotice.update(doc, toolbar);
   document.getElementById('workspace').hidden = notice;
   document.body.classList.toggle('diff-mode', !!plan);
   marks.forEach(mark => mark.clear()); activeMarks.forEach(mark => mark.clear());
@@ -853,7 +855,7 @@ window.gitx = { load, navigate, readingPosition, goToLine: () => goToLine.open()
   },
   openNotes: () => { if (markdown.active) markdown.activate(false, true); sourceSymbols.close(false); comments.openDrawer(); },
   setInclusion: state => { if (state.version !== generation) return; included = new Set(state.lines.map(line => `${line.side}:${line.line}`)); fileIncluded = state.included; inclusionBusy = !!state.busy; updateCounter(); scheduleConnectors(); },
-  refreshComments: () => comments.refresh(), openCommentDraft: id => { if (markdown.active) markdown.activate(false, true); comments.focusDraft(id); }, focus: () => continuousDiff.manifest ? continuousDiff.focus() : markdown.active ? markdown.host.focus() : panes[activePane].focus() };
+  refreshComments: () => comments.refresh(), openCommentDraft: id => { if (markdown.active) markdown.activate(false, true); comments.focusDraft(id); }, focus: () => continuousDiff.manifest ? continuousDiff.focus() : workspaceNotice.active ? workspaceNotice.focus() : markdown.active ? markdown.host.focus() : panes[activePane].focus() };
 const doubleShift = new DoubleShiftGesture();
 let composingSearch = false;
 const shiftAllowed = event => !composingSearch && !event.isComposing && event.keyCode !== 229 && !event.ctrlKey && !event.altKey && !event.metaKey

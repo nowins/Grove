@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { SourceTabs } from './source-tabs.js';
 
 function fixture(isMac = false, count = 3) {
-  const dom = new JSDOM('<!doctype html><body><button id="outside">outside</button><div id="source-tabs"></div><div id="file-path"></div><div id="workspace"></div></body>');
+  const dom = new JSDOM('<!doctype html><body><button id="outside">outside</button><div id="editor-tab"><div id="source-tabs"></div><div id="file-path"></div></div><div id="workspace"></div></body>');
   globalThis.window = dom.window; globalThis.document = dom.window.document;
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   const state = { version: 7, ready: true }, messages = [];
@@ -22,6 +22,32 @@ function fixture(isMac = false, count = 3) {
   const context = (i,extra={}) => button(i).dispatchEvent(new dom.window.MouseEvent('contextmenu',{button:2,clientX:180,clientY:22,bubbles:true,cancelable:true,...extra}));
   return {dom,state,messages,tabs,control,update,item,button,menuButton,key,context,dispose(){control.dispose();dom.window.close();delete globalThis.window;delete globalThis.document;delete globalThis.ResizeObserver;}};
 }
+
+test('closing the last document leaves no fallback file tab or tab bar',()=>{
+  const t=fixture(false,1);
+  try {
+    t.control.begin({sourceTabs:t.tabs,activeSourceTabId:t.tabs[0].id},{path:t.tabs[0].path},()=>null);
+    t.control.begin({sourceTabs:[]},{path:'',isNotice:true},()=>null);
+    assert.equal(t.control.host.hidden,true);
+    assert.equal(t.control.fallback.hidden,true);
+    assert.equal(document.getElementById('editor-tab').hidden,true);
+    t.update([]);
+    assert.equal(t.control.fallback.hidden,true);
+    t.control.begin({sourceTabs:t.tabs,activeSourceTabId:t.tabs[0].id},{path:t.tabs[0].path},()=>null);
+    assert.equal(document.getElementById('editor-tab').hidden,false);
+    assert.equal(t.control.host.hidden,false);
+  } finally { t.dispose(); }
+});
+
+test('standalone documents retain a real fallback tab while pathless notices do not',()=>{
+  const t=fixture(false,0);
+  try {
+    t.control.begin({}, {path:'actual.txt'},()=>null);
+    assert.equal(t.control.fallback.hidden,false);
+    t.control.begin({}, {path:'',isNotice:true},()=>null);
+    assert.equal(t.control.fallback.hidden,true);
+  } finally { t.dispose(); }
+});
 
 for (const mac of [false,true]) test(`${mac?'Mac':'Windows'} right-click targets the clicked background tab and cancel leaves the active file unchanged`,()=>{
   const t=fixture(mac);
