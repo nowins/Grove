@@ -48,10 +48,10 @@ public sealed class RefreshTests
         Assert.Equal(previous, count);
     }
 
-    private static async Task Until(Func<bool> condition)
+    private static async Task Until(Func<bool> condition, Func<string>? diagnostics = null)
     {
         for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(25);
-        Assert.True(condition());
+        Assert.True(condition(), diagnostics?.Invoke());
     }
 
     [Fact]
@@ -95,14 +95,24 @@ public sealed class RefreshTests
         using var repo = new TestRepository();
         repo.Write("a.txt", "base"); repo.Commit("base");
         var changes = new System.Collections.Concurrent.ConcurrentQueue<RepositoryChangeSet>();
+        var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var native = new FileSystemWatcher(repo.Root) { IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size };
+        void Record(object sender, FileSystemEventArgs e) => events.Enqueue($"{e.ChangeType}:{e.Name}");
+        native.Changed += Record; native.Created += Record; native.Deleted += Record; native.Renamed += Record;
+        native.EnableRaisingEvents = true;
         using var watcher = new RepositoryWatcher(repo.Root, change => changes.Enqueue(change));
         // FSEvents can coalesce the fixture's creation/commit with the first
         // write. Drain that startup batch before testing content-only hints.
         repo.Write("a.txt", "watcher ready");
         await Until(() => !changes.IsEmpty);
-        await Task.Delay(500); changes.Clear();
-        repo.Write("a.txt", "content");
-        await Until(() => changes.Any(change => !change.IsFull && change.Paths.Contains("a.txt")));
+        await Task.Delay(500); changes.Clear(); events.Clear();
+        // Test an in-place edit, without WriteAllText's create/truncate mode
+        // or the fixture helper's directory creation calls.
+        using (var stream = new FileStream(Path.Combine(repo.Root, "a.txt"), FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+        { stream.Write("content"u8); stream.SetLength(7); stream.Flush(true); }
+        await Until(() => changes.Any(change => !change.IsFull && change.Paths.Contains("a.txt")),
+            () => $"Native events: {string.Join(", ", events)}; batches: {string.Join(", ", changes.Select(c => c.IsFull ? "Full" : string.Join("/", c.Paths)))}");
         Assert.Contains(changes, change => !change.IsFull && change.Paths.Contains("a.txt"));
         await Task.Delay(500); changes.Clear();
         repo.Write("a.txt", "staged"); repo.Git("add", "a.txt");
