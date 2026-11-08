@@ -4,6 +4,10 @@
 
 Mac 验收应从本次开发构建对应的 Actions 运行下载 `desktop-osx-arm64` 或 `desktop-osx-x64`，按完整提交核对来源；既有 Release 不自动包含这些新功能。本次交付不修改既有 Release 或版本标签。远端构建、自动化及用户 Mac 实机验收分别报告；下文 Windows 与浏览器的既有结果不能替代 Mac 验收。
 
+**Mac 验收包已就绪：** 功能提交 `d847487c32a4a8a42a6faa58dd612959648b603e` 的 [CI 42443550219](https://github.com/nowins/Grove/actions/runs/42443550219) 中，Apple Silicon／Intel 两架构均完成原生构建、Core **962/962**、Editor **161/161**（零跳过）、WebKit／标题栏探针及 DMG 包检查。已下载两份 results 报告核对：只读挂载、含空格路径复制与 ad-hoc 签名完整性通过；物理输入、IME、Retina／多屏及完整人工 GUI 仍未验收。下载 [Apple Silicon 包](https://github.com/nowins/Grove/actions/runs/42443550219/artifacts/13602249396) 或 [Intel 包](https://github.com/nowins/Grove/actions/runs/42443550219/artifacts/13602293210)，外层 ZIP 内含 DMG、app.tar.gz 与 SHA256SUMS，保留 14 天且 Actions 下载需要 GitHub 登录。包版本为 Preview 6，但来源是上述功能提交；不要与已有 Release 资产混淆。后续本次状态记录提交只改文档，不改变验收包应用源码。
+
+该轮 Windows x64、Linux x64／ARM64 也通过；Windows ARM64 Core **961/962**，`IncrementalRepositoryTests` 的中文及方括号路径样本在全量扫描与增量状态之间不一致（全量为删除＋未跟踪，增量为修改），**尚未修复**。因此本轮为五平台成功，不宣称六平台全绿，也不创建 Release／更新版本标签。Mac 验收包交付不抹去这个待处理项。两份 Mac 原始报告和 Windows ARM64 失败日志均在忽略的 `validation/2026-11-08-github-delivery/`。
+
 首次推送为 `59962b6`，[CI 42441886795](https://github.com/nowins/Grove/actions/runs/42441886795) 的 Mac 两架构均为 Editor **161/161**、Core **960/961**：文件监听测试在夹具刚创建／提交后的首批通知收到完整刷新，却立即要求内容路径。该运行未生成 Mac 应用包，不用于验收。后续仅调整测试启动握手并排空首批通知，稳定期内容路径及索引完整刷新的原断言继续执行；产品监听实现及安全回退未改。Windows x64 修复后专项 **8/8**、零跳过；Mac 的修复结果仍须以新提交 CI 为准，不把本地 Windows 结果当成 Mac 通过。首轮失败日志与本地专项 TRX 在忽略的 `validation/2026-11-08-github-delivery/` 保留。
 
 `006a9fe` 的 [CI 42442467696](https://github.com/nowins/Grove/actions/runs/42442467696) 中 Apple Silicon 同一断言仍失败，说明仅启动握手不足，不能据此确定事件来源。进一步将纯内容步骤改为 `FileMode.Open` 原位写入，排除夹具助手的目录创建与 create/truncate 操作；失败诊断记录原生事件及刷新批次，继续严格要求内容路径和索引完整刷新。Windows x64 监听专项再次 **8/8**、零跳过；产品代码不变，Mac 以该后续测试提交的完整 CI 为准。
