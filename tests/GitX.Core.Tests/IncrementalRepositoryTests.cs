@@ -21,6 +21,8 @@ public sealed class IncrementalRepositoryTests
         foreach (var text in new[] { "changed\n", "changed again\n", "staged\n" })
         {
             repo.Write(path, text);
+            Assert.Equal($"{(text == "staged\n" ? "M " : "MM")} {path}\0",
+                repo.Git("--no-optional-locks", "--literal-pathspecs", "status", "--porcelain=v1", "-z", "--", path));
             var result = await reader.RefreshAsync(snapshot, RepositoryChangeSet.Content([path]));
             Assert.False(result.Changes.IsFull);
             Assert.Same(snapshot.Files, result.Snapshot.Files);

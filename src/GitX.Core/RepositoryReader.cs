@@ -48,20 +48,21 @@ public sealed partial class RepositoryReader : IRepositoryReader, IDisposable
             token.ThrowIfCancellationRequested();
             paths.Add(entry.Path);
         }
-        foreach (var entry in status)
+        foreach (var entry in ReconcileStatus(repo, status.Select(entry => new StatusReadEntry(
+            entry.FilePath, entry.State, entry.HeadToIndexRenameDetails?.OldFilePath, entry.IndexToWorkDirRenameDetails?.OldFilePath)).ToArray(), token))
         {
             token.ThrowIfCancellationRequested();
             if (entry.State.HasFlag(FileStatus.Conflicted))
-                changes.Add(new(entry.FilePath, ComparisonKind.Conflict, "冲突"));
+                changes.Add(new(entry.Path, ComparisonKind.Conflict, "冲突"));
             else
             {
                 if ((entry.State & IndexFlags) != 0)
-                    changes.Add(new(entry.FilePath, ComparisonKind.Index, StatusLabel(entry.State, true), entry.HeadToIndexRenameDetails?.OldFilePath));
+                    changes.Add(new(entry.Path, ComparisonKind.Index, StatusLabel(entry.State, true), entry.IndexOldPath));
                 if ((entry.State & WorkFlags) != 0)
-                    changes.Add(new(entry.FilePath, ComparisonKind.Worktree, StatusLabel(entry.State, false), entry.IndexToWorkDirRenameDetails?.OldFilePath));
+                    changes.Add(new(entry.Path, ComparisonKind.Worktree, StatusLabel(entry.State, false), entry.WorktreeOldPath));
             }
-            if (!entry.State.HasFlag(FileStatus.DeletedFromWorkdir)) paths.Add(entry.FilePath);
-            else paths.Remove(entry.FilePath);
+            if (!entry.State.HasFlag(FileStatus.DeletedFromWorkdir)) paths.Add(entry.Path);
+            else paths.Remove(entry.Path);
         }
         token.ThrowIfCancellationRequested();
         if (indexToken != RepositoryState.Token(root, [], token)) throw new IOException("读取期间索引或 HEAD 发生变化，请刷新后重试。");
