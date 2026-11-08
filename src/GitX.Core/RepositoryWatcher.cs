@@ -18,10 +18,13 @@ public sealed class RepositoryWatcher : IDisposable
 
     public RepositoryWatcher(string root, Action changed) : this(root, _ => changed()) { }
 
-    public RepositoryWatcher(string root, Action<RepositoryChangeSet> changed)
+    public RepositoryWatcher(string root, Action<RepositoryChangeSet> changed) : this(root, changed, true) { }
+
+    internal RepositoryWatcher(string root, Action<RepositoryChangeSet> changed, bool watchFileSystem)
     {
         _root = root; _changed = changed;
         _timer = new Timer(_ => CheckBatch(), null, Timeout.Infinite, Timeout.Infinite);
+        if (!watchFileSystem) return;
         try
         {
             using var repo = new Repository(root);
@@ -64,7 +67,7 @@ public sealed class RepositoryWatcher : IDisposable
         _watchers.Add(watcher); watcher.EnableRaisingEvents = true;
     }
 
-    private void Signal(string? path, bool structural = false)
+    internal void Signal(string? path, bool structural = false)
     {
         lock (_gate)
         {

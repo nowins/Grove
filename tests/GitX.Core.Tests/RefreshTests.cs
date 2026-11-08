@@ -90,10 +90,12 @@ public sealed class RefreshTests
     }
 
     [Fact]
-    public async Task Watcher_preserves_content_paths_and_promotes_mixed_metadata_batches_to_full()
+    public async Task Native_watcher_invalidates_written_paths_and_observes_index_changes()
     {
         using var repo = new TestRepository();
         repo.Write("a.txt", "base"); repo.Commit("base");
+        using var reader = new RepositoryReader();
+        var snapshot = await reader.OpenAsync(repo.Root);
         var changes = new System.Collections.Concurrent.ConcurrentQueue<RepositoryChangeSet>();
         var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
         using var native = new FileSystemWatcher(repo.Root) { IncludeSubdirectories = true,
@@ -111,12 +113,41 @@ public sealed class RefreshTests
         // or the fixture helper's directory creation calls.
         using (var stream = new FileStream(Path.Combine(repo.Root, "a.txt"), FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
         { stream.Write("content"u8); stream.SetLength(7); stream.Flush(true); }
-        await Until(() => changes.Any(change => !change.IsFull && change.Paths.Contains("a.txt")),
+        // Native streams may report Created as well as Changed even for an
+        // in-place write. A full scan is the required safe response then.
+        await Until(() => changes.Any(change => change.Touches("a.txt")),
             () => $"Native events: {string.Join(", ", events)}; batches: {string.Join(", ", changes.Select(c => c.IsFull ? "Full" : string.Join("/", c.Paths)))}");
-        Assert.Contains(changes, change => !change.IsFull && change.Paths.Contains("a.txt"));
+        var refresh = await reader.RefreshAsync(snapshot, changes.Last());
+        Assert.Equal("content", File.ReadAllText(Path.Combine(repo.Root, "a.txt")));
+        Assert.Contains(refresh.Snapshot.Changes, change => change.Path == "a.txt" && change.Kind == ComparisonKind.Worktree);
         await Task.Delay(500); changes.Clear();
         repo.Write("a.txt", "staged"); repo.Git("add", "a.txt");
         await Until(() => changes.Any(change => change.IsFull));
+    }
+
+    [Fact]
+    public async Task Watcher_preserves_content_paths_and_promotes_mixed_metadata_batches_to_full()
+    {
+        using var repo = new TestRepository();
+        repo.Write("a.txt", "base"); repo.Commit("base");
+        var changes = new System.Collections.Concurrent.ConcurrentQueue<RepositoryChangeSet>();
+        // Keep the real batch timer and Git ignore/index checks, while controlling
+        // the event hints instead of assuming an OS-specific notification shape.
+        using var watcher = new RepositoryWatcher(repo.Root, change => changes.Enqueue(change), watchFileSystem: false);
+        repo.Write("a.txt", "content"); watcher.Signal("a.txt");
+        await Until(() => !changes.IsEmpty);
+        var content = Assert.Single(changes);
+        Assert.False(content.IsFull); Assert.Equal(new[] { "a.txt" }, content.Paths);
+
+        changes.Clear();
+        repo.Write("a.txt", "staged"); repo.Git("add", "a.txt");
+        watcher.Signal("a.txt"); watcher.Signal(null);
+        await Until(() => !changes.IsEmpty);
+        Assert.True(Assert.Single(changes).IsFull);
+
+        changes.Clear(); watcher.Signal("a.txt", structural: true);
+        await Until(() => !changes.IsEmpty);
+        Assert.True(Assert.Single(changes).IsFull);
     }
 
     [Fact]

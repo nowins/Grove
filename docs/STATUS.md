@@ -8,6 +8,8 @@ Mac 验收应从本次开发构建对应的 Actions 运行下载 `desktop-osx-ar
 
 `006a9fe` 的 [CI 42442467696](https://github.com/nowins/Grove/actions/runs/42442467696) 中 Apple Silicon 同一断言仍失败，说明仅启动握手不足，不能据此确定事件来源。进一步将纯内容步骤改为 `FileMode.Open` 原位写入，排除夹具助手的目录创建与 create/truncate 操作；失败诊断记录原生事件及刷新批次，继续严格要求内容路径和索引完整刷新。Windows x64 监听专项再次 **8/8**、零跳过；产品代码不变，Mac 以该后续测试提交的完整 CI 为准。
 
+`658f70c` 的 [CI 42442900573](https://github.com/nowins/Grove/actions/runs/42442900573) 在 Apple Silicon 记录到原位写入的真实通知为 `Changed:a.txt, Created:a.txt`，刷新批次为 Full。该证据说明原生测试把文件调用方式等同于唯一 Changed 事件的假设不成立，前两次仅调整启动／写入方式仍未通过，不计为修复成功。现原生测试验证通知触及真实修改路径，并用它刷新实际 Git 状态；另新增确定性批次测试，仅关闭原生事件源，保留真实定时器、索引与忽略检查，严格断言纯内容保留路径、混合元数据及结构提示产生完整刷新。公共构造入口仍启用原生监听，运行时策略不变，未按平台跳过测试或取消安全回退。Windows x64 最终完整 Core **962/962**、零跳过；日志及 TRX 在上述忽略目录。最终 Mac 构建与包检查以本次事件契约修正提交的准确 CI 为准，Mac 物理输入／IME、Retina／多屏与完整人工 GUI 仍交由用户验收。
+
 ## 历史发布准备：0.1.0 Preview 6（2026-11-06）
 
 已核对 main `2e3bf00ac2996536e0b5b40060d933acdd7dc351`，包含 PR #1 引用生命周期修复、PR #2 联合功能和 PR #3 macOS 标题栏安全区修复。该基线的 [Desktop CI 42090785194](https://github.com/nowins/Grove/actions/runs/42090785194) 六平台成功；其内部版本仍为 Preview 5，不能作为 Preview 6 分发。新版本必须使用版本提交自身的完整 CI 与包检查，来源/结果记录于 Release 的 BUILD-INFO.json 和 SHA256SUMS.txt。

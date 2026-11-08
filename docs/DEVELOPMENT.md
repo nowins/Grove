@@ -2,7 +2,7 @@
 
 Grove 当前是个人本地 Git 与代码查看器。核心在 src/GitX.Core，Avalonia 桌面壳在 src/GitX.Desktop，离线 Monaco／Tree-sitter 在 Editor 子目录，真实 Git 集成测试在 tests/GitX.Core.Tests。包版本和运行时图由项目及锁文件维护。
 
-文件监听集成测试先以一次可观察写入完成启动握手并排空首批通知，再断言稳定期的按路径增量通知。纯内容场景用 `FileMode.Open` 对已有文件原位写入，不混入夹具助手的目录创建或 `WriteAllText` 的 create/truncate；失败附带原生事件与刷新批次。macOS 的 [FSEvents 会合并相邻事件](https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/TechnologyOverview/TechnologyOverview.html)，不能从一次写文件调用推定只有 Changed 通知；不确定、结构与元数据变化仍必须允许产品完整刷新。普通内容与索引变化的原断言继续执行，不按平台跳过。
+文件监听分两层验证：原生测试要求实际写入路径被失效，并以通知刷新真实 Git 状态；不假定原位写入只有 Changed 通知。macOS 的 [FSEvents 会合并相邻事件](https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/TechnologyOverview/TechnologyOverview.html)，runner 已观测到 `FileMode.Open` 写入同时收到 Changed 与 Created，完整刷新是正确回退。失败附带原生事件与刷新批次。增量路径、混合元数据与结构事件的批次规则另用 internal 事件输入验证，仅关闭原生事件源，保留真实定时器、Git 索引和忽略规则；严格断言纯内容保留路径、元数据／结构事件完整刷新。不按平台跳过，也不把允许安全回退表述为 Mac 增量性能已验收。
 
 ## 连续 Diff 阅读（2026-11-07）
 
