@@ -6,7 +6,7 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <Deterministic>true</Deterministic>
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>preview.5</VersionSuffix>
-    <MacBundleVersion>5</MacBundleVersion>
+    <VersionSuffix>preview.6</VersionSuffix>
+    <MacBundleVersion>6</MacBundleVersion>
   </PropertyGroup>
 </Project>

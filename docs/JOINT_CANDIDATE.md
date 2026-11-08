@@ -1,5 +1,9 @@
 # Linux-first joint candidate
 
+## Preview 6 release preparation (2026-11-06)
+
+Main `2e3bf00ac2996536e0b5b40060d933acdd7dc351` includes the merged lifecycle fix (PR #1), this joint integration (PR #2), and the subsequent macOS titlebar fix (PR #3). The exclusions below describe the original candidate; the merged titlebar fix remains included in Preview 6. No unmerged performance, Worktree-list or UI development is imported. The lifecycle regressions do not measure overall memory gains. Exact version-commit CI and release manifests supersede candidate build results for distribution; native GUI acceptance limits remain.
+
 Original candidate base: `205678ea396c131d11ca5f08780d97bd6f847431`. The sections below retain the original candidate validation record.
 
 ## Main integration verification (2026-11-05)
