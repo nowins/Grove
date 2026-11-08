@@ -54,6 +54,12 @@ export class ContinuousDiff {
       body.append(rows); item.body = body; item.rows = rows; item.sides = sides;
       const footer = node('div', 'cd-footer'); const message = node('span', '', '按需读取磁盘或固定修订；不含未保存编辑。');
       const retry = node('button', '', '重新读取'); retry.addEventListener('click', () => {
+        if (this.manifest !== manifest || !this.items.includes(item)) return;
+        item.controller?.abort(); item.controller = null;
+        if (item.retryTimer) { clearTimeout(item.retryTimer); this.timers.delete(item.retryTimer); item.retryTimer = null; }
+        // Preserve scroll geometry, but release the previous capture and its
+        // line links before a replacement can fail or finish out of order.
+        item.rows.replaceChildren(); item.sides.replaceChildren(); item.range = ''; item.message.textContent = '等待重新读取…';
         item.data = null; item.bytes = 0; item.error = ''; item.evictedAt = -1; item.retries = 0; item.retryAt = 0; this.scrollEpoch++; this.schedule();
       }); footer.append(message, retry); item.message = message;
       section.append(header, sides, body, footer); this.host.append(section); return item;
@@ -115,8 +121,8 @@ export class ContinuousDiff {
         const seconds = Number(response.headers?.get('Retry-After'));
         const delay = Number.isFinite(seconds) && seconds > 0 ? Math.min(5000, seconds * 1000) : this.retryDelay;
         item.retryAt = performance.now() + delay; item.message.textContent = '读取繁忙，稍后自动重试…';
-        const timer = setTimeout(() => { this.timers.delete(timer); if (epoch === this.epoch) this.schedule(); }, delay);
-        this.timers.add(timer); return;
+        const timer = setTimeout(() => { this.timers.delete(timer); if (item.retryTimer === timer) item.retryTimer = null; if (epoch === this.epoch) this.schedule(); }, delay);
+        item.retryTimer = timer; this.timers.add(timer); return;
       }
       if (!response.ok) throw new Error(response.status === 404 ? '比较范围已失效，请重新打开连续 Diff。' : '读取失败，请重试。');
       const data = await response.json();

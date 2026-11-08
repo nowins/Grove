@@ -81,14 +81,40 @@ test('HTTP errors and wrong-scope bodies expose retry without caching poisoned r
     t.host.querySelector('.cd-footer button').click();await t.flush();assert.match(t.host.textContent,/文件响应与当前比较范围不符/);assert.equal(t.control.items[0].data,null);
   }finally{t.dispose();}
 });
+test('manual reread clears old code and side labels even if the replacement fails',async()=>{
+  const t=fixture();try {
+    t.show(manifest('scope',1));await t.flush();const item=t.control.items[0];
+    assert.ok(item.rows.childElementCount);assert.ok(item.sides.childElementCount);const height=item.rows.style.height;
+    t.control.fetchFile=async()=>{throw new Error('network failure');};
+    t.host.querySelector('.cd-footer button').click();
+    assert.equal(item.rows.childElementCount,0);assert.equal(item.sides.childElementCount,0);
+    assert.equal(item.rows.style.height,height);assert.equal(item.data,null);assert.equal(item.bytes,0);
+    await t.flush();assert.match(item.message.textContent,/network failure/);assert.equal(item.rows.childElementCount,0);
+    t.control.fetchFile=async(owner,index)=>({ok:true,json:async()=>({...file(owner,index),rows:[{oldLine:1,newLine:1,oldText:'fresh old',newText:'fresh new',kind:'modified'}]})});
+    t.host.querySelector('.cd-footer button').click();await t.flush();assert.match(item.rows.textContent,/fresh new/);
+  }finally{t.dispose();}
+});
+test('manual reread aborts an in-flight request and refuses its late body',async()=>{
+  const pending=[];const t=fixture((owner,index,signal)=>new Promise(resolve=>pending.push({owner,index,signal,resolve})));
+  try {
+    t.show(manifest('scope',1));await t.flush(2);assert.equal(pending.length,1);
+    t.host.querySelector('.cd-footer button').click();assert.equal(pending[0].signal.aborted,true);await t.flush(2);
+    assert.equal(pending.length,2);assert.equal(t.control.active,2);
+    pending[1].resolve({ok:true,json:async()=>({...file(pending[1].owner,0),notice:'fresh capture'})});await t.flush();
+    const accepted=t.control.items[0].data;assert.equal(accepted.notice,'fresh capture');
+    pending[0].resolve({ok:true,json:async()=>({...file(pending[0].owner,0),notice:'obsolete capture'})});await t.flush();
+    assert.equal(t.control.items[0].data,accepted);assert.equal(t.control.active,0);
+  }finally{t.dispose();}
+});
 test('temporary server saturation retries without caching the busy response and close clears retry timers',async()=>{
   let attempts=0;const t=fixture((owner,index)=>++attempts===1?{ok:false,status:429}:{ok:true,json:async()=>file(owner,index)});
   try {
     t.control.retryDelay=5;t.show(manifest('scope',1));await t.flush(2);
     assert.equal(t.control.items[0].data,null);assert.equal(t.control.items[0].error,'');assert.match(t.host.textContent,/自动重试/);
     await new Promise(resolve=>setTimeout(resolve,10));await t.flush();assert.ok(t.control.items[0].data);assert.equal(attempts,2);
-    t.control.fetchFile=async()=>({ok:false,status:429});t.host.querySelector('.cd-footer button').click();await t.flush(2);
-    assert.equal(t.control.timers.size,1);t.control.close();assert.equal(t.control.timers.size,0);
+    t.control.retryDelay=1000;t.control.fetchFile=async()=>({ok:false,status:429});t.host.querySelector('.cd-footer button').click();await t.flush(2);
+    assert.equal(t.control.timers.size,1);t.host.querySelector('.cd-footer button').click();assert.equal(t.control.timers.size,0);
+    await t.flush(2);assert.equal(t.control.timers.size,1);t.control.close();assert.equal(t.control.timers.size,0);
   }finally{t.dispose();}
 });
 test('complete-Diff and old-side row links use exact captured identity and stale controls do nothing',async()=>{
