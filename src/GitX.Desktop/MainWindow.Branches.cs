@@ -16,15 +16,14 @@ public sealed partial class MainWindow
 {
     private sealed record BranchRow(BranchEntry? Branch, string Group);
 
-    private async void BranchesClicked(object? sender, RoutedEventArgs e)
+    private void BranchesClicked(object? sender, RoutedEventArgs e)
     {
         if (_model.Root is not { } root || _model.IsWriting || ToggleShellPopup(BranchButton)) return;
         var generation = _shellGeneration;
+        var repository = _model.RepositoryGeneration;
+        var session = new BranchMenuSession(root);
         try
         {
-            var context = await RepositoryActions.ReadAsync(root);
-            var worktrees = await WorktreeCatalog.ReadAsync(root);
-            if (_closed || _model.Root != root || generation != _shellGeneration || _model.IsWriting) return;
             var filter = new TextBox { PlaceholderText = "搜索分支名称…", Classes = { "search" } };
             AutomationProperties.SetName(filter, "搜索分支");
             var list = new ListBox { Background = Brushes.Transparent, BorderThickness = new(0), MaxHeight = Math.Clamp(Bounds.Height - 260, 170, 410) };
@@ -50,11 +49,19 @@ public sealed partial class MainWindow
             var flyout = new Flyout { Content = panel }; flyout.FlyoutPresenterClasses.Add("shell-popup"); flyout.FlyoutPresenterClasses.Add("branch-popup");
             filter.Margin = new(4,4,4,6);
             var empty = new TextBlock { Text = "没有匹配的分支", Classes = { "muted" }, Margin = new(8) };
+            var status = new TextBlock { Text = "正在读取分支…", Classes = { "muted" }, Margin = new(8), TextWrapping = TextWrapping.Wrap };
+            IReadOnlyList<BranchEntry> branches = [];
+            var loaded = false;
+            long page = 0;
             BranchEntry? lastTarget = null;
-            bool Valid() => !_closed && _model.Root == root && !_model.IsWriting;
+            Button retry = null!;
+            retry = ShellAction("重试", "RefreshIcon", () => _ = ReadBranchesAsync());
+            retry.IsVisible = false;
+            bool Valid() => !_closed && _model.Root == root && repository == _model.RepositoryGeneration &&
+                generation == _shellGeneration && ReferenceEquals(_shellPopup, flyout) && !_model.IsWriting;
             void Filter()
             {
-                var matches = context.Branches.Where(b => !(b.Remote && b.CanonicalName.EndsWith("/HEAD", StringComparison.Ordinal)) &&
+                var matches = branches.Where(b => !(b.Remote && b.CanonicalName.EndsWith("/HEAD", StringComparison.Ordinal)) &&
                     b.Name.Contains(filter.Text ?? "", StringComparison.OrdinalIgnoreCase)).ToArray();
                 var rows = new List<BranchRow>();
                 foreach (var remote in new[] { false, true })
@@ -65,19 +72,59 @@ public sealed partial class MainWindow
                 }
                 list.ItemsSource = rows;
                 list.SelectedItem = rows.FirstOrDefault(r => r.Branch == lastTarget) ?? rows.FirstOrDefault(r => r.Branch is not null);
-                empty.IsVisible = matches.Length == 0;
+                empty.IsVisible = loaded && matches.Length == 0;
             }
             filter.TextChanged += (_, _) => Filter();
             void ShowList()
             {
+                ++page; session.CancelActions();
                 panel.Children.Clear(); panel.Children.Add(filter);
-                panel.Children.Add(ShellAction("新建分支…", "PlusIcon", () => _ = ExecuteBranchActionAsync(context, BranchAction.Create, null), BranchActionAvailability.DisabledReason(context, BranchAction.Create, null)));
-                panel.Children.Add(new Separator()); panel.Children.Add(list); panel.Children.Add(empty);
-                if (context.Dirty || context.InOperation)
-                    panel.Children.Add(new TextBlock { Text = context.InOperation ? "当前有未完成的 Git 操作，可查看与比较分支。" : "有本地改动：切换、合并和变基前请先提交或 Stash。", TextWrapping = TextWrapping.Wrap, Foreground = (IBrush)this.FindResource("WarningBrush")!, Margin = new(8,4) });
+                panel.Children.Add(ShellAction("新建分支…", "PlusIcon", () => _ = LoadActionsAsync(null)));
+                panel.Children.Add(new Separator()); panel.Children.Add(list); panel.Children.Add(empty); panel.Children.Add(status); panel.Children.Add(retry);
                 Filter(); filter.Focus();
             }
-            void ShowActions(BranchEntry target)
+            async Task ReadBranchesAsync()
+            {
+                status.Text = "正在读取分支…"; status.IsVisible = true; retry.IsVisible = false;
+                try
+                {
+                    var result = await session.ReadAsync();
+                    if (!Valid()) return;
+                    branches = result; loaded = true; status.IsVisible = false; Filter();
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception error)
+                {
+                    if (!Valid()) return;
+                    status.Text = "分支读取失败：" + error.Message;
+                    retry.IsVisible = true;
+                }
+            }
+            async Task LoadActionsAsync(BranchEntry? target)
+            {
+                if (!Valid()) return;
+                var request = ++page;
+                lastTarget = target; panel.Children.Clear();
+                panel.Children.Add(ShellAction("← 所有分支", null, ShowList));
+                panel.Children.Add(new TextBlock { Text = target?.Name ?? "新建分支", FontWeight = FontWeight.SemiBold, Margin = new(8,4), TextWrapping = TextWrapping.Wrap });
+                panel.Children.Add(new TextBlock { Text = "正在检查工作区状态…", Classes = { "muted" }, Margin = new(8) });
+                try
+                {
+                    var result = await session.ReadActionsAsync(target);
+                    if (!Valid() || request != page) return;
+                    if (target is null) { await ExecuteBranchActionAsync(result.Context, BranchAction.Create, null); return; }
+                    ShowActions(target, result.Context, result.Worktrees);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception error)
+                {
+                    if (!Valid() || request != page) return;
+                    panel.Children.RemoveAt(panel.Children.Count - 1);
+                    panel.Children.Add(new TextBlock { Text = error.Message, Classes = { "muted" }, Margin = new(8), TextWrapping = TextWrapping.Wrap });
+                    panel.Children.Add(ShellAction("重试", "RefreshIcon", () => _ = LoadActionsAsync(target)));
+                }
+            }
+            void ShowActions(BranchEntry target, ActionContext context, WorktreeSnapshot worktrees)
             {
                 if (!Valid()) { CloseShellPopup(); return; }
                 lastTarget = target; panel.Children.Clear();
@@ -104,7 +151,7 @@ public sealed partial class MainWindow
                 Action("删除已合并的本地分支…", "DeleteIcon", BranchAction.Delete);
                 panel.Children.OfType<Button>().Skip(1).FirstOrDefault(b => b.IsEnabled)?.Focus(NavigationMethod.Directional);
             }
-            void OpenSelected() { if (list.SelectedItem is BranchRow { Branch: { } target }) ShowActions(target); }
+            void OpenSelected() { if (list.SelectedItem is BranchRow { Branch: { } target }) _ = LoadActionsAsync(target); }
             filter.KeyDown += (_, key) =>
             {
                 if (key.Key == Key.Down) { key.Handled = true; FocusShellList(list); }
@@ -113,7 +160,7 @@ public sealed partial class MainWindow
             list.PointerReleased += (_, pointer) =>
             {
                 if (pointer.InitialPressMouseButton != MouseButton.Left || (pointer.Source as Visual)?.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault()?.DataContext is not BranchRow { Branch: { } target }) return;
-                ShowActions(target);
+                _ = LoadActionsAsync(target);
             };
             panel.AddHandler(KeyDownEvent, (_, key) =>
             {
@@ -136,14 +183,17 @@ public sealed partial class MainWindow
                     Key.Up => (current + buttons.Count - 1) % buttons.Count, _ => (current + 1) % buttons.Count };
                 key.Handled = true; buttons[next].Focus(NavigationMethod.Directional);
             }, RoutingStrategies.Tunnel);
+            flyout.Closed += (_, _) => session.Dispose();
             flyout.Opened += (_, _) => filter.Focus(); ShowList(); ShowShellPopup(flyout, BranchButton);
+            _ = ReadBranchesAsync();
         }
-        catch (Exception ex) { if (!_closed && generation == _shellGeneration) _model.ReportError(ex.Message); }
+        catch (Exception ex) { session.Dispose(); if (!_closed && generation == _shellGeneration) _model.ReportError(ex.Message); }
     }
 
     private async Task ExecuteBranchActionAsync(ActionContext context, BranchAction action, BranchEntry? target)
     {
         if (_closed || _model.Root != context.Root || _model.IsWriting) return;
+        var repository = _model.RepositoryGeneration;
         CloseShellPopup();
         var reason = BranchActionAvailability.DisabledReason(context, action, target);
         if (reason is not null) { _model.ReportError(reason); return; }
@@ -163,6 +213,7 @@ public sealed partial class MainWindow
                 _ => $"把 {context.Branch} 重放到 {target.Name} ({target.Sha[..8]})。这会改写当前分支提交历史。" };
             if (!await ConfirmDialog.ShowAsync(this, "分支操作", description, "执行")) return;
         }
+        if (_closed || _model.Root != context.Root || repository != _model.RepositoryGeneration || _model.IsWriting) return;
         // The writer rechecks the captured repository token after input/confirmation.
         await ReturnToNavigationAfterAsync(() => _model.ExecuteActionAsync(context.Root, () => new BranchWriter().ExecuteAsync(context, action, target, name)));
         if (_model.HasOperation) ShowConflictsClicked(null, new RoutedEventArgs());

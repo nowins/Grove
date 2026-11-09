@@ -23,8 +23,7 @@ public static class RepositoryActions
         using var repo = new Repository(root);
         var changes = repo.RetrieveStatus().Where(s => s.State != FileStatus.Unaltered && s.State != FileStatus.Ignored).ToArray();
         var token = Token(repo, changes.Select(s => s.FilePath), cancellation);
-        var remoteNames = repo.Network.Remotes.Select(r => r.Name).OrderByDescending(name => name.Length).ToArray();
-        var branches = repo.Branches.Where(b => b.Tip is not null).Select(b => new BranchEntry(b.FriendlyName, b.CanonicalName, b.Tip.Sha, b.IsRemote, b.IsCurrentRepositoryHead, b.TrackedBranch?.FriendlyName, b.IsRemote ? remoteNames.FirstOrDefault(name => b.CanonicalName.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)) : null, b.TrackedBranch?.CanonicalName)).OrderBy(b => b.Remote).ThenBy(b => b.Name).ToArray();
+        var branches = BranchCatalog.Read(repo, cancellation);
         var stashes = repo.Stashes.Select((s, i) => new StashEntry(i, s.WorkTree.Sha, s.Message)).ToArray();
         return new(root, token, repo.Head.Tip?.Sha, repo.Head.FriendlyName, repo.Head.Tip?.Message ?? "", changes.Length > 0,
             RepositoryOperation.Read(repo) is not null || repo.Index.Conflicts.Any(), branches, stashes, repo.Info.IsHeadDetached);

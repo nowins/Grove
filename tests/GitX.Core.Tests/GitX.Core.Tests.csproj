@@ -33,6 +33,7 @@
     <Compile Include="../../src/GitX.Desktop/Services/ShellCommands.cs" Link="ShellCommands.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/RecentRepositoryStore.cs" Link="RecentRepositoryStore.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/BranchActionAvailability.cs" Link="BranchActionAvailability.cs" />
+    <Compile Include="../../src/GitX.Desktop/Services/BranchMenuSession.cs" Link="BranchMenuSession.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/EditorServer.cs" Link="EditorServer.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/EditorPublication.cs" Link="EditorPublication.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/BlameViewStore.cs" Link="BlameViewStore.cs" />
