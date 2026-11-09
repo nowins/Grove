@@ -2,6 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAlignment, sourceLines, visualRow, nextChange, unchangedRegions, visibleAnchor } from './diff-layout.js';
 
+test('file navigation detects both boundaries without wrapping a manually placed cursor',()=>{
+  const blocks=[{visualStart:5},{visualStart:20}];
+  assert.equal(nextChange(blocks,1,1,null,false),-1);
+  assert.equal(nextChange(blocks,0,-1,null,false),-1);
+  assert.equal(nextChange(blocks,-1,1,25,false),-1);
+  assert.equal(nextChange(blocks,-1,-1,2,false),-1);
+  assert.equal(nextChange(blocks,-1,1,10,false),1);
+  assert.equal(nextChange(blocks,-1,-1,10,false),0);
+  assert.equal(nextChange(blocks,-1,-1,null,false),1);
+});
+
 test('unequal replacements use view zones and leave every source line untouched', () => {
   const plan = buildAlignment({ old: { text: 'a\nb\nc\nd\ne\nf\n' }, new: { text: 'a\nx\ny\nz\nd\nf\n' }, blocks: [
     { oldStart: 1, oldCount: 2, newStart: 1, newCount: 3 }, { oldStart: 4, oldCount: 1, newStart: 5, newCount: 0 }

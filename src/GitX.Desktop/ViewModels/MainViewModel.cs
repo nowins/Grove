@@ -457,7 +457,6 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 var result = await session.RefreshAsync(_repositoryRead.Token);
                 if (_closed || IsWriting && !_reconciling || repositoryVersion != _repositoryVersion || !ReferenceEquals(session, _repositorySession)) return;
                 var updated = result.Snapshot;
-                if (_continuousDiff is not null) ClearDocument("仓库已刷新，请重新打开连续 Diff。");
                 if (result.Changes.IsFull) _blameReader.ClearCache();
                 var selected = _selectedEntry;
                 WriteStateChanged();
@@ -484,7 +483,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                         if (changed)
                         {
                             FileTitle = document.Path; Comparison = document.Comparison; Detail = document.Detail;
-                            DocumentChanged?.Invoke(++_documentVersion, document with { PreserveView = true });
+                            var refreshedVersion = ++_documentVersion;
+                            DocumentChanged?.Invoke(refreshedVersion, document with { PreserveView = true });
                         }
                         WriteStateChanged();
                     }
@@ -500,6 +500,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     await CompareHistoryAsync(_historyCompareOld, _historyCompareNew, preserve: true);
                 else if (result.Changes.IsFull && _historyDetailError is not null && _selectedCommit is { } retryCommit)
                     await SelectCommitAsync(retryCommit);
+                await RefreshContinuousDiffAsync(updated);
                 Status = $"已刷新 {DateTime.Now:HH:mm:ss} · {updated.Changes.Count} 个改动项 · F5 手动刷新";
             } while (session.HasPending && !_closed && ReferenceEquals(session, _repositorySession));
         }
@@ -692,6 +693,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _closed = true;
         ResetContinuousDiff();
         InterruptReading(); _readingHistory.Clear(); _readingTarget = null; CaptureReadingPosition = null;
+        CaptureContinuousPosition = null;
         _blameReader.ClearCache();
         foreach (var source in new[] { _repositoryRead, _documentRead, _commitRead, _historyRead, _noteRead }) { source.Cancel(); source.Dispose(); }
         (_reader as IDisposable)?.Dispose();

@@ -21,6 +21,7 @@
     <Compile Include="../../src/GitX.Desktop/ViewModels/CodeNavigation.cs" Link="CodeNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/ReadingNavigation.cs" Link="ReadingNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/ContinuousDiff.cs" Link="ContinuousDiff.cs" />
+    <Compile Include="../../src/GitX.Desktop/ViewModels/DiffFileNavigation.cs" Link="DiffFileNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/ViewModels/FileNavigation.cs" Link="FileNavigation.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferencePreferences.cs" Link="HistoryReferencePreferences.cs" />
     <Compile Include="../../src/GitX.Desktop/Services/HistoryReferenceChoices.cs" Link="HistoryReferenceChoices.cs" />

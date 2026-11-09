@@ -13,6 +13,7 @@ public sealed partial class MainViewModel
         public NavigationEntry Entry { get; set; } = entry;
         public BlameRevision? Target { get; } = target;
         public bool Annotate { get; set; } = annotate;
+        public IReadOnlyList<NavigationEntry>? DiffScope { get; set; }
     }
     private readonly List<SourceTabState> _sourceTabs = [];
     private readonly BlameReader _blameReader = new();
@@ -60,6 +61,7 @@ public sealed partial class MainViewModel
         var tab = _sourceTabs.FirstOrDefault(tab => tab.Target is null && tab.Entry.Path == entry.Path && tab.Entry.Kind == entry.Kind &&
             tab.Entry.Commit == entry.Commit && tab.Entry.BaseCommit == entry.BaseCommit && tab.Entry.OldPath == entry.OldPath);
         if (tab is null) { tab = new(entry, null, false); _sourceTabs.Add(tab); }
+        if (_historyEntries.Any(candidate => SameDiffEntry(candidate, entry))) tab.DiffScope = _historyEntries;
         tab.Entry = entry; SetSourceTab(tab);
     }
     private Task ActivateSourceTabAsync(SourceTabState tab, int? reveal = null)

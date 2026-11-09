@@ -88,6 +88,7 @@ let generation = -1, loadSequence = 0, fetchController;
 const toolFeedback = new ToolFeedback(document.getElementById('tool-feedback'));
 installTooltips('#editor-tools button, #editor-tools summary, #editor-tools select');
 let loading = false, pendingDirection = null, canStage = false, canRevert = false, canInclude = false;
+let diffFileNavigation = false, diffFilePending = false;
 let included = new Set(), fileIncluded = false, inclusionBusy = false, highlightMode = 'words', collapseUnchanged = false;
 let blame = null;
 let blameView = { ...defaultBlameView };
@@ -230,9 +231,9 @@ function syncScrollFrom(side) {
   syncing = previous;
 }
 
-function changeFromCursor(direction) {
+function changeFromCursor(direction, wrap = true) {
   const blocks = plan.blocks.map(block => ({ ...block, visualStart: activePane === 0 ? block.oldStart : block.newStart }));
-  return nextChange(blocks, selectedChange, direction, cursorRow);
+  return nextChange(blocks, selectedChange, direction, cursorRow, wrap);
 }
 
 function scheduleConnectors() {
@@ -472,6 +473,7 @@ function updateTextEditing() {
 }
 window.addEventListener('beforeunload',()=>textEditing.dispose());
 function display(doc, toolbar) {
+  diffFileNavigation = !!toolbar?.diffFileNavigation;
   document.getElementById('continuous-open').hidden = !toolbar?.canContinuousDiff;
   continuousDiff.show(toolbar?.continuousDiff);
   sourcePublished=doc;
@@ -727,6 +729,7 @@ function updateCounter() {
 const documentTransport = new DocumentTransport();
 window.addEventListener('beforeunload', () => documentTransport.clear());
 async function load(version) {
+  diffFilePending = false;
   if (version < generation) return;
   if (version !== generation) pendingDirection = null;
   generation = version;
@@ -744,7 +747,7 @@ async function load(version) {
     const payload = await documentTransport.read(version, { signal: fetchController.signal,
       isCurrent: () => request === loadSequence && version === generation });
     if (!payload) return;
-    if (continuousDiff.manifest?.id !== payload.toolbar?.continuousDiff?.id) continuousDiff.close();
+    if (!payload.toolbar?.continuousDiff) continuousDiff.close();
     // Keep layout measurable while the replacement models/folds/viewport are
     // prepared. Never paint their temporary line-1 state, including refreshes
     // that restore a saved viewport and navigation queued during a slow load.
@@ -796,10 +799,13 @@ async function load(version) {
     sourceSymbols.update();
     scheduleConnectors();
     comments.refresh();
-    if (plan && pendingDirection !== null) {
+    if (plan && (payload.document.revealDiffEdge === 1 || payload.document.revealDiffEdge === -1)) {
+      pendingDirection = null;
+      selectChange(payload.document.revealDiffEdge > 0 ? 0 : plan.blocks.length - 1);
+    } else if (plan && pendingDirection !== null) {
       const finding = !!document.activeElement?.closest('.find-widget');
       const direction = pendingDirection; pendingDirection = null;
-      selectChange(changeFromCursor(direction));
+      navigateChange(direction);
       if (finding) panes[activePane].trigger('keyboard', 'actions.find', null);
     }
     panes.forEach(pane => pane.render(true));
@@ -858,13 +864,28 @@ function queueNavigation(action) {
   }).catch(error => send({ type: 'error', version, message: String(error) }));
 }
 function navigate(direction) {
-  if (continuousDiff.manifest) return;
+  if (continuousDiff.manifest || diffFilePending) return;
   // Transfer DOM focus synchronously even while a new document is loading.
   panes[activePane].focus();
   if (loading || !plan) { pendingDirection = direction; return; }
-  queueNavigation(() => selectChange(changeFromCursor(direction)));
+  queueNavigation(() => navigateChange(direction));
 }
-window.gitx = { load, navigate, readingPosition, goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => { sourceTabs.update(toolbar);textEditing.sync(toolbar);textEditing.disposeRetired(models);updateTextEditing(); },
+function navigateChange(direction) {
+  if (diffFilePending || !plan) return;
+  const index = changeFromCursor(direction, !diffFileNavigation);
+  if (index >= 0) { selectChange(index); return; }
+  if (!diffFileNavigation) return;
+  diffFilePending = true;
+  send({ type: 'diff-file', direction, side: activePane, version: generation });
+}
+window.gitx = { load, navigate, readingPosition,
+  diffNavigationDone: (version, direction) => {
+    if (version !== generation || !diffFilePending) return;
+    diffFilePending = false;
+    if (!loading && plan) selectChange(direction > 0 ? 0 : plan.blocks.length - 1);
+  },
+  continuousPosition: (id, version) => continuousDiff.manifest?.id === id && continuousDiff.manifest?.version === version ? { id, version, index: continuousDiff.captureAnchor()?.index ?? 0 } : null,
+  goToLine: () => goToLine.open(), openSymbols: () => sourceSymbols.open(), revertBlock: revertCurrentBlock, setBlameView, setSourceTabs: toolbar => { sourceTabs.update(toolbar);textEditing.sync(toolbar);textEditing.disposeRetired(models);updateTextEditing(); },
   fileSessions: () => ({sessions:textEditing.metadata(),composing:composingSearch}), fileDraft:id=>textEditing.draft(id), fileRestore:(id,record)=>textEditing.restore(id,record),
   fileSaving:draft=>textEditing.saving(draft),fileSaved:result=>textEditing.saved(result),lockFiles:(ids,value)=>textEditing.lock(ids,value),lockDiskWrites:value=>textEditing.lockDiskWrites(value),
   captureDockView: () => ({ version: generation, path: sourcePath, views: panes.map(pane => pane.getModel() ? pane.saveViewState() : null), side: activePane, markdown: markdown.capture() }),
@@ -969,6 +990,7 @@ window.addEventListener('keydown', event => {
     // Close Find before returning native focus; its close command focuses Monaco.
     // Do not let a queued F7 reclaim focus after the user has left the diff.
     navigationEpoch++;
+    diffFilePending = false;
     pendingDirection = null;
     const side = activePane;
     panes.forEach(pane => pane.trigger('keyboard', 'closeFindWidget', null));

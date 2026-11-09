@@ -5,7 +5,7 @@ namespace GitX.Desktop.ViewModels;
 
 public sealed record ContinuousDiffEntry(int Index, string Path, string? OldPath, string Status);
 public sealed record ContinuousDiffManifest(string Id, long Version, string Title, string Whitespace,
-    int TotalFiles, int Offset, IReadOnlyList<ContinuousDiffEntry> Files);
+    int TotalFiles, int Offset, IReadOnlyList<ContinuousDiffEntry> Files, string Scope = "");
 public sealed record ContinuousDiffRow(int? OldLine, int? NewLine, string OldText, string NewText, string Kind);
 public sealed record ContinuousDiffSide(string Path, string Label, string Format, bool Exists, bool EndsWithNewline);
 public sealed record ContinuousDiffFile(string Id, int Index, ContinuousDiffSide? Old, ContinuousDiffSide? New,
@@ -22,26 +22,33 @@ public sealed class ContinuousDiffSession : IDisposable
     private readonly Func<bool> _current;
     private readonly CancellationTokenSource _lifetime;
     private readonly CancellationToken _token;
-    private readonly SemaphoreSlim _slots = new(2, 2);
+    private readonly SemaphoreSlim _slots;
     private readonly string? _repositoryToken;
     private int _disposed;
     public ContinuousDiffManifest Manifest { get; }
+    internal IReadOnlyList<NavigationEntry> Entries { get; }
+    internal int Tool { get; }
+    internal DiffWhitespace Whitespace { get; }
+    internal bool IsLive => Tool == 1 || Entries.Any(entry => entry.Kind is ComparisonKind.CommitWorktree or ComparisonKind.CommitParentWorktree);
     internal bool IsCurrent => Volatile.Read(ref _disposed) == 0 && _current();
 
     internal ContinuousDiffSession(string root, long version, string title, IReadOnlyList<NavigationEntry> entries,
-        DiffWhitespace whitespace, IRepositoryReader reader, Func<bool> current, CancellationToken lifetime, int offset = 0, string? repositoryToken = null)
+        DiffWhitespace whitespace, IRepositoryReader reader, Func<bool> current, CancellationToken lifetime, int offset = 0, string? repositoryToken = null,
+        string? scope = null, SemaphoreSlim? slots = null, int tool = 1)
     {
-        _reader = reader; _current = current;
-        var captured = _entries = entries.Skip(offset).Take(200).ToArray();
+        _reader = reader; _current = current; _slots = slots ?? new(2, 2); Tool = tool; Whitespace = whitespace;
+        Entries = Array.AsReadOnly(entries.ToArray());
+        var captured = _entries = Entries.Skip(offset).Take(200).ToArray();
         if (captured.Any(entry => !RecentFileStore.SafePath(entry.Path) || entry.OldPath is not null && !RecentFileStore.SafePath(entry.OldPath) ||
             !RecentFileStore.SafeRevision(entry.Commit) || !RecentFileStore.SafeRevision(entry.BaseCommit) ||
             entry.Kind is ComparisonKind.WorkingFile or ComparisonKind.RevisionFile)) throw new IOException("连续 Diff 的文件或修订范围无效。");
         _lifetime = CancellationTokenSource.CreateLinkedTokenSource(lifetime); _token = _lifetime.Token;
         _requests = captured.Select(entry => new DocumentRequest(root, entry.Path, entry.Kind, entry.Commit, entry.OldPath, whitespace, entry.BaseCommit)).ToArray();
         _repositoryToken = repositoryToken;
-        Manifest = new(Guid.NewGuid().ToString("N"), version, title, whitespace switch {
+        var id = Guid.NewGuid().ToString("N");
+        Manifest = new(id, version, title, whitespace switch {
             DiffWhitespace.Exact => "不忽略空白", DiffWhitespace.Ignore => "忽略空白", _ => "修剪首尾空白" }, entries.Count, offset,
-            Array.AsReadOnly(captured.Select((entry, index) => new ContinuousDiffEntry(index, entry.Path, entry.OldPath, entry.Status)).ToArray()));
+            Array.AsReadOnly(captured.Select((entry, index) => new ContinuousDiffEntry(index, entry.Path, entry.OldPath, entry.Status)).ToArray()), scope ?? id);
     }
     internal NavigationEntry Entry(int index) => _entries[index];
     public async Task<ContinuousDiffFile?> ReadAsync(int index, CancellationToken token = default)
@@ -122,6 +129,8 @@ public sealed class ContinuousDiffSession : IDisposable
 public sealed partial class MainViewModel
 {
     private ContinuousDiffSession? _continuousDiff;
+    private readonly SemaphoreSlim _continuousReadSlots = new(2, 2);
+    public Func<string, long, Task<int?>>? CaptureContinuousPosition { get; set; }
     public ContinuousDiffSession? ContinuousDiff => _continuousDiff;
     public bool CanOpenContinuousDiff => !_closed && !IsWriting && _snapshot is not null && _mode is 1 or 2 && NavigationEntries(_mode).Count > 0;
     private void ResetContinuousDiff() { _continuousDiff?.Dispose(); _continuousDiff = null; }
@@ -141,12 +150,54 @@ public sealed partial class MainViewModel
         {
             session = new(snapshot.Root, version + 1, title, entries,
                 _diffWhitespace, _reader, () => !_closed && repository == _repositoryVersion && version + 1 == _documentVersion &&
-                    ReferenceEquals(_continuousDiff, session), _repositoryRead.Token, offset, snapshot.IndexToken);
+                    ReferenceEquals(_continuousDiff, session), _repositoryRead.Token, offset, snapshot.IndexToken, slots: _continuousReadSlots, tool: mode);
         }
         catch (Exception error) when (error is IOException or ArgumentException) { ReportError(error.Message); return false; }
         SuspendSourceTab(); _selectedEntry = null; Changed(nameof(SelectedEntry));
         ClearDocument("连续 Diff", _ => _continuousDiff = session);
         return true;
+    }
+    public bool PageContinuousDiff(string id, int offset, long version)
+    {
+        if (_continuousDiff is not { } previous || previous.Manifest.Id != id || version != _documentVersion || IsWriting ||
+            offset < 0 || offset >= previous.Entries.Count || _snapshot is not { } snapshot) return false;
+        ReplaceContinuousDiff(previous.Entries, previous, snapshot, offset, preserve: false);
+        return true;
+    }
+    private void ReplaceContinuousDiff(IReadOnlyList<NavigationEntry> entries, ContinuousDiffSession previous, RepositorySnapshot snapshot, int offset, bool preserve)
+    {
+        var repository = _repositoryVersion; var version = _documentVersion + 1;
+        ContinuousDiffSession? next = null;
+        next = new(snapshot.Root, version, previous.Manifest.Title, entries, previous.Whitespace, _reader,
+            () => !_closed && repository == _repositoryVersion && version == _documentVersion && ReferenceEquals(_continuousDiff, next),
+            _repositoryRead.Token, offset, snapshot.IndexToken, preserve ? previous.Manifest.Scope : null, _continuousReadSlots, previous.Tool);
+        ClearDocument("连续 Diff", _ => _continuousDiff = next);
+    }
+    private async Task RefreshContinuousDiffAsync(RepositorySnapshot snapshot)
+    {
+        if (_continuousDiff is not { IsLive: true } previous) return;
+        var repository = _repositoryVersion; var version = _documentVersion;
+        var anchor = CaptureContinuousPosition is { } capture ? await capture(previous.Manifest.Id, version) : null;
+        IReadOnlyList<NavigationEntry> entries = previous.Entries;
+        if (previous.Tool == 1) entries = NavigationEntries(1).ToArray();
+        else if (entries.FirstOrDefault() is { Kind: ComparisonKind.CommitWorktree, Commit: { } commit })
+        {
+            var changes = await _reader.CompareChangesAsync(snapshot.Root, commit, null, _repositoryRead.Token);
+            entries = changes.Select(change => new NavigationEntry(change.Path, change.Status, change.Kind, change.OldPath, commit, change.Status)).ToArray();
+        }
+        if (_closed || IsWriting || repository != _repositoryVersion || version != _documentVersion ||
+            !ReferenceEquals(_continuousDiff, previous) || snapshot.IndexToken != _snapshot?.IndexToken) return;
+        var index = anchor is >= 0 && anchor < previous.Manifest.Files.Count ? anchor.Value : 0;
+        var offset = Math.Min(previous.Manifest.Offset, Math.Max(0, entries.Count - 200));
+        foreach (var old in previous.Manifest.Files.OrderBy(file => Math.Abs(file.Index - index)))
+        {
+            var found = -1;
+            for (var i = 0; i < entries.Count; i++)
+                if (entries[i].Path == old.Path && entries[i].OldPath == old.OldPath) { found = i; break; }
+            if (found < 0) continue;
+            offset = Math.Clamp(found - old.Index, 0, Math.Max(0, entries.Count - 200)); break;
+        }
+        ReplaceContinuousDiff(entries, previous, snapshot, offset, preserve: true);
     }
     public async Task<bool> OpenContinuousDiffFileAsync(string id, int index, int side, int line, long version)
     {
@@ -156,6 +207,7 @@ public sealed partial class MainViewModel
         var entry = session.Entry(index);
         await OpenEditorEntryAsync(entry, line, side);
         if (_closed || _documentVersion != version + 1 || _selectedEntry != entry || _document is not { IsNotice: false } document) return false;
+        if (session.Tool == 2 && _activeSourceTab is { } tab) tab.DiffScope = session.Entries;
         return document.RevealSide == side && document.RevealLine == line;
     }
 }

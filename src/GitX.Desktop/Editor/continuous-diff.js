@@ -17,28 +17,39 @@ export class ContinuousDiff {
   constructor({ host, send, retryDelay = 1000, fetchFile = (manifest, index, signal) => fetch(
     `continuous-diff?id=${encodeURIComponent(manifest.id)}&version=${manifest.version}&index=${index}`, { signal, cache: 'no-store' }) }) {
     Object.assign(this, { host, send, fetchFile, retryDelay }); this.epoch = 0; this.scrollEpoch = 0; this.active = 0; this.pending = new Set(); this.timers = new Set();
-    this.scroll = () => { this.scrollEpoch++; this.schedule(); };
+    this.scroll = () => {
+      if (this.host.scrollTop !== this.ownScrollTop) this.restoreAnchor = null;
+      this.ownScrollTop = this.host.scrollTop; this.scrollEpoch++; this.schedule();
+    };
     host.addEventListener('scroll', this.scroll, { passive: true });
     this.resize = new ResizeObserver(this.scroll); this.resize.observe(host);
     this.unload = () => this.close(); window.addEventListener('beforeunload', this.unload);
   }
   show(manifest) {
     if (this.manifest?.id === manifest?.id) { this.schedule(); return; }
+    const preserving = manifest?.scope && manifest.scope === this.manifest?.scope;
+    const saved = preserving ? this.restoreAnchor ?? this.captureAnchor() : null;
+    const anchor = saved ? { ...saved, placed: false } : null;
+    const heights = new Map(preserving ? this.items.map(item => [item.entry.path, item.count]) : []);
     this.close(); if (!manifest) return;
     this.manifest = manifest; this.host.hidden = false; document.body.classList.add('continuous-diff-mode');
     const toolbar = node('div', 'cd-toolbar');
     toolbar.append(node('strong', '', '连续 Diff'), node('span', '', `${manifest.title} · ${manifest.whitespace} · 按行高亮 · 只读`));
-    const range = node('span', 'cd-range', `${manifest.offset + 1}–${manifest.offset + manifest.files.length} / ${manifest.totalFiles} 个文件`);
+    const range = node('span', 'cd-range', manifest.files.length ? `${manifest.offset + 1}–${manifest.offset + manifest.files.length} / ${manifest.totalFiles} 个文件` : '0 个文件');
     toolbar.append(range);
     const page = (text, offset, disabled) => {
       const button = node('button', '', text); button.disabled = disabled;
-      button.addEventListener('click', () => { if (this.manifest === manifest) this.send({ type: 'continuous-diff', action: 'open', offset, version: manifest.version }); }); return button;
+      button.addEventListener('click', () => { if (this.manifest === manifest) this.send({ type: 'continuous-diff', action: 'page', id: manifest.id, offset, version: manifest.version }); }); return button;
     };
     toolbar.append(page('上一页文件', Math.max(0, manifest.offset - 200), manifest.offset === 0),
       page('下一页文件', manifest.offset + 200, manifest.offset + manifest.files.length >= manifest.totalFiles));
     const picker = node('select', 'cd-picker'); picker.setAttribute('aria-label', '定位连续 Diff 文件');
     manifest.files.forEach(entry => { const option = node('option', '', entry.path); option.value = entry.index; picker.append(option); });
-    picker.addEventListener('change', () => this.items.find(item => item.entry.index === Number(picker.value))?.section.scrollIntoView({ block: 'start' }));
+    picker.addEventListener('change', () => {
+      if (this.manifest !== manifest) return;
+      this.restoreAnchor = null;
+      this.items.find(item => item.entry.index === Number(picker.value))?.section.scrollIntoView({ block: 'start' });
+    });
     toolbar.append(picker);
     this.host.append(toolbar);
     this.items = manifest.files.map(entry => {
@@ -47,10 +58,11 @@ export class ContinuousDiff {
       const path = node('span', 'cd-path', entry.oldPath && entry.oldPath !== entry.path ? `${entry.oldPath} → ${entry.path}` : entry.path);
       path.title = path.textContent;
       const open = node('button', '', '打开完整 Diff'); open.setAttribute('aria-label', `打开 ${entry.path} 的完整 Diff`);
-      const item = { entry, section, header, data: null, count: 0, bytes: 0, range: '', evictedAt: -1, error: '', retries: 0, retryAt: 0 };
+      const item = { entry, section, header, data: null, count: heights.get(entry.path) ?? 0, bytes: 0, range: '', evictedAt: -1, error: '', retries: 0, retryAt: 0 };
       open.addEventListener('click', () => this.open(item, item.data?.new?.exists === false ? 0 : 1, 1));
       header.append(path, node('span', 'cd-status', entry.status), open);
       const sides = node('div', 'cd-sides'); const body = node('div', 'cd-body'); const rows = node('div', 'cd-rows');
+      rows.style.height = `${Math.max(5, item.count) * rowHeight}px`;
       body.append(rows); item.body = body; item.rows = rows; item.sides = sides;
       const footer = node('div', 'cd-footer'); const message = node('span', '', '按需读取磁盘或固定修订；不含未保存编辑。');
       const retry = node('button', '', '重新读取'); retry.addEventListener('click', () => {
@@ -64,7 +76,9 @@ export class ContinuousDiff {
       }); footer.append(message, retry); item.message = message;
       section.append(header, sides, body, footer); this.host.append(section); return item;
     });
-    this.host.scrollTop = 0; this.schedule();
+    if (!this.items.length) this.host.append(node('p', 'cd-empty', '当前比较范围没有文件差异。'));
+    this.restoreAnchor = anchor;
+    this.moveScroll(anchor ? this.host.scrollTop : 0); this.schedule();
   }
   open(item, side, line) {
     if (!this.manifest || !this.items.includes(item)) return;
@@ -72,19 +86,57 @@ export class ContinuousDiff {
       side, line, version: this.manifest.version });
   }
   focus() { this.host.focus(); }
+  readingTop() { return this.host.getBoundingClientRect().top + this.host.firstElementChild.getBoundingClientRect().height + 34; }
+  captureAnchor() {
+    if (!this.manifest || !this.items.length) return null;
+    const top = this.readingTop();
+    const item = this.items.find(item => item.section.getBoundingClientRect().bottom > top) ?? this.items.at(-1);
+    const row = Math.max(0, Math.min(item.count - 1, Math.floor((top - item.rows.getBoundingClientRect().top) / rowHeight)));
+    const value = item.data?.rows[row];
+    const side = value?.oldLine ? 0 : 1, line = side === 0 ? value?.oldLine : value?.newLine;
+    const index = this.items.indexOf(item);
+    return { path: item.entry.path, index: item.entry.index, side, line,
+      rowOffset: item.rows.getBoundingClientRect().top + row * rowHeight - top,
+      fileOffset: item.section.getBoundingClientRect().top - top,
+      fallback: [...this.items.slice(index + 1), ...this.items.slice(0, index).reverse()].map(item => item.entry.path) };
+  }
+  moveScroll(top) { this.host.scrollTop = top; this.ownScrollTop = this.host.scrollTop; }
+  restoreView() {
+    const anchor = this.restoreAnchor; if (!anchor) return;
+    let item = this.items.find(item => item.entry.path === anchor.path);
+    if (!item) {
+      item = anchor.fallback.map(path => this.items.find(item => item.entry.path === path)).find(Boolean);
+      if (!item) { this.restoreAnchor = null; return; }
+      anchor.path = item.entry.path; anchor.line = null; anchor.fileOffset = 0;
+    }
+    const top = this.readingTop();
+    if (!anchor.placed) {
+      this.moveScroll(this.host.scrollTop + item.section.getBoundingClientRect().top - top - anchor.fileOffset);
+      anchor.placed = true;
+    }
+    if (!item.data) return;
+    if (anchor.line) {
+      const field = anchor.side === 0 ? 'oldLine' : 'newLine';
+      let row = item.data.rows.findIndex(value => value[field] >= anchor.line);
+      if (row < 0) row = Math.max(0, item.data.rows.length - 1);
+      this.moveScroll(this.host.scrollTop + item.rows.getBoundingClientRect().top + row * rowHeight - top - anchor.rowOffset);
+    }
+    this.restoreAnchor = null;
+  }
   schedule() {
     if (!this.manifest || this.frame) return;
     this.frame = requestAnimationFrame(() => { this.frame = null; this.update(); });
   }
   anchor(action) {
-    const top = this.host.getBoundingClientRect().top;
-    const anchor = this.items.find(item => item.section.getBoundingClientRect().bottom > top + 40);
+    const top = this.readingTop();
+    const anchor = this.items.find(item => item.section.getBoundingClientRect().bottom > top);
     const before = anchor?.section.getBoundingClientRect().top;
     action();
-    if (anchor) this.host.scrollTop += anchor.section.getBoundingClientRect().top - before;
+    if (anchor) this.moveScroll(this.host.scrollTop + anchor.section.getBoundingClientRect().top - before);
   }
   update() {
     if (!this.manifest) return;
+    this.restoreView();
     this.host.style.setProperty('--cd-toolbar-height', `${this.host.firstElementChild.getBoundingClientRect().height}px`);
     const viewport = this.host.getBoundingClientRect();
     const rectangles = new Map(this.items.map(item => [item, item.section.getBoundingClientRect()]));
@@ -135,6 +187,7 @@ export class ContinuousDiff {
           `${side.label} · ${side.path} · ${side.format}${side.exists ? side.endsWithNewline ? ' · 末尾有换行' : ' · 末尾无换行' : ''}` : '无法显示文本差异')));
         item.message.textContent = [data.notice, data.truncated ? '本文件显示前 6,000 行；完整内容请打开完整 Diff。' : '行号可双击定位；不含未保存编辑。'].filter(Boolean).join(' ');
       });
+      this.restoreView();
     }).catch(error => {
       if (!controller.signal.aborted && epoch === this.epoch) { item.error = String(error.message || error); item.message.textContent = item.error; }
     }).finally(() => {
@@ -164,6 +217,7 @@ export class ContinuousDiff {
   }
   close() {
     this.epoch++; this.active = 0; this.manifest = null;
+    this.restoreAnchor = null;
     for (const controller of this.pending) controller.abort(); this.pending.clear();
     for (const timer of this.timers) clearTimeout(timer); this.timers.clear();
     if (this.frame) cancelAnimationFrame(this.frame); this.frame = null;

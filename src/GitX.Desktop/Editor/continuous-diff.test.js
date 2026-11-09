@@ -62,6 +62,44 @@ test('scrolling evicts old data and DOM rows while retaining file height and the
     assert.equal(t.control.items[0].count,80);assert.equal(t.control.items[0].rows.style.height,'1760px');
   }finally{t.dispose();}
 });
+test('refresh replaces old code while retaining the visible file and its original-side line',async()=>{
+  const t=fixture();try {
+    t.show({...manifest('before',3),scope:'kept'});await t.flush();
+    t.host.scrollTop=t.top(1)+440;t.control.scroll();await t.flush();
+    const before=t.control.captureAnchor();const retired=t.control.items[1].header.querySelector('button');
+    t.control.fetchFile=async(owner,index)=>({ok:true,json:async()=>{
+      const value=file(owner,index);
+      value.rows=[...Array.from({length:10},(_,n)=>({oldLine:null,newLine:n+1,oldText:'',newText:'fresh insertion',kind:'added'})),...value.rows];
+      return value;
+    }});
+    t.show({...manifest('after',3),version:8,scope:'kept'});await t.flush();
+    const after=t.control.captureAnchor();
+    assert.equal(after.path,before.path);assert.equal(after.line,before.line);assert.equal(after.side,before.side);
+    assert.equal(after.rowOffset,before.rowOffset);assert.equal(t.control.items[1].data.id,'after');
+    retired.click();assert.equal(t.messages.length,0);
+  }finally{t.dispose();}
+});
+test('user scrolling during a refresh cancels deferred row restoration',async()=>{
+  let resolve;const t=fixture();try {
+    t.show({...manifest('before',3),scope:'kept'});await t.flush();
+    t.host.scrollTop=t.top(1)+440;t.control.scroll();await t.flush();
+    t.control.fetchFile=async(owner,index)=>index===1?new Promise(done=>{resolve=()=>done({ok:true,json:async()=>file(owner,index)});}):{ok:true,json:async()=>file(owner,index)};
+    t.show({...manifest('after',3),version:8,scope:'kept'});await t.flush(2);assert.ok(resolve);
+    const position=t.top(2)+440;t.host.scrollTop=position;t.control.scroll();await t.flush();
+    resolve();await t.flush();assert.equal(t.host.scrollTop,position);assert.equal(t.control.restoreAnchor,null);
+  }finally{t.dispose();}
+});
+test('a removed visible file falls forward to a surviving file and an empty range stays visible',async()=>{
+  const t=fixture();try {
+    const before={...manifest('before',3),scope:'kept'};t.show(before);await t.flush();
+    t.host.scrollTop=t.top(1)+220;t.control.scroll();await t.flush();
+    const after={...before,id:'after',version:8,files:before.files.filter(entry=>entry.index!==1).map((entry,index)=>({...entry,index}))};
+    t.show(after);await t.flush();assert.equal(t.control.captureAnchor().path,'dir/file2.cs');
+    t.show({...after,id:'empty',version:9,files:[],totalFiles:0});await t.flush();
+    assert.equal(t.host.hidden,false);assert.equal(t.host.querySelector('.cd-range').textContent,'0 个文件');
+    assert.match(t.host.textContent,/当前比较范围没有文件差异/);assert.equal(t.host.querySelectorAll('.cd-file').length,0);
+  }finally{t.dispose();}
+});
 test('late responses after replacement or close are ignored and all old requests abort',async()=>{
   const pending=[];const t=fixture((owner,index,signal)=>new Promise(resolve=>pending.push({owner,index,signal,resolve})));
   try {

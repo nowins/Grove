@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
         _blameViewReady = LoadBlameViewAsync();
         _model.ConfirmSourceTextClose = ConfirmTextCloseAsync;
         _model.CaptureReadingPosition = CaptureReadingPositionAsync;
+        _model.CaptureContinuousPosition = CaptureContinuousPositionAsync;
         _model.DocumentChanged += OnDocumentChanged;
         _model.SourceTabsChanged += OnSourceTabsChanged;
         _model.InclusionChanged += RefreshInclusion;
@@ -177,7 +178,8 @@ public sealed partial class MainWindow : Window
             if (_closed || sequence != _publicationSequence) return;
             var toolbar = new EditorToolbarState(_model.FileTitle, _model.CanBlame, _model.BlameLabel, _model.CurrentIncludedLines(),
                 _model.SelectedEntry is { } selected ? _model.InclusionState(selected.Path) : false, _blameView, _model.SourceTabs, _model.ActiveSourceTabId, _model.Mode == 0, ReadingNavigation: true,
-                ContinuousDiff: _model.ContinuousDiff?.Manifest, CanContinuousDiff: _model.CanOpenContinuousDiff, WorkspaceActions: _model.Root is not null, EmptyWorkspace: _model.EmptyWorkspace);
+                ContinuousDiff: _model.ContinuousDiff?.Manifest, CanContinuousDiff: _model.CanOpenContinuousDiff, WorkspaceActions: _model.Root is not null, EmptyWorkspace: _model.EmptyWorkspace,
+                DiffFileNavigation: _model.CanNavigateDiffFiles);
             var markdown = !document.IsDiff && !document.IsNotice && document.Language == "markdown" && _model.Root is { } markdownRoot
                 ? new MarkdownResourceContext(version, markdownRoot, document.Path, document.SourceRevision) : null;
             var server = _server; var repository = _model.Root;
@@ -234,8 +236,15 @@ public sealed partial class MainWindow : Window
             case "reading-history": await NavigateReadingAsync(root.GetProperty("direction").GetInt32(), legacyLog: true); break;
             case "continuous-diff":
                 if (root.GetProperty("action").GetString() == "open") await _model.OpenContinuousDiffAsync(root.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0);
+                else if (root.GetProperty("action").GetString() == "page") _model.PageContinuousDiff(root.GetProperty("id").GetString()!, root.GetProperty("offset").GetInt32(), version);
                 else if (await _model.OpenContinuousDiffFileAsync(root.GetProperty("id").GetString()!, root.GetProperty("index").GetInt32(),
                     root.GetProperty("side").GetInt32(), root.GetProperty("line").GetInt32(), version)) RequestSourceFocus();
+                break;
+            case "diff-file":
+                var diffDirection = root.GetProperty("direction").GetInt32();
+                var diffInput = _inputEpoch;
+                if (await _model.NavigateDiffFileAsync(diffDirection, root.GetProperty("side").GetInt32(), version) && diffInput == _inputEpoch && IsActive) RequestSourceFocus();
+                await InvokeEditorAsync($"window.gitx.diffNavigationDone({version},{diffDirection})");
                 break;
             case "blame": await _model.ToggleBlameAsync(); break;
             case "blame-action": await HandleBlameActionAsync(root.GetProperty("action").GetString()!, root.GetProperty("line").GetInt32(), version); break;
@@ -292,10 +301,11 @@ public sealed partial class MainWindow : Window
                 if (_model.ActiveSourceTabId is { } activeTab) await _model.CloseSourceTabAsync(activeTab, version);
                 else _model.SelectedEntry = null;
                 break;
-            case "focus-navigation": FocusFileList(); break;
+            case "focus-navigation": _model.CancelDiffNavigation(); FocusFileList(); break;
             case "hide-tool": FocusEditor(); break;
             case "reset-layout": if (_dock is not null) await _dock.ResetAsync(); break;
             case "focus-out":
+                _model.CancelDiffNavigation();
                 if (_webView is not null) NativeKeyboardFocus.LeaveEmbedded(this, _webView, root.GetProperty("direction").GetInt32());
                 break;
             case "error": _model.ReportError(root.GetProperty("message").GetString()!); break;

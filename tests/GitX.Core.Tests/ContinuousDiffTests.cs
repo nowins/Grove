@@ -85,7 +85,8 @@ public sealed class ContinuousDiffTests
         else model.Dispose();
         pending.SetResult(new("file0.cs", "late", "plaintext", "", ""));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await read);
-        Assert.Null(await session.ReadAsync(0)); Assert.Null(model.ContinuousDiff);
+        Assert.Null(await session.ReadAsync(0));
+        if (change == "refresh") Assert.NotNull(model.ContinuousDiff); else Assert.Null(model.ContinuousDiff);
     }
 
     [Fact]
@@ -149,6 +150,73 @@ public sealed class ContinuousDiffTests
         var projected = ContinuousDiffSession.Project("id", 0, new("big", "", "plaintext", "", "", IsDiff: true, Diff: large.Diff));
         Assert.Equal(6000, projected.Rows.Count); Assert.True(projected.Truncated); Assert.Equal(6000, projected.Rows[^1].NewLine);
         Assert.Equal("<script>safe text</script>", ContinuousDiffSession.Project("id", 0, new("a", "<script>safe text</script>", "", "", "", IsNotice: true)).Notice);
+    }
+
+    [Fact]
+    public async Task Refresh_replaces_live_content_and_files_without_closing_the_comparison()
+    {
+        using var repo = new TestRepository(); repo.Write("a.cs", "base\n"); repo.Write("b.cs", "base\n"); repo.Commit("base");
+        repo.Write("a.cs", "first\n"); repo.Write("b.cs", "first\n");
+        using var model = new MainViewModel(); await model.OpenAsync(repo.Root); model.SwitchView(1); await model.OpenContinuousDiffAsync();
+        var previous = model.ContinuousDiff!; await previous.ReadAsync(0);
+        repo.Write("a.cs", "latest\n"); repo.Write("b.cs", "base\n"); repo.Write("c.cs", "new\n");
+        var head = repo.Git("rev-parse", "HEAD"); var index = File.ReadAllBytes(Path.Combine(repo.Root, ".git/index")); var status = repo.Git("--no-optional-locks", "status", "--porcelain");
+        await model.RefreshAsync(); var current = model.ContinuousDiff!;
+        Assert.NotEqual(previous.Manifest.Id, current.Manifest.Id); Assert.Equal(previous.Manifest.Scope, current.Manifest.Scope);
+        Assert.Equal(new[] { "a.cs", "c.cs" }, current.Manifest.Files.Select(file => file.Path).Order().ToArray());
+        var item = current.Manifest.Files.Single(file => file.Path == "a.cs");
+        Assert.Contains((await current.ReadAsync(item.Index))!.Rows, row => row.NewText == "latest");
+        Assert.Null(await previous.ReadAsync(0)); Assert.Null(model.CurrentDocument); Assert.False(model.EmptyWorkspace);
+        Assert.Equal(head, repo.Git("rev-parse", "HEAD")); Assert.Equal(index, File.ReadAllBytes(Path.Combine(repo.Root, ".git/index")));
+        Assert.Equal(status, repo.Git("--no-optional-locks", "status", "--porcelain"));
+    }
+
+    [Fact]
+    public async Task An_empty_live_range_remains_open_and_picks_up_later_changes()
+    {
+        using var repo = new TestRepository(); repo.Write("a", "base\n"); repo.Commit("base"); repo.Write("a", "changed\n");
+        using var model = new MainViewModel(); await model.OpenAsync(repo.Root); model.SwitchView(1); await model.OpenContinuousDiffAsync();
+        var scope = model.ContinuousDiff!.Manifest.Scope;
+        repo.Write("a", "base\n"); await model.RefreshAsync();
+        Assert.Empty(model.ContinuousDiff!.Manifest.Files); Assert.False(model.EmptyWorkspace); Assert.False(model.CanOpenContinuousDiff);
+        repo.Write("a", "changed again\n"); await model.RefreshAsync();
+        Assert.Single(model.ContinuousDiff!.Manifest.Files); Assert.Equal(scope, model.ContinuousDiff.Manifest.Scope);
+        Assert.Contains((await model.ContinuousDiff.ReadAsync(0))!.Rows, row => row.NewText == "changed again");
+    }
+
+    [Fact]
+    public async Task Fixed_history_stays_open_across_refresh_tool_selection_and_page_navigation()
+    {
+        using var repo = new TestRepository(); repo.Write("a", "old\n"); repo.Write("b", "old\n"); repo.Commit("old");
+        repo.Write("a", "new\n"); repo.Write("b", "new\n"); repo.Commit("new");
+        using var model = new MainViewModel(); await model.OpenAsync(repo.Root); model.SwitchView(2);
+        await model.CompareHistoryAsync(model.Commits[1], model.Commits[0]); await model.OpenContinuousDiffAsync();
+        var session = model.ContinuousDiff!; var version = model.DocumentVersion;
+        repo.Write("a", "working\n"); await model.RefreshAsync();
+        Assert.Same(session, model.ContinuousDiff); Assert.Equal(version, model.DocumentVersion);
+        await model.CompareHistoryAsync(model.Commits[0], null); model.SwitchView(0);
+        Assert.Same(session, model.ContinuousDiff);
+        Assert.True(model.PageContinuousDiff(session.Manifest.Id, 0, version));
+        Assert.All(model.ContinuousDiff!.Entries, entry => Assert.Equal(ComparisonKind.RevisionRange, entry.Kind));
+        Assert.Equal("new", (await model.ContinuousDiff.ReadAsync(0))!.Rows.Single(row => row.Kind == "modified").NewText);
+        Assert.False(model.PageContinuousDiff(session.Manifest.Id, 0, version));
+    }
+
+    [Fact]
+    public async Task Refresh_retains_page_and_capacity_until_old_non_cancellable_reads_finish()
+    {
+        var reader = new ControlledReader(450); using var model = new MainViewModel(reader); await model.OpenAsync("repo"); model.SwitchView(1);
+        await model.OpenContinuousDiffAsync(200); var previous = model.ContinuousDiff!;
+        model.CaptureContinuousPosition = (id, version) => Task.FromResult<int?>(150);
+        reader.Delay = new(TaskCreationOptions.RunContinuationsAsynchronously); var pending = reader.Delay;
+        var first = previous.ReadAsync(0); var second = previous.ReadAsync(1); reader.Delay = null;
+        await model.RefreshAsync(); var current = model.ContinuousDiff!;
+        Assert.Equal(200, current.Manifest.Offset); Assert.Equal("file350.cs", current.Manifest.Files[150].Path);
+        await Assert.ThrowsAsync<ContinuousDiffBusyException>(async () => await current.ReadAsync(0));
+        pending.SetResult(new("file200.cs", "late", "plaintext", "", ""));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await first);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await second);
+        Assert.NotNull(await current.ReadAsync(0));
     }
 
     private static ContinuousDiffSession Session(ControlledReader reader, Func<bool> current) => new("repo", 7, "local",

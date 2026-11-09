@@ -11,6 +11,23 @@ namespace GitX.Desktop;
 public sealed partial class MainWindow
 {
     private bool _readingCommandPending;
+    private async Task<int?> CaptureContinuousPositionAsync(string id, long version)
+    {
+        if (_closed || !_ready || _webView is null || _loadedEditorVersion != version || _publishedVersion != version) return null;
+        var repository = _model.RepositoryGeneration;
+        try
+        {
+            var value = await _webView.InvokeScript(WebViewScript.Json($"window.gitx.continuousPosition({JsonSerializer.Serialize(id)},{version})"))
+                .WaitAsync(TimeSpan.FromMilliseconds(250));
+            if (_closed || repository != _model.RepositoryGeneration || version != _model.DocumentVersion) return null;
+            var json = WebViewScript.DecodeObject(value, 2048); if (json is null) return null;
+            using var document = JsonDocument.Parse(json); var root = document.RootElement;
+            return root.TryGetProperty("id", out var owner) && owner.GetString() == id &&
+                root.TryGetProperty("version", out var revision) && revision.TryGetInt64(out var number) && number == version &&
+                root.TryGetProperty("index", out var entry) && entry.TryGetInt32(out var index) && index is >= 0 and < 200 ? index : null;
+        }
+        catch (Exception) { return null; }
+    }
     private async Task<ReadingPosition?> CaptureReadingPositionAsync(long version)
     {
         if (_closed || !_ready || _webView is null || _publishedVersion != version) return null;

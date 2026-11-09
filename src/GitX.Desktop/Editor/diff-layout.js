@@ -69,16 +69,17 @@ export function visibleAnchor(line, side, regions, collapsed) {
   return line;
 }
 
-export function nextChange(blocks, current, direction, cursorRow = null) {
+export function nextChange(blocks, current, direction, cursorRow = null, wrap = true) {
   if (!blocks.length) return -1;
   if (cursorRow !== null) {
     if (direction > 0) {
       const found = blocks.findIndex(block => block.visualStart > cursorRow);
-      return found < 0 ? 0 : found;
+      return found < 0 ? wrap ? 0 : -1 : found;
     }
     for (let i = blocks.length - 1; i >= 0; i--) if (blocks[i].visualStart < cursorRow) return i;
-    return blocks.length - 1;
+    return wrap ? blocks.length - 1 : -1;
   }
   if (current < 0) return direction > 0 ? 0 : blocks.length - 1;
-  return (current + direction + blocks.length) % blocks.length;
+  const target = current + direction;
+  return !wrap && (target < 0 || target >= blocks.length) ? -1 : (target + blocks.length) % blocks.length;
 }

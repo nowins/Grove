@@ -26,8 +26,8 @@ public sealed partial class MainViewModel
 
     private void SetHistoryEntries(IReadOnlyList<NavigationEntry> entries)
     {
-        if (_continuousDiff is not null && _mode == 2) ClearDocument("提交比较范围已变化，请重新打开连续 Diff。");
-        _historyEntries = entries; Changed(nameof(HistoryEntries));
+        // History tools do not replace an already opened comparison document.
+        _historyEntries = Array.AsReadOnly(entries.ToArray()); Changed(nameof(HistoryEntries));
         if (_mode == 2) { _allEntries = entries; FilterEntries(); }
     }
 

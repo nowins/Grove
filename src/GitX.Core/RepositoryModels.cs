@@ -73,6 +73,8 @@ public sealed record RepositoryDocument([property: System.Text.Json.Serializatio
     internal Lazy<string>? DeferredText { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? RevealSide { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? RevealDiffEdge { get; init; }
 }
 
 public sealed record DiffSide(string Path, string Label, string Text, bool Exists)
