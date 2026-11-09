@@ -173,9 +173,16 @@ public sealed class TextDraftStore
     private FileStream Lock()
     {
         CheckParents(_directory);
+        if (OperatingSystem.IsWindows() && Directory.Exists(_directory) && IsAbandonedWindowsDirectory())
+        {
+            // Preview 6 could fail after creating an empty inherited directory.
+            // Remove only that empty, current-user-owned shell. A racing file
+            // makes this nonrecursive delete fail; existing data is not repaired.
+            Directory.Delete(_directory, false);
+        }
         if (!Directory.Exists(_directory))
         {
-            if (OperatingSystem.IsWindows()) { Directory.CreateDirectory(_directory); WorkingTextWriter.RestrictWindows(_directory); }
+            if (OperatingSystem.IsWindows()) WorkingTextWriter.CreatePrivateWindowsDirectory(_directory);
             else Directory.CreateDirectory(_directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
         CheckParents(_directory);
@@ -191,6 +198,18 @@ public sealed class TextDraftStore
         // A competing creator fails closed instead of reopening an unverified
         // file. Existing files are never recreated or given new permissions.
         return CreatePrivateFile(file);
+    }
+    [SupportedOSPlatform("windows")]
+    private bool IsAbandonedWindowsDirectory()
+    {
+        var folder = new DirectoryInfo(_directory);
+        if (folder.LinkTarget is not null || folder.Attributes.HasFlag(FileAttributes.ReparsePoint)) return false;
+        var user = WindowsIdentity.GetCurrent().User ?? throw new IOException("无法验证恢复目录所有者。");
+        var security = folder.GetAccessControl();
+        if (!user.Equals(security.GetOwner(typeof(SecurityIdentifier))) || security.AreAccessRulesProtected) return false;
+        var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
+        return rules.Length > 0 && rules.All(rule => rule.IsInherited && rule.AccessControlType == AccessControlType.Allow)
+            && !Directory.EnumerateFileSystemEntries(_directory).Any();
     }
     private static FileStream CreatePrivateFile(string path, FileOptions options = FileOptions.None)
     {

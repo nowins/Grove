@@ -187,17 +187,27 @@ public sealed class WorkingTextWriter
         var directory = Path.Combine(parent, prefix + Guid.NewGuid().ToString("N"));
         if (OperatingSystem.IsWindows())
         {
-            Directory.CreateDirectory(directory); RestrictWindows(directory);
+            CreatePrivateWindowsDirectory(directory);
         }
         else Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         return directory;
     }
     [SupportedOSPlatform("windows")]
-    internal static void RestrictWindows(string directory)
+    internal static void CreatePrivateWindowsDirectory(string directory)
     {
         var user = WindowsIdentity.GetCurrent().User ?? throw new IOException("无法确定保存临时目录的所有者。");
         var security = new DirectorySecurity(); security.SetAccessRuleProtection(true, false); security.SetOwner(user);
         security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-        new DirectoryInfo(directory).SetAccessControl(security);
+        // Set the descriptor at creation: a writable parent may grant Modify
+        // without WRITE_OWNER, so changing the owner afterwards can fail.
+        var folder = new DirectoryInfo(directory);
+        folder.Create(security); folder.Refresh();
+        if (folder.LinkTarget is not null || folder.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            throw new IOException("保存临时目录包含链接，未写入。");
+        var actual = folder.GetAccessControl();
+        if (!user.Equals(actual.GetOwner(typeof(SecurityIdentifier))) || !actual.AreAccessRulesProtected ||
+            actual.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>()
+                .Any(rule => rule.AccessControlType == AccessControlType.Allow && !user.Equals(rule.IdentityReference)))
+            throw new IOException("临时目录权限不是仅当前用户可读，未写入。");
     }
 }

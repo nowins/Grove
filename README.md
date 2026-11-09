@@ -18,18 +18,18 @@
 
 ## 下载与安装
 
-从 [Grove 0.1.0 Preview 6](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.6) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
+从 [Grove 0.1.0 Preview 7](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.7) 的 **Assets** 下载对应架构；GitHub 自动生成的 **Source code** 是源码，不是应用包。
 
 | 平台 | 推荐下载 |
 | --- | --- |
-| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-win-x64-setup.exe) |
-| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-win-arm64-setup.exe) |
-| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-osx-arm64.dmg) |
-| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-osx-x64.dmg) |
-| Linux x64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-linux-x64.tar.gz) |
-| Linux ARM64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.6/Grove-0.1.0-preview.6-linux-arm64.tar.gz) |
+| Windows x64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.7/Grove-0.1.0-preview.7-win-x64-setup.exe) |
+| Windows ARM64 | [安装程序](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.7/Grove-0.1.0-preview.7-win-arm64-setup.exe) |
+| macOS Apple Silicon | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.7/Grove-0.1.0-preview.7-osx-arm64.dmg) |
+| macOS Intel | [DMG](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.7/Grove-0.1.0-preview.7-osx-x64.dmg) |
+| Linux x64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.7/Grove-0.1.0-preview.7-linux-x64.tar.gz) |
+| Linux ARM64（实验性） | [便携 tar.gz](https://github.com/nowins/Grove/releases/download/v0.1.0-preview.7/Grove-0.1.0-preview.7-linux-arm64.tar.gz) |
 
-Preview 6 包含文件／内容搜索、阅读位置导航、连续 Diff、阅读区与工具侧栏简化，以及 Windows ARM64 路径状态修正；另包含 Push 审阅、单块回退／撤销、可选草稿恢复、更新诊断和 macOS 标题栏安全区修复。编辑器旧引用生命周期修复不代表已测得整体内存或性能收益。
+Preview 7 修复 Windows 保存权限和恢复草稿读取报错，并兼容旧版失败留下的空恢复目录。继续包含文件／内容搜索、阅读位置导航、连续 Diff、阅读区与工具侧栏简化、Windows ARM64 路径状态修正、Push 审阅、单块回退／撤销、可选草稿恢复、更新诊断和 macOS 标题栏安全区修复。编辑器旧引用生命周期修复不代表已测得整体内存或性能收益。
 
 Release 也提供 Windows 便携 ZIP、包含 `Grove.app` 的 macOS tar.gz、`SHA256SUMS.txt` 和 `BUILD-INFO.json`。先核对 SHA-256。公开 Release 可直接下载，无需 GitHub 登录；Release 包不受 Actions 的 14 天产物保留期限制。
 
