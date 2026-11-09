@@ -106,7 +106,9 @@ try {
     $publishedFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
         @{ path = [IO.Path]::GetRelativePath($publish, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
-    @{ runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; nativeChromeTested = $IsMacOS; physicalInputTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
+    $sourceRevision = (git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $sourceRevision -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot determine exact source revision.' }
+    @{ sourceRevision = $sourceRevision; runtimeIdentifier = $RuntimeIdentifier; sdk = (dotnet --version).Trim(); node = $nodeVersion; nodeArchitecture = $nodeArchitecture; nativeExecution = $true; platform = $platform; coreTests = @{ total = [int]$counts.total; passed = [int]$counts.passed; skipped = [int]$counts.notExecuted }; nativeGuiTested = $false; nativeChromeTested = $IsMacOS; physicalInputTested = $false; selfContained = $true; signedRelease = $false; files = $publishedFiles } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding utf8
     & (Join-Path $PSScriptRoot 'package.ps1') -PublishDirectory $publish -OutputDirectory $output -RuntimeIdentifier $RuntimeIdentifier
     if ($IsWindows) {
         & (Join-Path $PSScriptRoot 'test-windows-package.ps1') -PackageDirectory $output -TestShellIntegration:($env:GITHUB_ACTIONS -eq 'true')

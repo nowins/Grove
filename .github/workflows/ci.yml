@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: desktop-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build-test:
@@ -97,3 +97,36 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+
+  preview-release:
+    name: Publish new preview
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'nowins/Grove'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Check preview version
+        id: preview
+        run: ./tools/release-preview.ps1 -CheckVersion
+      - name: Test release preparation
+        if: steps.preview.outputs.publish == 'true'
+        run: ./tools/test-release-preview.ps1 -OutputDirectory artifacts/release-script-tests
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: steps.preview.outputs.publish == 'true'
+        with:
+          path: artifacts/release-input
+      - name: Validate and publish preview
+        if: steps.preview.outputs.publish == 'true'
+        run: ./tools/release-preview.ps1 -ArtifactDirectory artifacts/release-input -OutputDirectory artifacts/release-assets

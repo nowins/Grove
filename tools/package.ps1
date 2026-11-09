@@ -123,7 +123,8 @@ $bundleFiles = @()
 if (-not $isWindowsPackage -and -not $isLinuxPackage) {
     $bundleFiles = @(Get-ChildItem -LiteralPath $app -Recurse -File -Force | ForEach-Object { @{path=[IO.Path]::GetRelativePath($app,$_.FullName); bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName).Hash.ToLowerInvariant()} })
 }
-$packageMetadata = @{ bundleFiles=$bundleFiles; version=$version; runtimeIdentifier=$RuntimeIdentifier; appHost=$appHost; developerSigned=$false; notarized=$false; macAdHocSigned=(-not $isWindowsPackage -and -not $isLinuxPackage); installerBootstrapper= $(if ($isWindowsPackage) {'NSIS x86 Unicode; payload native to RID'} else {$null}); files=$manifest }
+$assetManifest = @($assets | ForEach-Object { $file = Get-Item -LiteralPath $_; @{ path=$file.Name; bytes=$file.Length; sha256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() } })
+$packageMetadata = @{ assets=$assetManifest; bundleFiles=$bundleFiles; version=$version; runtimeIdentifier=$RuntimeIdentifier; appHost=$appHost; developerSigned=$false; notarized=$false; macAdHocSigned=(-not $isWindowsPackage -and -not $isLinuxPackage); installerBootstrapper= $(if ($isWindowsPackage) {'NSIS x86 Unicode; payload native to RID'} else {$null}); files=$manifest }
 $packageMetadata | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $output 'package-metadata.json') -Encoding utf8
 $assets | ForEach-Object { "$((Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_))" } | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt') -Encoding utf8
 Write-Host "Packaged $version $RuntimeIdentifier (not Developer-signed)."

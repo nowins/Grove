@@ -39,7 +39,7 @@ WebView 包采用托管 WebView2 loader；探针检查发布的托管程序集�
 
 ## 触发与权限
 
-分支 push、pull_request 和手动 workflow_dispatch 触发；不使用 pull_request_target、任意用户输入 shell、部署凭据或仓库写权限。仅 contents: read，checkout 不持久化凭据。官方 Actions 固定完整 commit SHA，版本在注释中；更新时同时核对上游 release 与 SHA，不用本机登录令牌写入 YAML。
+分支 push、pull_request 和手动 workflow_dispatch 触发；不使用 pull_request_target、任意用户输入 shell 或个人部署凭据。构建 job 仅 contents: read，checkout 不持久化凭据；发布 job 的最小写权限见下文。官方 Actions 固定完整 commit SHA，版本在注释中；更新时同时核对上游 release 与 SHA，不用本机登录令牌写入 YAML。
 
 Runner 标签依据 [GitHub 官方 runner 文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)；Actions 输入与版本依据 [checkout](https://github.com/actions/checkout/releases/tag/v6.1.0)、[setup-dotnet](https://github.com/actions/setup-dotnet/releases/tag/v5.3.0)、[setup-node](https://github.com/actions/setup-node/releases/tag/v6.4.0)、[upload-artifact](https://github.com/actions/upload-artifact/releases/tag/v7.0.0)。
 
@@ -79,3 +79,11 @@ pwsh ./tools/perf.ps1 -OutputDirectory artifacts/perf/candidate -Baseline artifa
 ## Linux 候选
 
 CI 安装 WebKitGTK 4.1/X11 依赖；PlatformProbe 检查 apphost、LibGit2、Skia、HarfBuzz 的 ELF64/小端/机器类型并加载 LibGit2。package.ps1 生成 tar.gz 和 SHA256SUMS；test-linux-package.ps1 校验归档后在含空格路径解包，逐文件哈希、数量与执行位检查，不修改用户系统集成。发布必须核对准确版本提交的实际 job 结果，不据配置宣称通过，详见 [LINUX](LINUX.md)。
+
+## 新预览版自动发布
+
+main 的 push 在六个平台全部成功后进入 preview-release；PR、其他分支和手动运行不发布。仅发布 job 获得 contents: write／actions: read，使用本次任务的 GITHUB_TOKEN；官方 download-artifact 固定完整 SHA。main 已运行的流程不被后续 push 取消，避免发布过程中留下半成品草稿；其他分支继续取消旧运行。
+
+Directory.Build.props 必须递增 preview 编号和 MacBundleVersion，已发布的同版本直接跳过，不移动标签或覆盖资产。tools/release-preview.ps1 核对同次运行六个平台的完整 sourceRevision、RID、版本、原生执行及全部 Core 通过／零跳过，再核对每个平台的 SHA256SUMS 和 package-metadata.assets；包内逐文件清单仍由各平台安装包检查验证。只复制明确列出的十个应用资产，另附 BUILD-INFO.json 和统一 SHA256SUMS.txt。
+
+先创建准确来源提交的草稿预览版，上传十二项并核对服务端摘要／尺寸后才公开；不设置稳定 Latest。随后匿名重新下载十二项核对 SHA-256。遇到已有草稿或孤立标签时停止，保留现场供检查，不自动删除或重传覆盖；匿名下载失败可使 job 失败，但已公开的 release 不会被脚本删除。新版本发布前在 Linux runner 再运行 11 项合成输入的发布准备检查；这些检查不代替真正的包、API 或 Mac 验收。
