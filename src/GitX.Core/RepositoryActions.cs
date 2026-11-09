@@ -61,7 +61,7 @@ public static class RepositoryActions
     }
 }
 
-public enum BranchAction { Create, Switch, Delete, Merge, Rebase, CreateAndSwitch }
+public enum BranchAction { Create, Switch, Delete, Merge, Rebase, CreateAndSwitch, Rename }
 public sealed class BranchWriter
 {
     public Task<string> ExecuteAsync(ActionContext context, BranchAction action, BranchEntry? target = null, string name = "") => RepositoryWriter.Locked(context.Root, async () =>
@@ -92,6 +92,16 @@ public sealed class BranchWriter
             case BranchAction.Delete:
                 if (target!.Remote || target.Current) throw new IOException("只能删除非当前的本地分支；未合并分支由 Git 拒绝删除。");
                 return await GitWriteProcess.RepositoryAsync(context.Root, ["branch", "-d", "--", target.Name]);
+            case BranchAction.Rename:
+                if (target!.Remote) throw new IOException("这里只重命名本地分支，不修改远端分支。");
+                await BranchCheckout.ValidateNameAsync(context.Root, name);
+                if (context.Branches.Any(b => !b.Remote && b.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    throw new IOException("本地分支名称已存在，未覆盖已有分支。");
+                var worktrees = await WorktreeCatalog.ReadAsync(context.Root);
+                if (worktrees.Entries.Any(w => !w.Current && w.Branch == target.CanonicalName))
+                    throw new IOException("此分支正在其他工作树使用，未修改其分支或 HEAD。");
+                RepositoryActions.Check(context);
+                return await GitWriteProcess.RepositoryAsync(context.Root, ["branch", "-m", "--", target.Name, name]);
             case BranchAction.Merge:
                 return await RepositoryActions.RunWithConflicts(context.Root, "merge", ["merge", "--no-edit", "--no-autostash", "--", target!.Sha]);
             case BranchAction.Rebase:

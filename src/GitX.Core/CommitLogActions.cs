@@ -59,6 +59,22 @@ public static class CommitLogActions
 
 public sealed class CommitReferenceWriter
 {
+    public Task<string> RebaseOntoAsync(ActionContext context, string sha) => RepositoryWriter.Locked(context.Root, async () =>
+    {
+        RepositoryActions.Check(context, clean: true);
+        sha = RepositoryActions.CommitSha(context.Root, sha);
+        if (context.Head is null || context.Head == sha) throw new IOException("请选择与当前 HEAD 不同的变基目标。");
+        var worktrees = await WorktreeCatalog.ReadAsync(context.Root);
+        var current = worktrees.Entries.SingleOrDefault(w => w.Current) ?? throw new IOException("工作树登记已变化，请重新打开仓库。");
+        if (current.Branch is { } branch && worktrees.Entries.Any(w => !w.Current && w.Branch == branch))
+            throw new IOException("当前分支正在其他工作树使用，未执行变基。");
+        var recovery = await HistoryWriter.SaveRecoveryAsync(context, null);
+        RepositoryActions.Check(context, clean: true);
+        var output = await RepositoryActions.RunWithConflicts(context.Root, "rebase",
+            ["-c", "rebase.updateRefs=false", "-c", "submodule.recurse=false", "rebase", "--no-autostash", sha]);
+        return output + "\n原历史恢复记录：" + recovery;
+    });
+
     public Task<string> CreateBranchAsync(ActionContext context, string sha, string name, bool checkout = false) => RepositoryWriter.Locked(context.Root, async () =>
     {
         RepositoryActions.Check(context, clean: checkout);

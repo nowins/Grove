@@ -142,6 +142,7 @@ public sealed partial class MainWindow
                 if (target.Remote && BranchCheckout.Resolve(context, target) is { Error: null } plan)
                     panel.Children.Add(new TextBlock { Text = plan.CreateTracking ? $"创建本地 {plan.LocalName}，跟踪 {target.Name}。" : $"使用本地 {plan.LocalName}，保留其提交与跟踪关系。", Classes = { "muted" }, TextWrapping = TextWrapping.Wrap, Margin = new(8,0,8,4) });
                 Action(target.Remote ? "New Branch…" : "从此处新建分支…", "PlusIcon", BranchAction.Create);
+                Action("重命名本地分支…", "BranchIcon", BranchAction.Rename);
                 panel.Children.Add(new Separator());
                 if (context.Head is not null && target.Sha != context.Head) panel.Children.Add(ShellAction("与当前分支比较", "HistoryIcon", () => _ = CompareBranchAsync(context, target, false)));
                 panel.Children.Add(ShellAction("与工作区比较", "ChangesIcon", () => _ = CompareBranchAsync(context, target, true)));
@@ -190,9 +191,9 @@ public sealed partial class MainWindow
         catch (Exception ex) { session.Dispose(); if (!_closed && generation == _shellGeneration) _model.ReportError(ex.Message); }
     }
 
-    private async Task ExecuteBranchActionAsync(ActionContext context, BranchAction action, BranchEntry? target)
+    private async Task ExecuteBranchActionAsync(ActionContext context, BranchAction action, BranchEntry? target, Func<bool>? current = null)
     {
-        if (_closed || _model.Root != context.Root || _model.IsWriting) return;
+        if (_closed || _model.Root != context.Root || _model.IsWriting || current?.Invoke() == false) return;
         var repository = _model.RepositoryGeneration;
         CloseShellPopup();
         var reason = BranchActionAvailability.DisabledReason(context, action, target);
@@ -205,6 +206,12 @@ public sealed partial class MainWindow
             name = choice.Name; action = choice.Checkout ? BranchAction.CreateAndSwitch : BranchAction.Create;
         }
         else if (target is null) return;
+        else if (action == BranchAction.Rename)
+        {
+            var value = await InputDialog.ShowAsync(this, "重命名本地分支", $"将本地分支 {target.Name} 重命名，保留提交及跟踪关系。\n正在其他工作树使用的分支不能在此重命名。", target.Name, required: true, inputLabel: "新分支名称", acceptText: "重命名");
+            if (value is null) return;
+            name = value;
+        }
         else if (action is BranchAction.Delete or BranchAction.Merge or BranchAction.Rebase)
         {
             var description = action switch {
@@ -213,7 +220,7 @@ public sealed partial class MainWindow
                 _ => $"把 {context.Branch} 重放到 {target.Name} ({target.Sha[..8]})。这会改写当前分支提交历史。" };
             if (!await ConfirmDialog.ShowAsync(this, "分支操作", description, "执行")) return;
         }
-        if (_closed || _model.Root != context.Root || repository != _model.RepositoryGeneration || _model.IsWriting) return;
+        if (_closed || _model.Root != context.Root || repository != _model.RepositoryGeneration || _model.IsWriting || current?.Invoke() == false) return;
         // The writer rechecks the captured repository token after input/confirmation.
         await ReturnToNavigationAfterAsync(() => _model.ExecuteActionAsync(context.Root, () => new BranchWriter().ExecuteAsync(context, action, target, name)));
         if (_model.HasOperation) ShowConflictsClicked(null, new RoutedEventArgs());

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -55,18 +56,20 @@ public sealed partial class MainWindow
             var context = await RepositoryActions.ReadAsync(root);
             if (!Current()) return;
             var menu = new MenuFlyout();
-            MenuItem Item(string label, Func<Task> action, bool enabled = true, string? reason = null, string? icon = null)
+            MenuItem Item(string label, Func<Task> action, bool enabled = true, string? reason = null, string? icon = null, MenuItem? parent = null)
             {
-                var item = new MenuItem { Header = label, IsEnabled = enabled, MinWidth = 220 };
+                var item = new MenuItem { Header = new TextBlock { Text = label, MaxWidth = 330, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis }, IsEnabled = enabled, MinWidth = 340 };
+                AutomationProperties.SetName(item, label);
                 if (icon is not null) item.Icon = IconContent.Icon(icon);
-                if (reason is not null) ToolTip.SetTip(item, reason);
+                ToolTip.SetTip(item, reason ?? label);
                 item.Click += async (_, _) =>
                 {
                     menu.Hide();
                     if (!Current()) return;
                     try { await action(); } catch (Exception ex) { if (!_closed && repository == _model.RepositoryGeneration) _model.ReportError(ex.Message); }
                 };
-                menu.Items.Add(item); return item;
+                if (parent is null) menu.Items.Add(item); else parent.Items.Add(item);
+                return item;
             }
             Item("复制 SHA", async () =>
             {
@@ -94,6 +97,35 @@ public sealed partial class MainWindow
             Item("从此提交新建标签…", () => CreateHistoryTagAsync(context, selected[0], Current), referenceReason is null, referenceReason);
             var checkoutReason = ReferenceReason(true);
             Item("检出此修订（分离 HEAD）…", () => CheckoutHistoryRevisionAsync(context, selected[0], Current), checkoutReason is null, checkoutReason, "BranchIcon");
+            var branches = single ? context.Branches.Where(b => b.Sha == selected[0].Sha && !(b.Remote && b.CanonicalName.EndsWith("/HEAD", StringComparison.Ordinal)))
+                .OrderBy(b => b.Remote).ThenByDescending(b => b.Current).ThenBy(b => b.Name, StringComparer.Ordinal).ToArray() : [];
+            var branchMenu = new MenuItem { Header = single ? $"此提交上的分支（{branches.Length}）" : "此提交上的分支", MinWidth = 340, IsEnabled = single && branches.Length > 0 };
+            ToolTip.SetTip(branchMenu, single ? "操作直接指向此提交的本地或远端分支" : selectOne); menu.Items.Add(branchMenu);
+            foreach (var branch in branches.Take(50))
+            {
+                var caption = (branch.Remote ? "远端 · " : "本地 · ") + branch.Name + (branch.Current ? " · 当前" : "");
+                var group = new MenuItem { Header = new TextBlock { Text = caption, MaxWidth = 320, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis } };
+                AutomationProperties.SetName(group, caption);
+                ToolTip.SetTip(group, branch.CanonicalName); branchMenu.Items.Add(group);
+                Item("复制分支名称", async () =>
+                {
+                    var clipboard = GetTopLevel(this)?.Clipboard ?? throw new IOException("系统剪贴板不可用。"); await clipboard.SetTextAsync(branch.Name);
+                }, parent: group);
+                Item("只显示此分支历史", () => _model.SelectHistoryReferenceAsync(branch.CanonicalName), parent: group);
+                Item("与当前 HEAD 比较", () => CompareBranchAsync(context, branch, false), context.Head is not null && context.Head != branch.Sha, parent: group);
+                Item("与工作区比较", () => CompareBranchAsync(context, branch, true), parent: group);
+                group.Items.Add(new Separator());
+                foreach (var (label, action) in new[] { (branch.Remote ? "Checkout" : "切换到此分支", BranchAction.Switch),
+                    ("从此分支新建分支…", BranchAction.Create), ("重命名本地分支…", BranchAction.Rename),
+                    ("合并到 " + context.Branch + "…", BranchAction.Merge), ("将 " + context.Branch + " 变基到此分支…", BranchAction.Rebase), ("删除已合并的本地分支…", BranchAction.Delete) })
+                {
+                    var reason = _model.IsWriting ? "Git 操作正在执行" : BranchActionAvailability.DisabledReason(context, action, branch);
+                    Item(label, () => ExecuteBranchActionAsync(context, action, branch, Current), reason is null, reason, parent: group);
+                }
+            }
+            if (branches.Length > 50) Item($"前 50 个／共 {branches.Length} 个；查看全部分支…", () => { BranchesClicked(null, new RoutedEventArgs()); return Task.CompletedTask; }, parent: branchMenu);
+            var rebaseOntoReason = ReferenceReason(true) ?? (context.Head is null ? "当前工作树尚无提交" : context.Head == selected[0].Sha ? "此提交已是当前 HEAD" : null);
+            Item("将当前 HEAD 变基到此提交…", () => RebaseOntoHistoryAsync(context, selected[0], Current), rebaseOntoReason is null, rebaseOntoReason, "RebaseIcon");
             menu.Items.Add(new Separator());
             string? UnavailableReason(bool needsClean) => selected.Length != 1 ? "此操作需要选择一个提交" : _model.IsWriting ? "Git 操作正在执行" : context.InOperation ? "请先完成或中止当前 Git 操作" : context.Head is null ? "当前分支尚无提交" : needsClean && context.Dirty ? "请先提交改动或使用 Stash 保存" : null;
             foreach (var (label, action) in new[] { ("Cherry-pick…", HistoryAction.CherryPick), ("Revert…", HistoryAction.Revert) })

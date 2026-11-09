@@ -19,8 +19,9 @@ internal static class BranchActionAvailability
             if (plan.Error is not null) return plan.Error;
             target = plan.Target;
         }
-        if (action is BranchAction.Switch or BranchAction.Delete && !target.Remote && worktrees?.FirstOrDefault(w => !w.Current && w.Branch == target.CanonicalName) is { } occupied)
+        if (action is BranchAction.Switch or BranchAction.Delete or BranchAction.Rename && !target.Remote && worktrees?.FirstOrDefault(w => !w.Current && w.Branch == target.CanonicalName) is { } occupied)
             return "此分支已在另一个工作树使用：" + occupied.Root + "。可打开该工作树，不会强制检出。";
+        if (action == BranchAction.Rename) return target.Remote ? "这里只重命名本地分支。" : null;
         if (target.Current) return "这已经是当前分支。";
         if (action == BranchAction.Delete) return target.Remote ? "这里只删除已合并的本地分支。" : null;
         return context.Dirty ? "存在本地改动，请先提交或 Stash。" : null;
