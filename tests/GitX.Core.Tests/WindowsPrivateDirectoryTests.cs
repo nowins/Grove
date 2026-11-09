@@ -55,7 +55,7 @@ public sealed class WindowsPrivateDirectoryTests
     {
         if (!OperatingSystem.IsWindows()) return;
         using var repo = new TestRepository(); var parent = Path.Combine(repo.Root, "profile"); CreateModifyParent(parent);
-        var directory = Path.Combine(parent, "DraftRecovery"); Directory.CreateDirectory(directory);
+        var directory = Path.Combine(parent, "DraftRecovery"); CreateInheritedDirectory(directory);
         Assert.False(new DirectoryInfo(directory).GetAccessControl().AreAccessRulesProtected);
         var store = new TextDraftStore(directory);
         Assert.False(store.Enabled); AssertPrivate(new DirectoryInfo(directory));
@@ -69,7 +69,7 @@ public sealed class WindowsPrivateDirectoryTests
     {
         if (!OperatingSystem.IsWindows()) return;
         using var repo = new TestRepository(); var parent = Path.Combine(repo.Root, "profile"); CreateModifyParent(parent);
-        var directory = Path.Combine(parent, "DraftRecovery"); Directory.CreateDirectory(directory);
+        var directory = Path.Combine(parent, "DraftRecovery"); CreateInheritedDirectory(directory);
         var folder = new DirectoryInfo(directory);
         if (explicitRule)
         {
@@ -82,6 +82,24 @@ public sealed class WindowsPrivateDirectoryTests
         Assert.Throws<IOException>(() => new TextDraftStore(directory).List(repo.Root));
         Assert.Equal(before, folder.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Owner | AccessControlSections.Access));
         if (!explicitRule) Assert.Equal("preserve", File.ReadAllText(Path.Combine(directory, "keep.json")));
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void CreateInheritedDirectory(string path)
+    {
+        // Hosted Windows runners can default new directory owners to the
+        // Administrators group. This fixture models the current-user-owned
+        // shell left by failed initialization on a regular desktop account.
+        var user = WindowsIdentity.GetCurrent().User!;
+        var folder = Directory.CreateDirectory(path); var security = folder.GetAccessControl();
+        if (!user.Equals(security.GetOwner(typeof(SecurityIdentifier))))
+        {
+            security.SetOwner(user); folder.SetAccessControl(security);
+        }
+        var actual = folder.GetAccessControl();
+        Assert.Equal(user, actual.GetOwner(typeof(SecurityIdentifier))); Assert.False(actual.AreAccessRulesProtected);
+        var rules = actual.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
+        Assert.NotEmpty(rules); Assert.All(rules, rule => Assert.True(rule.IsInherited));
     }
 
     [SupportedOSPlatform("windows")]
