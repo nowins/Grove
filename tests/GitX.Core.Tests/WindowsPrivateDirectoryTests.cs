@@ -92,10 +92,9 @@ public sealed class WindowsPrivateDirectoryTests
         // shell left by failed initialization on a regular desktop account.
         var user = WindowsIdentity.GetCurrent().User!;
         var folder = Directory.CreateDirectory(path); var security = folder.GetAccessControl();
-        if (!user.Equals(security.GetOwner(typeof(SecurityIdentifier))))
-        {
-            security.SetOwner(user); folder.SetAccessControl(security);
-        }
+        // Recreate this empty fixture with its inherited descriptor and
+        // explicit owner; Modify does not permit post-creation WRITE_OWNER.
+        security.SetOwner(user); Directory.Delete(path, false); folder.Create(security);
         var actual = folder.GetAccessControl();
         Assert.Equal(user, actual.GetOwner(typeof(SecurityIdentifier))); Assert.False(actual.AreAccessRulesProtected);
         var rules = actual.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
