@@ -680,6 +680,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public void ReportError(string message) { Error = message; Status = "操作未完成 · 修正问题后可重试"; }
+    public void ReportStatus(string message) => Status = message;
     private static void Replace(ref CancellationTokenSource source) { source.Cancel(); source.Dispose(); source = new(); }
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

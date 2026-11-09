@@ -45,11 +45,15 @@ public sealed partial class MainWindow
         var selected = CommitList.SelectedItems?.Cast<CommitEntry>().OrderBy(c => _model.Commits.ToList().IndexOf(c)).ToArray() ?? [];
         if (selected.Length == 0) return;
         var generation = ++_historyMenuGeneration;
+        var repository = _model.RepositoryGeneration;
+        var history = _model.HistoryGeneration;
+        bool Current() => !_closed && _model.Root == root && _bottomOpen && generation == _historyMenuGeneration &&
+            repository == _model.RepositoryGeneration && history == _model.HistoryGeneration &&
+            selected.Select(c => c.Sha).ToHashSet().SetEquals(CommitList.SelectedItems?.Cast<CommitEntry>().Select(c => c.Sha) ?? []);
         try
         {
             var context = await RepositoryActions.ReadAsync(root);
-            if (_closed || _model.Root != root || !_bottomOpen || generation != _historyMenuGeneration ||
-                !selected.Select(c => c.Sha).ToHashSet().SetEquals(CommitList.SelectedItems?.Cast<CommitEntry>().Select(c => c.Sha) ?? [])) return;
+            if (!Current()) return;
             var menu = new MenuFlyout();
             MenuItem Item(string label, Func<Task> action, bool enabled = true, string? reason = null, string? icon = null)
             {
@@ -59,8 +63,8 @@ public sealed partial class MainWindow
                 item.Click += async (_, _) =>
                 {
                     menu.Hide();
-                    if (_closed || _model.Root != root || !_bottomOpen) return;
-                    try { await action(); } catch (Exception ex) { _model.ReportError(ex.Message); }
+                    if (!Current()) return;
+                    try { await action(); } catch (Exception ex) { if (!_closed && repository == _model.RepositoryGeneration) _model.ReportError(ex.Message); }
                 };
                 menu.Items.Add(item); return item;
             }
@@ -69,8 +73,26 @@ public sealed partial class MainWindow
                 var clipboard = GetTopLevel(this)?.Clipboard ?? throw new IOException("系统剪贴板不可用。");
                 await clipboard.SetTextAsync(string.Join('\n', selected.Select(c => c.Sha)));
             }).InputGesture = new KeyGesture(Key.C, KeyModifiers.Control);
+            var single = selected.Length == 1;
+            const string selectOne = "此操作需要选择一个提交";
+            Item("复制提交说明", () => CopyHistoryMessageAsync(root, selected[0], Current), single, single ? null : selectOne);
+            Item("创建提交补丁…", () => ExportHistoryPatchAsync(root, selected[0], Current), single, single ? "导出整个提交的文件差异；合并提交可选择父提交" : selectOne, "SaveIcon");
+            menu.Items.Add(new Separator());
             Item("比较两个提交", async () => { await _model.CompareHistoryAsync(selected[1], selected[0]); ShowHistoryComparisonFiles(); }, selected.Length == 2, "选择两个提交后比较版本");
-            Item("与本地比较", async () => { await _model.CompareHistoryAsync(selected[0], null); ShowHistoryComparisonFiles(); }, selected.Length == 1);
+            Item("与本地比较", async () => { await _model.CompareHistoryAsync(selected[0], null); ShowHistoryComparisonFiles(); }, single);
+            var parents = selected[0].Parents?.Count ?? 0;
+            Item(parents > 1 ? "转到父提交…" : "转到父提交", () => NavigateHistoryParentAsync(root, selected[0], Current), single && parents > 0,
+                !single ? selectOne : parents == 0 ? "此提交没有可用的父提交" : "目标不在已加载列表时，清除历史筛选后定位", "UpIcon");
+            Item("转到子提交…", () => NavigateHistoryChildAsync(root, selected[0], Current), single,
+                single ? "查找实际父子关系；有多个子提交时选择目标" : selectOne, "DownIcon");
+            menu.Items.Add(new Separator());
+            string? ReferenceReason(bool clean) => !single ? selectOne : _model.IsWriting ? "Git 操作正在执行" : context.InOperation ? "请先完成或中止当前 Git 操作" :
+                clean && context.Dirty ? "请先提交改动或使用 Stash 保存" : null;
+            var referenceReason = ReferenceReason(false);
+            Item("从此提交新建分支…", () => CreateHistoryBranchAsync(context, selected[0], Current), referenceReason is null, referenceReason, "BranchIcon");
+            Item("从此提交新建标签…", () => CreateHistoryTagAsync(context, selected[0], Current), referenceReason is null, referenceReason);
+            var checkoutReason = ReferenceReason(true);
+            Item("检出此修订（分离 HEAD）…", () => CheckoutHistoryRevisionAsync(context, selected[0], Current), checkoutReason is null, checkoutReason, "BranchIcon");
             menu.Items.Add(new Separator());
             string? UnavailableReason(bool needsClean) => selected.Length != 1 ? "此操作需要选择一个提交" : _model.IsWriting ? "Git 操作正在执行" : context.InOperation ? "请先完成或中止当前 Git 操作" : context.Head is null ? "当前分支尚无提交" : needsClean && context.Dirty ? "请先提交改动或使用 Stash 保存" : null;
             foreach (var (label, action) in new[] { ("Cherry-pick…", HistoryAction.CherryPick), ("Revert…", HistoryAction.Revert) })
