@@ -1,10 +1,10 @@
 # Release 分发
 
-## 0.1.0 Preview 7 发布准备
+## 0.1.0 Preview 7 已发布
 
 本次 `v0.1.0-preview.7` 包含 Windows 保存权限和恢复草稿读取修复，macOS 构建号递增为 7。仅当前用户所有、空白且全部权限为继承 Allow 的旧失败恢复目录可重新私有创建；已有草稿或显式权限保持拒绝，不修改数据或放宽访问。Windows x64 本地相关专项 50/50、Release 构建零警告／错误，原生保存、旧配置启动、预置草稿恢复后再保存均通过，详见 STATUS。
 
-发布前仍须核对准确提交的六平台 CI 与安装包结果，合并并核验全部分发资产的哈希和来源；发布为预览版，不设为稳定 Latest，不覆盖 Preview 1–6。Mac 和 Windows ARM64 GUI、原生后台自动检查点及断电不在本次本地复验范围。连续 Diff 刷新失效和 F7 不跨文件仍是已知限制。
+已发布 [`v0.1.0-preview.7`](https://github.com/nowins/Grove/releases/tag/v0.1.0-preview.7)，准确来源为 `f99ea86f9bbebb6394e0c859c9e31bb94abe3dcc`，使用 [六平台成功 CI 42548410513](https://github.com/nowins/Grove/actions/runs/42548410513) 的全新自包含应用包。每平台 Core 979/979、Editor 169/169，构建和安装包检查通过；1,558 个清单文件与 12 个发布资产的服务端摘要、匿名重新下载均已核验。发布为预览版，不设为稳定 Latest，不覆盖 Preview 1–6。Mac 和 Windows ARM64 GUI、原生后台自动检查点及断电不在本次本地复验范围。连续 Diff 刷新失效和 F7 不跨文件仍是已知限制。
 
 ## 0.1.0 Preview 6
 
