@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Runtime.CompilerServices;
 using GitX.Core;
+using GitX.Desktop.Services;
 
 namespace GitX.Desktop.ViewModels;
 
@@ -24,6 +25,7 @@ public sealed record NavigationEntry(string Path, string Subtitle, ComparisonKin
 
 public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
+    internal HistoryMenuState? CaptureHistoryMenuState() => _snapshot is { } snapshot ? HistoryMenuState.From(snapshot) : null;
     private readonly IRepositoryReader _reader;
     private CancellationTokenSource _repositoryRead = new(), _documentRead = new(), _commitRead = new();
     private long _repositoryVersion, _documentVersion, _commitVersion, _historyVersion;

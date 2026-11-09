@@ -226,13 +226,16 @@ public sealed partial class MainWindow
         if (_model.HasOperation) ShowConflictsClicked(null, new RoutedEventArgs());
     }
 
-    private async Task CompareBranchAsync(ActionContext context, BranchEntry target, bool worktree)
+    private Task CompareBranchAsync(ActionContext context, BranchEntry target, bool worktree)
+        => CompareBranchAsync(context.Root, context.Head, context.Branch, target, worktree);
+
+    private async Task CompareBranchAsync(string root, string? head, string branch, BranchEntry target, bool worktree)
     {
-        if (_closed || _model.Root != context.Root) return;
+        if (_closed || _model.Root != root) return;
         CloseShellPopup(); SwitchView(2);
         if (!_bottomOpen) return;
         var old = new CommitEntry(target.Sha, target.Name, "", DateTimeOffset.MinValue);
-        var next = worktree || context.Head is null ? null : new CommitEntry(context.Head, context.Branch, "", DateTimeOffset.MinValue);
+        var next = worktree || head is null ? null : new CommitEntry(head, branch, "", DateTimeOffset.MinValue);
         await _model.CompareHistoryAsync(old, next); ShowHistoryComparisonFiles();
     }
 }

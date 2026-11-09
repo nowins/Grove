@@ -77,6 +77,19 @@ public sealed class DiagnosticTests
         var error = Assert.Throws<IOException>(() => new EditorServer("index.html", () => { attempts++; return occupiedPort; }));
         Assert.Equal(5, attempts); Assert.Contains("5 个端口", error.Message);
     }
+    [Fact]
+    public async Task Default_editor_origin_uses_private_ports_and_keeps_the_capability_boundary()
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            using var server = new EditorServer(); using var client = new HttpClient();
+            Assert.InRange(server.Address.Port, 49152, 65535);
+            Assert.Equal("127.0.0.1", server.Address.Host);
+            Assert.Equal("{}", await client.GetStringAsync(new Uri(server.Address, "document")));
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(new Uri(server.Address.GetLeftPart(UriPartial.Authority) + "/document"))).StatusCode);
+        }
+    }
+
     private static int Port()
     { using var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start(); return ((IPEndPoint)probe.LocalEndpoint).Port; }
 }

@@ -63,6 +63,7 @@ public sealed partial class MainWindow
     private void InitializeHistory()
     {
         _model.PropertyChanged += HistoryModelChanged;
+        Closed += (_, _) => _closeHistoryMenu?.Invoke();
         CommitList.AddHandler(PointerPressedEvent, HistoryPointerPressed, RoutingStrategies.Tunnel);
         CommitList.AddHandler(KeyDownEvent, HistoryMenuKeyDown, RoutingStrategies.Tunnel);
         CommitList.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => QueueHistoryPage());

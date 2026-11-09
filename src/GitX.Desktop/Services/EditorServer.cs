@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using GitX.Core;
@@ -59,7 +60,9 @@ public sealed class EditorServer : IDisposable
 
     private static int ReservePort()
     {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
+        // The OS ephemeral range can be customized to include WebView-blocked
+        // service ports (observed: 1720). Use the dynamic/private range instead.
+        using var probe = new TcpListener(IPAddress.Loopback, RandomNumberGenerator.GetInt32(49152, 65536));
         probe.Start();
         var port = ((IPEndPoint)probe.LocalEndpoint).Port;
         probe.Stop();
