@@ -53,8 +53,9 @@ internal static class GitWriteProcess
 
     // Repository-wide commands can internally construct magic pathspecs (notably stash -u).
     // Literal path mode is only appropriate for commands that receive our file paths.
-    public static Task<string> RepositoryAsync(string root, IEnumerable<string> arguments, byte[]? input = null, bool noEditor = true)
-        => RunAsync(root, arguments, input, noEditor, literalPaths: false, includeErrorOutput: true);
+    public static Task<string> RepositoryAsync(string root, IEnumerable<string> arguments, byte[]? input = null, bool noEditor = true,
+        IReadOnlyDictionary<string, string>? environment = null)
+        => RunAsync(root, arguments, input, noEditor, literalPaths: false, includeErrorOutput: true, environment: environment);
 
     private sealed record Output(string Text, bool Truncated);
     private static async Task<Output> DrainAsync(StreamReader reader, Action<string> publish)

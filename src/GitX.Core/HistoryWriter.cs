@@ -44,7 +44,7 @@ public sealed class HistoryWriter
         return $"{output}\n原提交恢复记录：{recovery}";
     });
 
-    private static async Task<string> SaveRecoveryAsync(ActionContext context, string? hardTarget)
+    internal static async Task<string> SaveRecoveryAsync(ActionContext context, string? hardTarget)
     {
         using var repo = new Repository(context.Root);
         var directory = Path.Combine(repo.Info.Path, "gitx-recovery", Guid.NewGuid().ToString("N"));

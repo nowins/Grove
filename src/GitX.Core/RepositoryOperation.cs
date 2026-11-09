@@ -36,5 +36,6 @@ public sealed record RepositoryOperation(string Kind, string Label, string LeftL
     }
 
     internal static IEnumerable<string> StateFiles => ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "ORIG_HEAD", "sequencer/head", "sequencer/todo",
-        "rebase-merge/onto", "rebase-merge/msgnum", "rebase-merge/end", "rebase-apply/onto", "rebase-apply/next", "rebase-apply/last"];
+        "rebase-merge/onto", "rebase-merge/msgnum", "rebase-merge/end", "rebase-merge/orig-head", "rebase-merge/head-name", "rebase-merge/git-rebase-todo", "rebase-merge/done", "rebase-merge/grove-history-edit.json",
+        "rebase-apply/onto", "rebase-apply/next", "rebase-apply/last"];
 }

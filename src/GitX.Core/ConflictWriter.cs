@@ -56,14 +56,18 @@ public sealed class ConflictWriter
     {
         using var repo = new Repository(root);
         if (RepositoryState.Token(root, []) != expected || RepositoryOperation.Read(repo)?.Kind != operation.Kind) throw new IOException("Git 操作状态已变化，请刷新后重试。");
-        if (abort && skip || skip && operation.Kind is not ("cherry-pick" or "revert")) throw new IOException("当前操作不支持跳过提交。");
+        if (abort && skip || skip && operation.Kind is not ("rebase" or "cherry-pick" or "revert")) throw new IOException("当前操作不支持跳过提交。");
         if (!abort && !skip && repo.Index.Conflicts.Any()) throw new IOException("还有未解决的索引冲突。");
         if (operation.Kind is not ("merge" or "rebase" or "cherry-pick" or "revert")) throw new IOException("不支持此操作。");
         // Abort can discard conflict resolutions; retain exact current files first.
         if (abort || skip)
             foreach (var path in repo.RetrieveStatus(new StatusOptions { IncludeIgnored = false, IncludeUntracked = true, RecurseUntrackedDirs = true })
                 .Where(s => s.State != FileStatus.Unaltered).Select(s => s.FilePath).Distinct()) Backup(root, path);
-        try { await GitWriteProcess.RepositoryAsync(root, [operation.Kind, abort ? "--abort" : skip ? "--skip" : "--continue"]); }
+        var settings = !abort && operation.Kind == "rebase" ? HistoryRewrite.RebaseSettings(repo) : null;
+        var arguments = new List<string>();
+        if (settings is { } editor) arguments.AddRange(["-c", "rebase.abbreviateCommands=false", "-c", "commit.gpgSign=false", "-c", "submodule.recurse=false", "-c", "commit.cleanup=strip", "-c", "core.commentChar=" + editor.CommentCharacter, "-c", "core.commentString=" + editor.CommentCharacter]);
+        arguments.AddRange([operation.Kind, abort ? "--abort" : skip ? "--skip" : "--continue"]);
+        try { await GitWriteProcess.RepositoryAsync(root, arguments, environment: settings?.Environment); }
         catch (IOException) when (!abort && operation.Kind is "rebase" or "cherry-pick" or "revert")
         {
             // Git returns 1 when continuing successfully reaches the next conflict.

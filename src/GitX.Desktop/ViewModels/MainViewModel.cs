@@ -104,7 +104,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public string OperationText => $"{_snapshot?.Operation?.Label ?? "未合并索引"} · {_snapshot?.Changes.Count(c => c.Kind == ComparisonKind.Conflict) ?? 0} 个冲突文件 · {_snapshot?.Operation?.Detail}";
     public bool CanContinueOperation => !IsWriting && _snapshot?.Operation is not null && !_snapshot.Changes.Any(c => c.Kind == ComparisonKind.Conflict);
     public bool CanAbortOperation => !IsWriting && _snapshot?.Operation is not null;
-    public bool CanSkipOperation => !IsWriting && _snapshot?.Operation?.Kind is "cherry-pick" or "revert";
+    public bool CanSkipOperation => !IsWriting && _snapshot?.Operation?.Kind is "rebase" or "cherry-pick" or "revert";
     public bool CanOpenConflict => !IsWriting && _selectedEntry?.Kind == ComparisonKind.Conflict;
     internal (string Root, string Token, RepositoryOperation Operation)? CaptureOperation() =>
         _snapshot is { Operation: { } operation, IndexToken: { } expected } snapshot ? (snapshot.Root, expected, operation) : null;

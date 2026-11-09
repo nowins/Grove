@@ -105,6 +105,22 @@ public sealed partial class MainWindow
             }
             var resetReason = UnavailableReason(needsClean: false);
             Item(context.Detached ? "Reset 分离 HEAD 到此处…" : "Reset 当前分支到此处…", () => RunResetHistoryActionAsync(context, selected[0]), resetReason is null, resetReason, "UndoIcon");
+            menu.Items.Add(new Separator());
+            string? RewriteReason(bool clean, bool one = false) => one && !single ? selectOne : selected.Length > 100 ? "一次最多整理 100 个提交" :
+                _model.IsWriting ? "Git 操作正在执行" : context.InOperation ? "请先完成当前 Git 操作" : context.Head is null || context.Detached ? "请检出有提交的本地分支" : clean && context.Dirty ? "请先提交改动或使用 Stash 保存" : null;
+            var rewordReason = RewriteReason(selected[0].Sha != context.Head, one: true);
+            Item("修改提交说明…", () => RewordHistoryAsync(context, selected[0], Current), rewordReason is null, rewordReason);
+            var undoReason = RewriteReason(false, one: true) ?? (selected[0].Sha != context.Head ? "Undo Commit 仅适用于 HEAD" : parents != 1 ? "根提交／合并提交请使用明确的 Reset 操作" : null);
+            Item("撤回当前提交（Undo Commit）…", () => UndoHistoryAsync(context, selected[0], Current), undoReason is null, undoReason, "UndoIcon");
+            foreach (var (action, caption) in new[] { (RewriteAction.Squash, single ? "与上一提交合并（Squash）…" : $"合并 {selected.Length} 个提交（Squash）…"),
+                (RewriteAction.Fixup, single ? "合入上一提交（Fixup）…" : $"合并 {selected.Length} 个提交（Fixup）…"),
+                (RewriteAction.Drop, single ? "丢弃此提交（Drop）…" : $"丢弃 {selected.Length} 个提交（Drop）…") })
+            {
+                var reason = RewriteReason(true) ?? (single && parents != 1 && action is RewriteAction.Squash or RewriteAction.Fixup ? "此提交没有唯一的上一提交可供合并" : null);
+                Item(caption, () => RewriteHistorySelectionAsync(context, selected, action, caption, Current), reason is null, reason);
+            }
+            var interactiveReason = RewriteReason(true, one: true);
+            Item("交互式 Rebase（从此提交起）…", () => InteractiveHistoryRewriteAsync(context, selected[0], Current), interactiveReason is null, interactiveReason);
             menu.ShowAt(anchor, atPointer);
         }
         catch (Exception ex) { if (!_closed && _model.Root == root) _model.ReportError(ex.Message); }
