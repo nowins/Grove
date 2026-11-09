@@ -30,7 +30,7 @@ public sealed partial class MainWindow
         InitializeUpdateTool();
         _dock = new(this, EditorPane, Path.Combine(LocalDataDirectory, "tool-layout.json"));
         foreach (var control in new Control[] { _projectPanel, LocalNavigation, GitLogWorkspace, FileHistoryHost }) control.DataContext = _model;
-        _dock.Register(ToolId.Project, "项目", "FolderIcon", _projectPanel);
+        _dock.Register(ToolId.Project, "项目", "FolderIcon", _projectHost);
         _dock.Register(ToolId.Commit, "提交", "ChangesIcon", LocalNavigation);
         _dock.Register(ToolId.GitLog, "Git · Log", "HistoryIcon", GitLogWorkspace);
         _dock.Register(ToolId.FileHistory, "文件历史", "FileIcon", FileHistoryHost);
@@ -45,7 +45,7 @@ public sealed partial class MainWindow
             UpdateEditorFocusButton();
             switch (id)
             {
-                case ToolId.Project: NativeKeyboardFocus.TryFocusControl(this, _projectList); break;
+                case ToolId.Project: if (_revisionBrowser is { } revision) revision.FocusFiles(); else NativeKeyboardFocus.TryFocusControl(this, _projectList); break;
                 case ToolId.Commit: NativeKeyboardFocus.TryFocusControl(this, FileList); break;
                 case ToolId.GitLog: NativeKeyboardFocus.TryFocusControl(this, CommitList); break;
                 case ToolId.FileHistory: _fileHistoryPanel?.FocusCommits(); break;

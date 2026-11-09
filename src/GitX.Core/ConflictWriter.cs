@@ -52,17 +52,18 @@ public sealed class ConflictWriter
         return true;
     });
 
-    public Task OperationAsync(string root, string expected, RepositoryOperation operation, bool abort) => RepositoryWriter.Locked(root, async () =>
+    public Task OperationAsync(string root, string expected, RepositoryOperation operation, bool abort, bool skip = false) => RepositoryWriter.Locked(root, async () =>
     {
         using var repo = new Repository(root);
         if (RepositoryState.Token(root, []) != expected || RepositoryOperation.Read(repo)?.Kind != operation.Kind) throw new IOException("Git 操作状态已变化，请刷新后重试。");
-        if (!abort && repo.Index.Conflicts.Any()) throw new IOException("还有未解决的索引冲突。");
+        if (abort && skip || skip && operation.Kind is not ("cherry-pick" or "revert")) throw new IOException("当前操作不支持跳过提交。");
+        if (!abort && !skip && repo.Index.Conflicts.Any()) throw new IOException("还有未解决的索引冲突。");
         if (operation.Kind is not ("merge" or "rebase" or "cherry-pick" or "revert")) throw new IOException("不支持此操作。");
         // Abort can discard conflict resolutions; retain exact current files first.
-        if (abort)
+        if (abort || skip)
             foreach (var path in repo.RetrieveStatus(new StatusOptions { IncludeIgnored = false, IncludeUntracked = true, RecurseUntrackedDirs = true })
                 .Where(s => s.State != FileStatus.Unaltered).Select(s => s.FilePath).Distinct()) Backup(root, path);
-        try { await GitWriteProcess.RepositoryAsync(root, [operation.Kind, abort ? "--abort" : "--continue"]); }
+        try { await GitWriteProcess.RepositoryAsync(root, [operation.Kind, abort ? "--abort" : skip ? "--skip" : "--continue"]); }
         catch (IOException) when (!abort && operation.Kind is "rebase" or "cherry-pick" or "revert")
         {
             // Git returns 1 when continuing successfully reaches the next conflict.

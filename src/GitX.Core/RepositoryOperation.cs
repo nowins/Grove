@@ -23,6 +23,15 @@ public sealed record RepositoryOperation(string Kind, string Label, string LeftL
             return new("revert", "Revert 中", "当前 HEAD（ours）", "撤销后的版本（theirs）", Short(revert));
         if (Read("MERGE_HEAD") is { Length: > 0 } incoming)
             return new("merge", "合并中", "当前 HEAD（ours）", "传入版本（theirs）", $"HEAD ← {Short(incoming)}");
+        if (Read("sequencer/head").Length > 0 && Read("sequencer/todo") is { Length: > 0 } todo)
+        {
+            var next = todo.Split('\n').FirstOrDefault(line => line.StartsWith("pick ", StringComparison.Ordinal) || line.StartsWith("revert ", StringComparison.Ordinal));
+            if (next is not null)
+            {
+                var kind = next.StartsWith("pick ", StringComparison.Ordinal) ? "cherry-pick" : "revert";
+                return new(kind, kind == "revert" ? "批量 Revert 中" : "批量 Cherry-pick 中", "当前 HEAD（ours）", "正在处理的提交（theirs）", next);
+            }
+        }
         return null;
     }
 

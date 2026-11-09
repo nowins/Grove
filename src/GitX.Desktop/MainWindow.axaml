@@ -29,10 +29,11 @@
       </Grid>
     </Border>
     <Border Grid.Row="1" IsVisible="{Binding HasOperation}" Background="{StaticResource OperationBrush}" Padding="10,5">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto"><TextBlock Text="{Binding OperationText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"><TextBlock Text="{Binding OperationText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         <Button Grid.Column="1" Click="ShowConflictsClicked" Margin="6,0" automation:AutomationProperties.Name="查看冲突"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource MergeIcon}" /><TextBlock Text="查看冲突" VerticalAlignment="Center" /></StackPanel></Button>
         <Button Grid.Column="2" Click="AbortOperationClicked" IsEnabled="{Binding CanAbortOperation}" Margin="0,0,6,0" automation:AutomationProperties.Name="中止…"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource CloseIcon}" /><TextBlock Text="中止…" VerticalAlignment="Center" /></StackPanel></Button>
         <Button Grid.Column="3" Click="ContinueOperationClicked" IsEnabled="{Binding CanContinueOperation}" automation:AutomationProperties.Name="继续"><StackPanel Orientation="Horizontal" Spacing="4"><Path Classes="icon" Data="{StaticResource AcceptLeftIcon}" /><TextBlock Text="继续" VerticalAlignment="Center" /></StackPanel></Button>
+        <Button Grid.Column="4" Click="SkipOperationClicked" IsVisible="{Binding CanSkipOperation}" Margin="6,0,0,0" Content="跳过当前提交…" automation:AutomationProperties.Name="跳过当前提交" />
       </Grid>
     </Border>
     <ContentControl x:Name="DockWorkspaceHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />

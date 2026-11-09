@@ -80,6 +80,7 @@ public sealed partial class MainWindow
             menu.Items.Add(new Separator());
             Item("比较两个提交", async () => { await _model.CompareHistoryAsync(selected[1], selected[0]); ShowHistoryComparisonFiles(); }, selected.Length == 2, "选择两个提交后比较版本");
             Item("与本地比较", async () => { await _model.CompareHistoryAsync(selected[0], null); ShowHistoryComparisonFiles(); }, single);
+            Item("浏览此修订的仓库", () => OpenRevisionBrowserAsync(root, selected[0], Current), single, single ? "只读浏览完整历史目录，不执行检出" : selectOne, "FolderIcon");
             var parents = selected[0].Parents?.Count ?? 0;
             Item(parents > 1 ? "转到父提交…" : "转到父提交", () => NavigateHistoryParentAsync(root, selected[0], Current), single && parents > 0,
                 !single ? selectOne : parents == 0 ? "此提交没有可用的父提交" : "目标不在已加载列表时，清除历史筛选后定位", "UpIcon");
@@ -97,8 +98,10 @@ public sealed partial class MainWindow
             string? UnavailableReason(bool needsClean) => selected.Length != 1 ? "此操作需要选择一个提交" : _model.IsWriting ? "Git 操作正在执行" : context.InOperation ? "请先完成或中止当前 Git 操作" : context.Head is null ? "当前分支尚无提交" : needsClean && context.Dirty ? "请先提交改动或使用 Stash 保存" : null;
             foreach (var (label, action) in new[] { ("Cherry-pick…", HistoryAction.CherryPick), ("Revert…", HistoryAction.Revert) })
             {
-                var reason = UnavailableReason(needsClean: true);
-                Item(label, () => RunHistoryActionAsync(context, selected[0], action, label), reason is null, reason, action == HistoryAction.CherryPick ? "CherryPickIcon" : "UndoIcon");
+                var reason = selected.Length > 100 ? "一次最多选择 100 个提交" : _model.IsWriting ? "Git 操作正在执行" : context.InOperation ? "请先完成或中止当前 Git 操作" :
+                    context.Head is null ? "当前分支尚无提交" : context.Dirty ? "请先提交改动或使用 Stash 保存" : null;
+                var caption = single ? label : label.Replace("…", $" {selected.Length} 个提交…");
+                Item(caption, () => RunHistoryBatchAsync(context, selected, action, caption, Current), reason is null, reason, action == HistoryAction.CherryPick ? "CherryPickIcon" : "UndoIcon");
             }
             var resetReason = UnavailableReason(needsClean: false);
             Item(context.Detached ? "Reset 分离 HEAD 到此处…" : "Reset 当前分支到此处…", () => RunResetHistoryActionAsync(context, selected[0]), resetReason is null, resetReason, "UndoIcon");
@@ -113,26 +116,6 @@ public sealed partial class MainWindow
         if (selected.Length == 0) return;
         var clipboard = GetTopLevel(this)?.Clipboard ?? throw new IOException("系统剪贴板不可用。");
         await clipboard.SetTextAsync(string.Join('\n', selected.Select(commit => commit.Sha)));
-    }
-
-    private async Task RunHistoryActionAsync(ActionContext context, CommitEntry commit, HistoryAction action, string label)
-    {
-        var mainline = 0;
-        if (action is HistoryAction.CherryPick or HistoryAction.Revert && commit.Parents?.Count > 1)
-        {
-            var value = await InputDialog.ShowAsync(this, "选择主线父提交", string.Join('\n', commit.Parents.Select((p, i) => $"{i + 1}: {p}")) + "\n输入主线父提交序号。", "1");
-            if (value is null) return;
-            if (!int.TryParse(value, out mainline) || mainline < 1 || mainline > commit.Parents.Count) { _model.ReportError("主线父提交序号无效。"); return; }
-        }
-        var description = action switch
-        {
-            HistoryAction.CherryPick => "把此提交的改动应用到当前分支并创建提交。",
-            HistoryAction.Revert => "创建反向提交，保留原有历史。",
-            _ => throw new ArgumentOutOfRangeException(nameof(action))
-        };
-        if (!await ConfirmDialog.ShowAsync(this, label, $"{context.Branch} → {commit.ShortSha}\n{commit.Subject}\n\n{description}", "执行")) return;
-        await _model.ExecuteActionAsync(context.Root, () => new HistoryWriter().ExecuteAsync(context, action, commit.Sha, mainline));
-        if (_model.HasOperation) ShowConflictsClicked(null, new RoutedEventArgs());
     }
 
     private async Task RunResetHistoryActionAsync(ActionContext context, CommitEntry commit)

@@ -104,12 +104,16 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public string OperationText => $"{_snapshot?.Operation?.Label ?? "未合并索引"} · {_snapshot?.Changes.Count(c => c.Kind == ComparisonKind.Conflict) ?? 0} 个冲突文件 · {_snapshot?.Operation?.Detail}";
     public bool CanContinueOperation => !IsWriting && _snapshot?.Operation is not null && !_snapshot.Changes.Any(c => c.Kind == ComparisonKind.Conflict);
     public bool CanAbortOperation => !IsWriting && _snapshot?.Operation is not null;
+    public bool CanSkipOperation => !IsWriting && _snapshot?.Operation?.Kind is "cherry-pick" or "revert";
     public bool CanOpenConflict => !IsWriting && _selectedEntry?.Kind == ComparisonKind.Conflict;
-    public Task RunOperationAsync(bool abort)
+    internal (string Root, string Token, RepositoryOperation Operation)? CaptureOperation() =>
+        _snapshot is { Operation: { } operation, IndexToken: { } expected } snapshot ? (snapshot.Root, expected, operation) : null;
+    public Task RunOperationAsync(bool abort, bool skip = false)
     {
-        if (_snapshot is not { Operation: { } operation, IndexToken: { } expected } snapshot) return Task.CompletedTask;
-        return ExecuteWriteAsync(snapshot.Root, () => new ConflictWriter().OperationAsync(snapshot.Root, expected, operation, abort));
+        return CaptureOperation() is { } context ? RunOperationAsync(context, abort, skip) : Task.CompletedTask;
     }
+    internal Task RunOperationAsync((string Root, string Token, RepositoryOperation Operation) context, bool abort, bool skip = false) =>
+        ExecuteWriteAsync(context.Root, () => new ConflictWriter().OperationAsync(context.Root, context.Token, context.Operation, abort, skip));
     public bool IsWriting { get => _isWriting; private set { Set(ref _isWriting, value); WriteStateChanged(); Changed(nameof(CanInteract)); } }
     public bool CanInteract => !IsWriting;
     public bool CanStageFile => !IsWriting && _mode == 1 && _selectedEntry?.Kind is ComparisonKind.Worktree or ComparisonKind.LocalChanges && _document?.WriteToken is not null;
@@ -276,7 +280,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         Changed(nameof(CanBlame)); Changed(nameof(HasRecovery));
         Changed(nameof(CanStageFile)); Changed(nameof(CanUnstageFile)); Changed(nameof(CanCommit)); Changed(nameof(CanRestoreDiscard));
-        Changed(nameof(HasOperation)); Changed(nameof(OperationText)); Changed(nameof(CanContinueOperation)); Changed(nameof(CanAbortOperation)); Changed(nameof(CanOpenConflict));
+        Changed(nameof(HasOperation)); Changed(nameof(OperationText)); Changed(nameof(CanContinueOperation)); Changed(nameof(CanAbortOperation)); Changed(nameof(CanSkipOperation)); Changed(nameof(CanOpenConflict));
     }
     public string RepositoryPath { get => _repositoryPath; set { if (Set(ref _repositoryPath, value)) Changed(nameof(RepositoryName)); } }
     public string RepositoryName => string.IsNullOrWhiteSpace(RepositoryPath) ? "打开本地仓库" : Path.GetFileName(RepositoryPath.TrimEnd(Path.DirectorySeparatorChar));

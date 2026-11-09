@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
         InitializeDraftRecovery();
         _model.RepositoryOpened += WatchRepository;
         _model.RepositoryOpened += _ => CloseFileHistory(false);
+        _model.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.Root)) CloseRevisionBrowser(false); };
         AddHandler(KeyDownEvent, WindowKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, DoubleShiftDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyUpEvent, DoubleShiftUp, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -86,6 +87,7 @@ public sealed partial class MainWindow : Window
         {
             _closed = true;
             _draftTimer.Stop();
+            CloseRevisionBrowser(false);
             _dock?.Dispose();
             CloseFileHistory(false);
             _blameRead?.Cancel(); _blameRead?.Dispose();
@@ -420,8 +422,10 @@ public sealed partial class MainWindow : Window
     private async void ContinueOperationClicked(object? sender, RoutedEventArgs e) => await _model.RunOperationAsync(false);
     private async void AbortOperationClicked(object? sender, RoutedEventArgs e)
     {
-        if (await ConfirmDialog.ShowAsync(this, "中止 Git 操作", $"{_model.OperationText}\n\nGit 将回到操作开始前的状态，当前冲突处理结果可能被撤销。受影响文件会先备份到 Git 元数据目录 gitx-recovery。", "中止并保留备份"))
-            await _model.RunOperationAsync(true);
+        if (_model.CaptureOperation() is not { } context) return;
+        var repository = _model.RepositoryGeneration;
+        if (await ConfirmDialog.ShowAsync(this, "中止 Git 操作", $"{_model.OperationText}\n\nGit 将回到操作开始前的状态，当前冲突处理结果可能被撤销。受影响文件会先备份到 Git 元数据目录 gitx-recovery。", "中止并保留备份") && repository == _model.RepositoryGeneration)
+            await _model.RunOperationAsync(context, true);
     }
     private async void StageClicked(object? sender, RoutedEventArgs e)
     {

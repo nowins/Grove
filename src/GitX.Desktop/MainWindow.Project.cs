@@ -24,6 +24,7 @@ public sealed partial class MainWindow
     private readonly Button _projectFilterToggle = new() { Classes = { "toolbar", "icon-button", "log-filter" }, Content = IconContent.Icon("FilterIcon") };
     private void InitializeProjectTool()
     {
+        _projectHost.Children.Add(_projectPanel);
         AddFileFilterClear(_projectFilter);
         var header = new DockPanel { Margin = new(8, 4, 4, 4) }; var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         DockPanel.SetDock(actions, Dock.Right); header.Children.Add(actions);
